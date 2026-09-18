@@ -33,7 +33,7 @@ export function tempoRelativo(dataIso: string, agora: Date = new Date()): string
   const semanas = Math.floor(dias / 7);
   if (semanas < 5) return `${semanas} sem`;
   const meses = Math.floor(dias / 30);
-  if (meses < 12) return `${meses} mês${meses > 1 ? 'es' : ''}`;
+  if (meses < 12) return `${meses} ${meses > 1 ? 'meses' : 'mês'}`;
   return `${Math.floor(dias / 365)} a`;
 }
 

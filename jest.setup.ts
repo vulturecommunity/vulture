@@ -13,6 +13,12 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 require('react-native-reanimated').setUpTests();
 require('react-native-gesture-handler/jestSetup');
 
+// Área segura: valores fixos para os testes
+jest.mock('react-native-safe-area-context', () => {
+  const mock = require('react-native-safe-area-context/jest/mock');
+  return mock.default ?? mock;
+});
+
 // Haptics não existe no ambiente de teste
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(() => Promise.resolve()),
@@ -43,12 +49,15 @@ jest.mock('expo-video', () => {
   return {
     useVideoPlayer: jest.fn(() => criarPlayer()),
     createVideoPlayer: jest.fn(() => criarPlayer()),
-    VideoView: (props: Record<string, unknown>) => React.createElement(View, { testID: 'video-view', ...props }),
+    VideoView: (props: Record<string, unknown>) =>
+      React.createElement(View, { testID: 'video-view', ...props }),
   };
 });
 
 jest.mock('expo-video-thumbnails', () => ({
-  getThumbnailAsync: jest.fn(() => Promise.resolve({ uri: 'file:///thumb.jpg', width: 100, height: 100 })),
+  getThumbnailAsync: jest.fn(() =>
+    Promise.resolve({ uri: 'file:///thumb.jpg', width: 100, height: 100 }),
+  ),
 }));
 
 // Sistema de arquivos: simulação em memória
@@ -121,7 +130,8 @@ jest.mock('expo-router', () => {
     usePathname: jest.fn(() => '/'),
     useFocusEffect: jest.fn(),
     useNavigation: () => ({ setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-    Link: ({ children }: { children: React.ReactNode }) => React.createElement(Text, null, children),
+    Link: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(Text, null, children),
     Redirect: () => null,
     Stack: Object.assign(() => null, { Screen: () => null }),
     Tabs: Object.assign(() => null, { Screen: () => null }),
