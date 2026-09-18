@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { PortaoDeAutenticacao } from '@/components/navegacao/PortaoDeAutenticacao';
+import { SheetsGlobais } from '@/components/navegacao/SheetsGlobais';
 import { queryClient } from '@/services/queryClient';
 import { useAuthStore } from '@/stores/authStore';
 import { cores } from '@/theme';
@@ -64,6 +65,7 @@ export default function LayoutRaiz() {
                 />
                 <Stack.Screen name="live/[id]" options={{ animation: 'slide_from_bottom' }} />
               </Stack>
+              <SheetsGlobais />
             </PortaoDeAutenticacao>
           </ThemeProvider>
         </QueryClientProvider>

@@ -1,0 +1,55 @@
+{
+  "time": "Flamengo",
+  "partidas": [
+    {
+      "id": "p-001",
+      "competicao": "Brasileirão",
+      "mandante": "Flamengo",
+      "visitante": "Fluminense",
+      "diasRelativos": -4,
+      "hora": "16:00",
+      "estadio": "Maracanã",
+      "placar": { "mandante": 2, "visitante": 1 }
+    },
+    {
+      "id": "p-002",
+      "competicao": "Copa do Brasil",
+      "mandante": "Athletico-PR",
+      "visitante": "Flamengo",
+      "diasRelativos": -11,
+      "hora": "21:30",
+      "estadio": "Ligga Arena",
+      "placar": { "mandante": 0, "visitante": 0 }
+    },
+    {
+      "id": "p-003",
+      "competicao": "Brasileirão",
+      "mandante": "Flamengo",
+      "visitante": "Palmeiras",
+      "diasRelativos": 3,
+      "hora": "18:30",
+      "estadio": "Maracanã",
+      "placar": null
+    },
+    {
+      "id": "p-004",
+      "competicao": "Libertadores",
+      "mandante": "Flamengo",
+      "visitante": "River Plate",
+      "diasRelativos": 9,
+      "hora": "21:30",
+      "estadio": "Maracanã",
+      "placar": null
+    },
+    {
+      "id": "p-005",
+      "competicao": "Brasileirão",
+      "mandante": "Botafogo",
+      "visitante": "Flamengo",
+      "diasRelativos": 16,
+      "hora": "16:00",
+      "estadio": "Nilton Santos",
+      "placar": null
+    }
+  ]
+}
