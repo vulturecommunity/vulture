@@ -1,0 +1,87 @@
+{
+  "expo": {
+    "name": "Vulture",
+    "slug": "vulture",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "vulture",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#111111",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.vulture.torcida",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.vulture.torcida",
+      "adaptiveIcon": {
+        "backgroundColor": "#111111",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#111111",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 160
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Vulture usa a câmera para gravar vídeos e fotos para a torcida.",
+          "microphonePermission": "O Vulture usa o microfone para gravar o áudio dos seus vídeos.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Vulture acessa sua galeria para importar vídeos e fotos.",
+          "cameraPermission": "O Vulture usa a câmera para gravar vídeos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "O Vulture acessa sua galeria para salvar e importar vídeos.",
+          "savePhotosPermission": "O Vulture salva os vídeos gravados na sua galeria.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": false
+    }
+  }
+}

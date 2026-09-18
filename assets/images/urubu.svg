@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Silhueta própria de urubu (mascote da torcida). Não é marca registrada. -->
+  <circle cx="50" cy="50" r="50" fill="#E30613" />
+  <g fill="#FFFFFF" transform="translate(12 12) scale(0.76)">
+  <ellipse cx="52" cy="60" rx="23" ry="15" />
+  <ellipse cx="60" cy="52" rx="22" ry="13" />
+  <polygon points="66,50 84,66 80,74 60,68" />
+  <polygon points="62,66 86,78 74,82 56.00000000000001,74" />
+  <polygon points="37,56.00000000000001 47,54 38,33 30,34" />
+  <ellipse cx="33.5" cy="30.5" rx="6.2" ry="5.800000000000001" />
+  <polygon points="28.999999999999996,27 19,30 22,34.5 30,33.5" />
+  <polygon points="19,30 18.5,38.5 23.5,34" />
+  <polygon points="44,72 47,72 47,82 44,82" />
+  <polygon points="53,72 56.00000000000001,72 56.00000000000001,82 53,82" />
+  <polygon points="28.000000000000004,81.5 74,81.5 74,84.5 28.000000000000004,84.5" />
+  </g>
+  <circle cx="37.46" cy="34.192" r="0.988" fill="#E30613" />
+</svg>
