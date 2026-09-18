@@ -1,0 +1,60 @@
+/** Formata números grandes de forma compacta: 950, 1,2 mil, 3,4 mi. */
+export function formatarContador(valor: number): string {
+  if (!Number.isFinite(valor) || valor < 0) return '0';
+  if (valor < 1000) return String(Math.floor(valor));
+  if (valor < 1_000_000) return `${trocarPonto(valor / 1000)} mil`;
+  return `${trocarPonto(valor / 1_000_000)} mi`;
+}
+
+function trocarPonto(n: number): string {
+  const texto = n >= 100 ? String(Math.floor(n)) : (Math.floor(n * 10) / 10).toString();
+  return texto.replace('.', ',');
+}
+
+/** Formata segundos como m:ss (ex.: 65 → 1:05). */
+export function formatarDuracao(segundos: number): string {
+  const total = Math.max(0, Math.floor(segundos));
+  const min = Math.floor(total / 60);
+  const seg = total % 60;
+  return `${min}:${seg.toString().padStart(2, '0')}`;
+}
+
+/** Tempo relativo curto em pt-BR: agora, 5 min, 3 h, 2 d, 4 sem. */
+export function tempoRelativo(dataIso: string, agora: Date = new Date()): string {
+  const data = new Date(dataIso);
+  const diffSeg = Math.max(0, Math.floor((agora.getTime() - data.getTime()) / 1000));
+  if (diffSeg < 60) return 'agora';
+  const min = Math.floor(diffSeg / 60);
+  if (min < 60) return `${min} min`;
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return `${horas} h`;
+  const dias = Math.floor(horas / 24);
+  if (dias < 7) return `${dias} d`;
+  const semanas = Math.floor(dias / 7);
+  if (semanas < 5) return `${semanas} sem`;
+  const meses = Math.floor(dias / 30);
+  if (meses < 12) return `${meses} mês${meses > 1 ? 'es' : ''}`;
+  return `${Math.floor(dias / 365)} a`;
+}
+
+/** Data/hora curta: 18/09 20:30 */
+export function formatarDataHora(dataIso: string): string {
+  const d = new Date(dataIso);
+  const dia = d.getDate().toString().padStart(2, '0');
+  const mes = (d.getMonth() + 1).toString().padStart(2, '0');
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  return `${dia}/${mes} ${h}:${m}`;
+}
+
+/** Iniciais para avatar sem foto: "Maria Silva" → "MS". */
+export function iniciais(nome: string): string {
+  const partes = nome
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p.replace(/^@/, ''));
+  if (partes.length === 0) return '?';
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
