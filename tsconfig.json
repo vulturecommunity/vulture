@@ -4,29 +4,11 @@
     "strict": true,
     "noUncheckedIndexedAccess": false,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@/assets/*": [
-        "./assets/*"
-      ]
+      "@/*": ["./src/*"],
+      "@/assets/*": ["./assets/*"]
     },
-    "types": [
-      "jest"
-    ]
+    "types": ["jest"]
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts",
-    "jest.setup.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "android",
-    "ios",
-    "coverage",
-    "supabase/functions"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "jest.setup.ts"],
+  "exclude": ["node_modules", "android", "ios", "coverage", "supabase/functions"]
 }
