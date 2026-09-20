@@ -1,10 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar, Botao, Carregando, Erro, EstadoVazio, Texto } from '@/components/ui';
+import { Avatar, Botao, Carregando, Erro, EstadoVazio, Icone, Texto } from '@/components/ui';
 import { useLives } from '@/hooks/useLive';
 import { modoDeLive, motivoDoModoSimulado } from '@/services/live';
 import { cores, espacos, raios } from '@/theme';
@@ -15,7 +14,7 @@ function CardLive({ live, aoAbrir }: { live: Live; aoAbrir: () => void }) {
   return (
     <Pressable
       onPress={aoAbrir}
-      style={estilos.card}
+      style={({ pressed }) => [estilos.card, pressed && estilos.cardPressionado]}
       accessibilityRole="button"
       testID={`card-live-${live.id}`}>
       <View style={estilos.capa}>
@@ -28,21 +27,21 @@ function CardLive({ live, aoAbrir }: { live: Live; aoAbrir: () => void }) {
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, estilos.capaVazia]}>
-            <Ionicons name="radio" size={40} color={cores.textoTerciario} />
+            <Icone nome="aoVivo" tamanho={36} cor={cores.textoTerciario} />
           </View>
         )}
         <View style={estilos.badgeAoVivo}>
           <View style={estilos.ponto} />
-          <Texto variante="legenda">AO VIVO</Texto>
+          <Texto variante="rotulo">AO VIVO</Texto>
         </View>
         <View style={estilos.badgeEspectadores}>
-          <Ionicons name="eye" size={12} color={cores.branco} />
+          <Icone nome="olho" tamanho={12} cor={cores.branco} />
           <Texto variante="legenda">{formatarContador(live.espectadores)}</Texto>
         </View>
       </View>
       <View style={estilos.info}>
-        <Avatar url={live.anfitriao.avatarUrl} nome={live.anfitriao.nome} tamanho={36} />
-        <View style={{ flex: 1 }}>
+        <Avatar url={live.anfitriao.avatarUrl} nome={live.anfitriao.nome} tamanho={40} borda />
+        <View style={estilos.flex}>
           <Texto variante="corpoForte" numberOfLines={2}>
             {live.titulo}
           </Texto>
@@ -50,6 +49,7 @@ function CardLive({ live, aoAbrir }: { live: Live; aoAbrir: () => void }) {
             @{live.anfitriao.apelido} · há {tempoRelativo(live.iniciadaEm)}
           </Texto>
         </View>
+        <Icone nome="avancar" tamanho={18} cor={cores.textoTerciario} />
       </View>
     </Pressable>
   );
@@ -65,19 +65,24 @@ export default function TelaLives() {
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
       <View style={estilos.topo}>
-        <Texto variante="titulo">Lives</Texto>
+        <View style={estilos.flex}>
+          <Texto variante="titulo">Lives</Texto>
+          <Texto variante="pequeno" cor={cores.textoSecundario}>
+            A nação ao vivo, agora.
+          </Texto>
+        </View>
         <Botao
           titulo="Iniciar live"
           tamanho="pequeno"
-          icone={<Ionicons name="videocam" size={16} color={cores.branco} />}
+          icone={<Icone nome="gravar" tamanho={16} cor={cores.branco} />}
           onPress={() => router.push('/live/iniciar')}
           testID="botao-iniciar-live"
         />
       </View>
       {modo === 'simulado' ? (
         <View style={estilos.avisoModo} testID="aviso-modo-simulado">
-          <Ionicons name="information-circle-outline" size={16} color={cores.aviso} />
-          <Texto variante="legenda" cor={cores.textoSecundario} style={{ flex: 1 }}>
+          <Icone nome="laboratorio" tamanho={16} cor={cores.aviso} />
+          <Texto variante="legenda" cor={cores.textoSecundario} style={estilos.flex}>
             Modo live simulada: {motivoDoModoSimulado()} Chat e reações funcionam normalmente.
           </Texto>
         </View>
@@ -102,7 +107,7 @@ export default function TelaLives() {
           refreshing={lives.isRefetching}
           ListEmptyComponent={
             <EstadoVazio
-              icone="radio-outline"
+              icone="lives"
               titulo="Nenhuma live no ar"
               descricao="Seja o primeiro a transmitir para a nação."
               acao={{ titulo: 'Iniciar live', aoPressionar: () => router.push('/live/iniciar') }}
@@ -116,12 +121,15 @@ export default function TelaLives() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
+  flex: { flex: 1 },
   topo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: espacos.md,
     paddingHorizontal: espacos.lg,
-    paddingVertical: espacos.sm,
+    paddingTop: espacos.md,
+    paddingBottom: espacos.sm,
   },
   avisoModo: {
     flexDirection: 'row',
@@ -129,13 +137,22 @@ const estilos = StyleSheet.create({
     gap: espacos.sm,
     marginHorizontal: espacos.lg,
     marginBottom: espacos.sm,
-    padding: espacos.sm,
+    padding: espacos.sm + 2,
     borderRadius: raios.md,
     backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
   },
   lista: { padding: espacos.lg, gap: espacos.lg, flexGrow: 1 },
-  card: { backgroundColor: cores.fundoElevado, borderRadius: raios.lg, overflow: 'hidden' },
-  capa: { height: 180, backgroundColor: cores.fundoCartao },
+  card: {
+    backgroundColor: cores.fundoElevado,
+    borderRadius: raios.lg,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    overflow: 'hidden',
+  },
+  cardPressionado: { borderColor: cores.vermelho },
+  capa: { aspectRatio: 16 / 9, backgroundColor: cores.fundoCartao },
   capaVazia: { alignItems: 'center', justifyContent: 'center' },
   badgeAoVivo: {
     position: 'absolute',
@@ -143,10 +160,10 @@ const estilos = StyleSheet.create({
     left: espacos.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     backgroundColor: cores.vermelho,
     paddingHorizontal: espacos.sm,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: raios.sm,
   },
   ponto: { width: 6, height: 6, borderRadius: 3, backgroundColor: cores.branco },
@@ -157,10 +174,12 @@ const estilos = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
     paddingHorizontal: espacos.sm,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: raios.sm,
   },
-  info: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm, padding: espacos.md },
+  info: { flexDirection: 'row', alignItems: 'center', gap: espacos.md, padding: espacos.md },
 });

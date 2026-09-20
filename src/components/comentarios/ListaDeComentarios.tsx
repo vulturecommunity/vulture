@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { Avatar, Botao, Carregando, EstadoVazio, Texto } from '@/components/ui';
+import { Avatar, Botao, Carregando, EstadoVazio, Icone, Texto } from '@/components/ui';
 import {
   useAdicionarComentario,
   useComentarios,
@@ -45,7 +44,7 @@ function ItemComentario({
       />
       <View style={estilos.corpoComentario}>
         <View style={estilos.linhaAutor}>
-          <Texto variante="pequeno" cor={cores.textoSecundario}>
+          <Texto variante="pequeno" cor={cores.textoSecundario} style={estilos.autor}>
             @{comentario.autor.apelido}
           </Texto>
           <Texto variante="legenda" cor={cores.textoTerciario}>
@@ -169,7 +168,7 @@ export function ListaDeComentarios({ videoId, meuId }: ListaDeComentariosProps) 
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <EstadoVazio
-              icone="chatbubbles-outline"
+              icone="comentarios"
               titulo="Nenhum comentário ainda"
               descricao="Puxe a resenha: seja o primeiro a comentar."
             />
@@ -190,7 +189,7 @@ export function ListaDeComentarios({ videoId, meuId }: ListaDeComentariosProps) 
             onPress={() => setRespondendo(null)}
             hitSlop={8}
             accessibilityLabel="Cancelar resposta">
-            <Ionicons name="close" size={18} color={cores.textoSecundario} />
+            <Icone nome="fechar" tamanho={16} cor={cores.textoSecundario} />
           </Pressable>
         </View>
       ) : null}
@@ -217,7 +216,7 @@ export function ListaDeComentarios({ videoId, meuId }: ListaDeComentariosProps) 
           accessibilityRole="button"
           accessibilityLabel="Enviar comentário"
           testID="botao-enviar-comentario">
-          <Ionicons name="send" size={20} color={cores.branco} />
+          <Icone nome="enviar" tamanho={18} cor={cores.branco} />
         </Pressable>
       </View>
     </View>
@@ -228,16 +227,24 @@ const estilos = StyleSheet.create({
   container: { flex: 1 },
   lista: { paddingHorizontal: espacos.lg, paddingVertical: espacos.sm, flexGrow: 1 },
   comentario: { flexDirection: 'row', gap: espacos.sm, paddingVertical: espacos.sm },
-  resposta: { paddingLeft: espacos.xxl },
+  resposta: {
+    marginLeft: espacos.xl,
+    paddingLeft: espacos.md,
+    borderLeftWidth: 2,
+    borderLeftColor: cores.borda,
+  },
   corpoComentario: { flex: 1, gap: 2 },
   linhaAutor: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
+  autor: { fontWeight: '700', color: cores.texto },
   acoes: { flexDirection: 'row', gap: espacos.lg, marginTop: 2 },
   respondendo: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: espacos.lg,
-    paddingVertical: espacos.xs,
-    backgroundColor: cores.fundoCartao,
+    paddingVertical: espacos.sm,
+    backgroundColor: cores.vermelhoSuave,
+    borderLeftWidth: 3,
+    borderLeftColor: cores.vermelho,
   },
   erro: { alignItems: 'center', gap: espacos.sm, padding: espacos.lg },
   erroEnvio: { paddingHorizontal: espacos.lg, paddingTop: espacos.xs },
@@ -255,15 +262,17 @@ const estilos = StyleSheet.create({
     ...tipografia.corpo,
     color: cores.texto,
     backgroundColor: cores.fundoCartao,
-    borderRadius: raios.lg,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    borderRadius: raios.md,
     paddingHorizontal: espacos.md,
-    paddingVertical: espacos.sm,
+    paddingVertical: espacos.sm + 2,
     maxHeight: 100,
   },
   enviar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: raios.md,
     backgroundColor: cores.vermelho,
     alignItems: 'center',
     justifyContent: 'center',

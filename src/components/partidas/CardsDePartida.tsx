@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { Texto } from '@/components/ui';
+import { Icone, Texto } from '@/components/ui';
 import { matchService, type Partida } from '@/services/partidas';
 import { chaves } from '@/services/queryClient';
 import { cores, espacos, raios } from '@/theme';
@@ -11,23 +11,35 @@ function CardPartida({ titulo, partida }: { titulo: string; partida: Partida }) 
   const encerrada = partida.status === 'encerrada' && partida.placar;
   return (
     <View style={estilos.card} testID={`card-${titulo}`}>
-      <Texto variante="legenda" cor={cores.vermelho} style={estilos.titulo}>
-        {titulo.toUpperCase()} · {partida.competicao}
-      </Texto>
-      <View style={estilos.linha}>
-        <Texto variante="corpoForte" numberOfLines={1} style={estilos.time}>
-          {partida.mandante}
-        </Texto>
-        <Texto variante="destaque" style={estilos.placar}>
-          {encerrada ? `${partida.placar!.mandante} × ${partida.placar!.visitante}` : 'vs'}
-        </Texto>
-        <Texto variante="corpoForte" numberOfLines={1} style={[estilos.time, estilos.direita]}>
-          {partida.visitante}
+      <View style={estilos.faixa} />
+      <View style={estilos.conteudo}>
+        <View style={estilos.cabecalho}>
+          <Icone nome={encerrada ? 'apito' : 'estadio'} tamanho={13} cor={cores.vermelhoVivo} />
+          <Texto
+            variante="rotulo"
+            cor={cores.textoSecundario}
+            numberOfLines={1}
+            style={estilos.flex}>
+            {titulo} · {partida.competicao}
+          </Texto>
+        </View>
+        <View style={estilos.linha}>
+          <Texto variante="corpoForte" numberOfLines={1} style={estilos.time}>
+            {partida.mandante}
+          </Texto>
+          <View style={estilos.placar}>
+            <Texto variante="destaque" centralizado>
+              {encerrada ? `${partida.placar!.mandante} – ${partida.placar!.visitante}` : 'vs'}
+            </Texto>
+          </View>
+          <Texto variante="corpoForte" numberOfLines={1} style={[estilos.time, estilos.direita]}>
+            {partida.visitante}
+          </Texto>
+        </View>
+        <Texto variante="legenda" cor={cores.textoSecundario} numberOfLines={1}>
+          {encerrada ? 'Encerrado' : formatarDataHora(partida.dataHora)} · {partida.estadio}
         </Texto>
       </View>
-      <Texto variante="legenda" cor={cores.textoSecundario} numberOfLines={1}>
-        {encerrada ? 'Encerrado' : formatarDataHora(partida.dataHora)} · {partida.estadio}
-      </Texto>
     </View>
   );
 }
@@ -63,18 +75,26 @@ export function CardsDePartida() {
 const estilos = StyleSheet.create({
   lista: { paddingHorizontal: espacos.md, gap: espacos.sm },
   card: {
-    width: 230,
-    backgroundColor: 'rgba(17,17,17,0.72)',
+    width: 236,
+    flexDirection: 'row',
+    backgroundColor: cores.vidro,
     borderRadius: raios.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: espacos.md,
-    paddingVertical: espacos.sm,
-    gap: 2,
+    borderColor: cores.bordaClara,
+    overflow: 'hidden',
   },
-  titulo: { letterSpacing: 0.5 },
+  faixa: { width: 4, backgroundColor: cores.vermelho },
+  conteudo: { flex: 1, paddingHorizontal: espacos.md, paddingVertical: espacos.sm, gap: 3 },
+  cabecalho: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs },
+  flex: { flex: 1 },
   linha: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
   time: { flex: 1 },
   direita: { textAlign: 'right' },
-  placar: { minWidth: 44, textAlign: 'center' },
+  placar: {
+    minWidth: 52,
+    paddingHorizontal: espacos.xs,
+    paddingVertical: 2,
+    borderRadius: raios.sm,
+    backgroundColor: cores.vidroClaro,
+  },
 });

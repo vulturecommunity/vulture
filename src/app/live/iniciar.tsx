@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -6,7 +5,7 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SalaDaLive } from '@/components/lives/SalaDaLive';
-import { Botao, Input, Texto } from '@/components/ui';
+import { Botao, Icone, Input, Listras, Texto } from '@/components/ui';
 import { useCriarLive, useEncerrarLive } from '@/hooks/useLive';
 import { modoDeLive, motivoDoModoSimulado } from '@/services/live';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -84,7 +83,7 @@ export default function TelaIniciarLive() {
         <CameraView style={StyleSheet.absoluteFill} facing="front" mode="video" />
       ) : (
         <View style={[StyleSheet.absoluteFill, estilos.semCamera]}>
-          <Ionicons name="videocam-off-outline" size={48} color={cores.textoTerciario} />
+          <Icone nome="videoDesligado" tamanho={40} cor={cores.textoTerciario} />
           <Texto variante="pequeno" cor={cores.textoSecundario}>
             Libere a câmera para ver o preview
           </Texto>
@@ -97,20 +96,25 @@ export default function TelaIniciarLive() {
           onPress={() => router.back()}
           hitSlop={12}
           accessibilityLabel="Fechar"
+          style={estilos.fechar}
           testID="botao-fechar-iniciar">
-          <Ionicons name="close" size={30} color={cores.branco} />
+          <Icone nome="fechar" tamanho={20} cor={cores.branco} />
         </Pressable>
         <View style={estilos.badgeModo}>
-          <Ionicons
-            name={modo === 'livekit' ? 'cloud-done-outline' : 'flask-outline'}
-            size={14}
-            color={cores.branco}
+          <Icone
+            nome={modo === 'livekit' ? 'nuvem' : 'laboratorio'}
+            tamanho={14}
+            cor={cores.branco}
           />
           <Texto variante="legenda">{modo === 'livekit' ? 'LiveKit' : 'Modo simulado'}</Texto>
         </View>
       </View>
 
       <View style={[estilos.formulario, { paddingBottom: insets.bottom + espacos.xl }]}>
+        <Listras altura={4} faixas={8} style={estilos.faixa} />
+        <Texto variante="rotulo" cor={cores.vermelhoVivo}>
+          Transmitir agora
+        </Texto>
         <Texto variante="subtitulo">Sua live</Texto>
         {modo === 'simulado' ? (
           <Texto variante="legenda" cor={cores.textoSecundario}>
@@ -120,7 +124,8 @@ export default function TelaIniciarLive() {
           </Texto>
         ) : null}
         <Input
-          placeholder="Título da live (ex.: Esquenta pro clássico 🔴⚫)"
+          placeholder="Título da live (ex.: Esquenta pro clássico)"
+          icone="aoVivo"
           value={titulo}
           onChangeText={setTitulo}
           maxLength={80}
@@ -132,7 +137,7 @@ export default function TelaIniciarLive() {
           carregando={criar.isPending}
           largo
           tamanho="grande"
-          icone={<Ionicons name="radio" size={18} color={cores.branco} />}
+          icone={<Icone nome="lives" tamanho={18} cor={cores.branco} />}
           testID="botao-entrar-ao-vivo"
         />
       </View>
@@ -166,13 +171,25 @@ const estilos = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: espacos.lg,
   },
+  fechar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   badgeModo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    gap: 5,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
     paddingHorizontal: espacos.sm,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: raios.sm,
   },
   formulario: {
@@ -182,8 +199,11 @@ const estilos = StyleSheet.create({
     bottom: 0,
     gap: espacos.md,
     padding: espacos.xl,
-    backgroundColor: 'rgba(17,17,17,0.85)',
+    backgroundColor: 'rgba(10,10,11,0.9)',
     borderTopLeftRadius: raios.xl,
     borderTopRightRadius: raios.xl,
+    borderTopWidth: 1,
+    borderColor: cores.bordaClara,
   },
+  faixa: { width: 48, marginBottom: -espacos.xs },
 });

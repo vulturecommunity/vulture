@@ -1,11 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Icone } from '@/components/ui';
 import { cores } from '@/theme';
 
-/** Botão central "+" da barra de abas: abre a câmera como modal. */
+/** Botão central da barra de abas: círculo vermelho elevado que abre a câmera como modal. */
 export function BotaoGravar() {
   const router = useRouter();
   return (
@@ -18,39 +18,42 @@ export function BotaoGravar() {
         router.push('/criar/camera');
       }}
       style={estilos.area}>
-      <View style={estilos.fundoEsquerdo} />
-      <View style={estilos.fundoDireito} />
-      <View style={estilos.botao}>
-        <Ionicons name="add" size={26} color={cores.preto} />
-      </View>
+      {({ pressed }) => (
+        <View style={[estilos.aro, pressed && estilos.pressionado]}>
+          <View style={estilos.botao}>
+            <Icone nome="gravar" tamanho={22} cor={cores.branco} />
+          </View>
+        </View>
+      )}
     </Pressable>
   );
 }
 
 const estilos = StyleSheet.create({
-  area: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  botao: {
-    width: 46,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: cores.branco,
+  area: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
+  aro: {
+    marginTop: -26,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    backgroundColor: cores.fundo,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: cores.vermelho,
   },
-  fundoEsquerdo: {
-    position: 'absolute',
-    width: 46,
-    height: 32,
-    borderRadius: 10,
+  botao: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: cores.vermelho,
-    transform: [{ translateX: -3 }],
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: cores.vermelhoVivo,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  fundoDireito: {
-    position: 'absolute',
-    width: 46,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#3AA0FF',
-    transform: [{ translateX: 3 }],
-  },
+  pressionado: { transform: [{ scale: 0.94 }] },
 });

@@ -3,6 +3,7 @@ import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { cores, espacos, raios, tipografia } from '@/theme';
 
+import { Icone, type NomeDeIcone } from './Icone';
 import { Texto } from './Texto';
 
 export interface InputProps extends TextInputProps {
@@ -10,22 +11,26 @@ export interface InputProps extends TextInputProps {
   erro?: string | null;
   ajuda?: string;
   prefixo?: string;
+  icone?: NomeDeIcone;
 }
 
-/** Campo de texto com rótulo, prefixo opcional (ex.: "@") e mensagem de erro. */
+/** Campo de texto com rótulo, prefixo opcional (ex.: "@"), ícone e mensagem de erro. */
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { rotulo, erro, ajuda, prefixo, style, onFocus, onBlur, ...resto },
+  { rotulo, erro, ajuda, prefixo, icone, style, onFocus, onBlur, ...resto },
   ref,
 ) {
   const [focado, setFocado] = useState(false);
   return (
     <View style={estilos.container}>
       {rotulo ? (
-        <Texto variante="pequeno" cor={cores.textoSecundario} style={estilos.rotulo}>
+        <Texto variante="rotulo" cor={cores.textoSecundario} style={estilos.rotulo}>
           {rotulo}
         </Texto>
       ) : null}
       <View style={[estilos.caixa, focado && estilos.caixaFocada, !!erro && estilos.caixaErro]}>
+        {icone ? (
+          <Icone nome={icone} tamanho={18} cor={focado ? cores.texto : cores.textoTerciario} />
+        ) : null}
         {prefixo ? (
           <Texto variante="corpo" cor={cores.textoTerciario}>
             {prefixo}
@@ -35,6 +40,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           ref={ref}
           placeholderTextColor={cores.textoTerciario}
           selectionColor={cores.vermelho}
+          cursorColor={cores.vermelho}
           style={[estilos.input, style]}
           onFocus={(e) => {
             setFocado(true);
@@ -62,17 +68,17 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 
 const estilos = StyleSheet.create({
   container: { alignSelf: 'stretch' },
-  rotulo: { marginBottom: espacos.xs },
+  rotulo: { marginBottom: espacos.sm },
   caixa: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: espacos.xs,
-    backgroundColor: cores.fundoElevado,
+    gap: espacos.sm,
+    backgroundColor: cores.fundoCartao,
     borderRadius: raios.md,
     borderWidth: 1,
     borderColor: cores.borda,
     paddingHorizontal: espacos.md,
-    minHeight: 48,
+    minHeight: 50,
   },
   caixaFocada: { borderColor: cores.vermelho },
   caixaErro: { borderColor: cores.erro },

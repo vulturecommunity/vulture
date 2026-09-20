@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import {
   CameraView,
   useCameraPermissions,
@@ -12,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Botao, Texto } from '@/components/ui';
+import { Botao, Icone, Texto } from '@/components/ui';
 import { DURACAO_MAXIMA_VIDEO_SEGUNDOS } from '@/constants/interesses';
 import { useCriacaoStore } from '@/stores/criacaoStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -193,7 +192,9 @@ export default function TelaCamera() {
   if (semPermissao) {
     return (
       <View style={[estilos.tela, estilos.centro, { paddingTop: insets.top }]}>
-        <Ionicons name="camera-outline" size={56} color={cores.textoSecundario} />
+        <View style={estilos.circuloPermissao}>
+          <Icone nome="camera" tamanho={30} cor={cores.textoSecundario} />
+        </View>
         <Texto variante="subtitulo" centralizado>
           Precisamos da câmera e do microfone
         </Texto>
@@ -209,7 +210,7 @@ export default function TelaCamera() {
               Linking.openSettings();
           }}
         />
-        <Botao titulo="Importar da galeria" variante="secundario" onPress={importarDaGaleria} />
+        <Botao titulo="Importar da galeria" variante="contorno" onPress={importarDaGaleria} />
         <Botao titulo="Voltar" variante="fantasma" onPress={() => router.back()} />
       </View>
     );
@@ -245,7 +246,7 @@ export default function TelaCamera() {
           disabled={gravando}
           accessibilityLabel="Fechar"
           style={estilos.iconeBotao}>
-          <Ionicons name="close" size={30} color={cores.branco} />
+          <Icone nome="fechar" tamanho={20} cor={cores.branco} />
         </Pressable>
         {gravando ? (
           <View style={estilos.contador} testID="contador-gravacao">
@@ -264,7 +265,10 @@ export default function TelaCamera() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: modo === m }}
                 testID={`modo-${m}`}>
-                <Texto variante="pequeno" cor={modo === m ? cores.preto : cores.branco}>
+                <Texto
+                  variante="pequeno"
+                  cor={cores.branco}
+                  style={modo === m && estilos.modoTextoAtivo}>
                   {m === 'video' ? 'Vídeo' : 'Foto'}
                 </Texto>
               </Pressable>
@@ -279,7 +283,7 @@ export default function TelaCamera() {
             accessibilityLabel="Alternar câmera"
             style={estilos.iconeBotao}
             testID="botao-alternar-camera">
-            <Ionicons name="camera-reverse-outline" size={28} color={cores.branco} />
+            <Icone nome="virarCamera" tamanho={22} cor={cores.branco} />
           </Pressable>
           <Pressable
             onPress={() => setFlash((f) => !f)}
@@ -287,10 +291,10 @@ export default function TelaCamera() {
             accessibilityLabel="Flash"
             style={estilos.iconeBotao}
             testID="botao-flash">
-            <Ionicons
-              name={flash ? 'flash' : 'flash-off-outline'}
-              size={26}
-              color={flash ? cores.aviso : cores.branco}
+            <Icone
+              nome={flash ? 'flash' : 'flashDesligado'}
+              tamanho={22}
+              cor={flash ? cores.aviso : cores.branco}
             />
           </Pressable>
         </View>
@@ -303,7 +307,9 @@ export default function TelaCamera() {
           style={estilos.galeria}
           accessibilityLabel="Importar da galeria"
           testID="botao-galeria">
-          <Ionicons name="images-outline" size={28} color={cores.branco} />
+          <View style={estilos.iconeGaleria}>
+            <Icone nome="galeria" tamanho={22} cor={cores.branco} />
+          </View>
           <Texto variante="legenda">Galeria</Texto>
         </Pressable>
 
@@ -343,14 +349,24 @@ export default function TelaCamera() {
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.pretoPuro },
   centro: { alignItems: 'center', justifyContent: 'center', gap: espacos.md, padding: espacos.xl },
+  circuloPermissao: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   trilha: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 4,
+    height: 3,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  barra: { height: 4, backgroundColor: cores.vermelho },
+  barra: { height: 3, backgroundColor: cores.vermelhoVivo },
   topo: {
     position: 'absolute',
     top: 0,
@@ -361,26 +377,40 @@ const estilos = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: espacos.lg,
   },
-  iconeBotao: { padding: espacos.xs },
-  colunaDireita: { alignItems: 'center', gap: espacos.md },
+  iconeBotao: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colunaDireita: { alignItems: 'center', gap: espacos.sm },
   modos: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
     borderRadius: raios.redondo,
     padding: 3,
   },
-  modo: { paddingHorizontal: espacos.lg, paddingVertical: espacos.xs, borderRadius: raios.redondo },
-  modoAtivo: { backgroundColor: cores.branco },
+  modo: { paddingHorizontal: espacos.lg, paddingVertical: 6, borderRadius: raios.redondo },
+  modoAtivo: { backgroundColor: cores.vermelho },
+  modoTextoAtivo: { fontWeight: '700' },
   contador: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacos.sm,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
     paddingHorizontal: espacos.md,
-    paddingVertical: espacos.xs,
+    paddingVertical: 6,
     borderRadius: raios.redondo,
   },
-  pontoVermelho: { width: 10, height: 10, borderRadius: 5, backgroundColor: cores.vermelho },
+  pontoVermelho: { width: 10, height: 10, borderRadius: 5, backgroundColor: cores.vermelhoVivo },
   rodape: {
     position: 'absolute',
     bottom: 0,
@@ -391,18 +421,34 @@ const estilos = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: espacos.xxl,
   },
-  galeria: { width: 72, alignItems: 'center', gap: 2 },
+  galeria: { width: 72, alignItems: 'center', gap: espacos.xs },
+  iconeGaleria: {
+    width: 46,
+    height: 46,
+    borderRadius: raios.md,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   obturadorExterno: {
     width: 84,
     height: 84,
     borderRadius: 42,
-    borderWidth: 5,
-    borderColor: cores.branco,
+    borderWidth: 4,
+    borderColor: cores.vermelho,
+    backgroundColor: cores.vidro,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  obturadorGravando: { borderColor: cores.vermelho },
-  obturadorInterno: { width: 64, height: 64, borderRadius: 32, backgroundColor: cores.vermelho },
-  obturadorInternoGravando: { width: 36, height: 36, borderRadius: 8 },
+  obturadorGravando: { borderColor: cores.vermelhoVivo },
+  obturadorInterno: { width: 62, height: 62, borderRadius: 31, backgroundColor: cores.branco },
+  obturadorInternoGravando: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: cores.vermelhoVivo,
+  },
   obturadorFoto: { backgroundColor: cores.branco },
 });

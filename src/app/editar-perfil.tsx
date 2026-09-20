@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -12,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SeletorDeInteresses } from '@/components/perfil/SeletorDeInteresses';
-import { Avatar, Botao, Input, Texto } from '@/components/ui';
+import { Avatar, Botao, Cabecalho, Icone, Input, Texto } from '@/components/ui';
 import type { Interesse } from '@/constants/interesses';
 import { useEscolherImagem } from '@/hooks/useEscolherImagem';
 import { useAtualizarPerfil } from '@/hooks/usePerfil';
@@ -63,26 +62,12 @@ export default function TelaEditarPerfil() {
 
   return (
     <KeyboardAvoidingView
-      style={estilos.tela}
+      style={[estilos.tela, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Cabecalho titulo="Editar perfil" aoVoltar={() => router.back()} />
       <ScrollView
-        contentContainerStyle={[
-          estilos.conteudo,
-          { paddingTop: insets.top + espacos.sm, paddingBottom: insets.bottom + espacos.xl },
-        ]}
+        contentContainerStyle={[estilos.conteudo, { paddingBottom: insets.bottom + espacos.xl }]}
         keyboardShouldPersistTaps="handled">
-        <View style={estilos.topo}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={12}
-            accessibilityLabel="Voltar"
-            style={estilos.lado}>
-            <Ionicons name="arrow-back" size={26} color={cores.texto} />
-          </Pressable>
-          <Texto variante="destaque">Editar perfil</Texto>
-          <View style={estilos.lado} />
-        </View>
-
         <Pressable
           onPress={async () => {
             const imagem = await escolher();
@@ -91,11 +76,14 @@ export default function TelaEditarPerfil() {
           disabled={escolhendo}
           style={estilos.areaFoto}
           accessibilityLabel="Trocar foto">
-          <Avatar url={novaFoto ?? usuario.avatarUrl} nome={usuario.nome} tamanho={96} borda />
+          <Avatar url={novaFoto ?? usuario.avatarUrl} nome={usuario.nome} tamanho={100} borda />
           <View style={estilos.iconeCamera}>
-            <Ionicons name="camera" size={16} color={cores.branco} />
+            <Icone nome="camera" tamanho={14} cor={cores.branco} />
           </View>
         </Pressable>
+        <Texto variante="pequeno" cor={cores.textoTerciario} centralizado>
+          Toque na foto para trocar
+        </Texto>
 
         <Input
           rotulo="Apelido"
@@ -125,7 +113,7 @@ export default function TelaEditarPerfil() {
           testID="campo-bio"
         />
         <View style={estilos.bloco}>
-          <Texto variante="pequeno" cor={cores.textoSecundario}>
+          <Texto variante="rotulo" cor={cores.textoSecundario}>
             Interesses (até 3)
           </Texto>
           <SeletorDeInteresses selecionados={interesses} aoMudar={setInteresses} maximo={3} />
@@ -146,9 +134,7 @@ export default function TelaEditarPerfil() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
-  conteudo: { paddingHorizontal: espacos.xl, gap: espacos.lg },
-  topo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  lado: { width: 32 },
+  conteudo: { paddingHorizontal: espacos.xl, paddingTop: espacos.sm, gap: espacos.lg },
   areaFoto: { alignSelf: 'center' },
   iconeCamera: {
     position: 'absolute',

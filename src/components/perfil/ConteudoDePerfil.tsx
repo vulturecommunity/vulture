@@ -1,10 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { GradeDeVideos } from '@/components/perfil/GradeDeVideos';
-import { Carregando, EstadoVazio, Texto } from '@/components/ui';
+import { Carregando, EstadoVazio, Icone, Texto, type NomeDeIcone } from '@/components/ui';
 import { useSeguir } from '@/hooks/useInteracoes';
 import { useListaDeVideos, type OrigemDaLista } from '@/hooks/useListasDeVideos';
 import { useUiStore } from '@/stores/uiStore';
@@ -21,10 +20,10 @@ export interface ConteudoDePerfilProps {
   aoAtualizar?: () => void;
 }
 
-const ABAS: { id: Aba; rotulo: string; icone: keyof typeof Ionicons.glyphMap; soEu?: boolean }[] = [
-  { id: 'usuario', rotulo: 'Vídeos', icone: 'grid-outline' },
-  { id: 'curtidos', rotulo: 'Curtidos', icone: 'heart-outline' },
-  { id: 'salvos', rotulo: 'Salvos', icone: 'bookmark-outline', soEu: true },
+const ABAS: { id: Aba; rotulo: string; icone: NomeDeIcone; soEu?: boolean }[] = [
+  { id: 'usuario', rotulo: 'Vídeos', icone: 'grade' },
+  { id: 'curtidos', rotulo: 'Curtidos', icone: 'curtir' },
+  { id: 'salvos', rotulo: 'Salvos', icone: 'salvar', soEu: true },
 ];
 
 /** Corpo do perfil (meu ou de outro usuário): cabeçalho + abas com grades de vídeos. */
@@ -71,7 +70,7 @@ export function ConteudoDePerfil({ perfil, atualizando, aoAtualizar }: ConteudoD
 
       {perfil.bloqueado ? (
         <EstadoVazio
-          icone="ban-outline"
+          icone="bloquear"
           titulo="Você bloqueou esse perfil"
           descricao="Desbloqueie em Perfil → Contas bloqueadas para ver os vídeos."
         />
@@ -84,18 +83,19 @@ export function ConteudoDePerfil({ perfil, atualizando, aoAtualizar }: ConteudoD
                 <Pressable
                   key={item.id}
                   onPress={() => setAba(item.id)}
-                  style={[estilos.aba, ativa && estilos.abaAtiva]}
+                  style={estilos.aba}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: ativa }}
                   testID={`aba-perfil-${item.id}`}>
-                  <Ionicons
-                    name={item.icone}
-                    size={18}
-                    color={ativa ? cores.branco : cores.textoTerciario}
+                  <Icone
+                    nome={item.icone}
+                    tamanho={16}
+                    cor={ativa ? cores.vermelhoVivo : cores.textoTerciario}
                   />
-                  <Texto variante="pequeno" cor={ativa ? cores.branco : cores.textoTerciario}>
+                  <Texto variante="rotulo" cor={ativa ? cores.texto : cores.textoTerciario}>
                     {item.rotulo}
                   </Texto>
+                  <View style={[estilos.indicador, ativa && estilos.indicadorAtivo]} />
                 </Pressable>
               );
             })}
@@ -105,13 +105,7 @@ export function ConteudoDePerfil({ perfil, atualizando, aoAtualizar }: ConteudoD
             <Carregando telaCheia={false} />
           ) : (lista.data?.length ?? 0) === 0 ? (
             <EstadoVazio
-              icone={
-                aba === 'usuario'
-                  ? 'videocam-outline'
-                  : aba === 'curtidos'
-                    ? 'heart-outline'
-                    : 'bookmark-outline'
-              }
+              icone={aba === 'usuario' ? 'video' : aba === 'curtidos' ? 'curtir' : 'salvar'}
               titulo={
                 aba === 'usuario'
                   ? perfil.souEu
@@ -123,7 +117,7 @@ export function ConteudoDePerfil({ perfil, atualizando, aoAtualizar }: ConteudoD
               }
               descricao={
                 aba === 'usuario' && perfil.souEu
-                  ? 'Toque no + para gravar seu primeiro vídeo.'
+                  ? 'Toque no botão vermelho para gravar seu primeiro vídeo.'
                   : undefined
               }
               acao={
@@ -145,6 +139,7 @@ const estilos = StyleSheet.create({
   conteudo: { paddingBottom: espacos.xxxl, flexGrow: 1 },
   abas: {
     flexDirection: 'row',
+    marginTop: espacos.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: cores.borda,
   },
@@ -153,10 +148,16 @@ const estilos = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: espacos.xs,
+    gap: espacos.xs + 2,
     paddingVertical: espacos.md,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
   },
-  abaAtiva: { borderBottomColor: cores.vermelho },
+  indicador: {
+    position: 'absolute',
+    left: espacos.xl,
+    right: espacos.xl,
+    bottom: 0,
+    height: 2,
+    backgroundColor: 'transparent',
+  },
+  indicadorAtivo: { backgroundColor: cores.vermelho },
 });

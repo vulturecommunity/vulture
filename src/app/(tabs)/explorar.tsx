@@ -1,13 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BarraDeCanais } from '@/components/explorar/BarraDeCanais';
 import { RankingSemanal } from '@/components/explorar/RankingSemanal';
 import { GradeDeVideos } from '@/components/perfil/GradeDeVideos';
-import { Avatar, Carregando, EstadoVazio, Texto } from '@/components/ui';
+import { Avatar, Carregando, EstadoVazio, Icone, Texto, TituloDeSecao } from '@/components/ui';
 import {
   useBuscaDeHashtags,
   useBuscaDeUsuarios,
@@ -22,6 +21,7 @@ export default function TelaExplorar() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [termo, setTermo] = useState('');
+  const [focado, setFocado] = useState(false);
   const termoAtrasado = useValorAtrasado(termo.trim(), 250);
   const buscando = termoAtrasado.length > 0;
 
@@ -32,22 +32,32 @@ export default function TelaExplorar() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <View style={estilos.busca}>
-        <Ionicons name="search" size={20} color={cores.textoTerciario} />
+      <View style={estilos.topo}>
+        <Texto variante="titulo">Explorar</Texto>
+        <Texto variante="pequeno" cor={cores.textoSecundario}>
+          Canais, torcedores e o que está bombando na nação.
+        </Texto>
+      </View>
+
+      <View style={[estilos.busca, focado && estilos.buscaFocada]}>
+        <Icone nome="buscar" tamanho={18} cor={focado ? cores.texto : cores.textoTerciario} />
         <TextInput
           style={estilos.input}
           placeholder="Buscar @usuário ou #hashtag"
           placeholderTextColor={cores.textoTerciario}
           value={termo}
           onChangeText={setTermo}
+          onFocus={() => setFocado(true)}
+          onBlur={() => setFocado(false)}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
+          selectionColor={cores.vermelho}
           testID="campo-busca"
         />
         {termo ? (
           <Pressable onPress={() => setTermo('')} hitSlop={8} accessibilityLabel="Limpar busca">
-            <Ionicons name="close-circle" size={20} color={cores.textoTerciario} />
+            <Icone nome="limpar" tamanho={18} cor={cores.textoTerciario} />
           </Pressable>
         ) : null}
       </View>
@@ -58,7 +68,8 @@ export default function TelaExplorar() {
         testID="explorar-scroll">
         {buscando ? (
           <>
-            <Secao titulo="Torcedores">
+            <View style={estilos.secao}>
+              <TituloDeSecao titulo="Torcedores" icone="torcida" />
               {usuarios.isLoading ? (
                 <Carregando telaCheia={false} />
               ) : (usuarios.data?.length ?? 0) === 0 ? (
@@ -73,18 +84,19 @@ export default function TelaExplorar() {
                     style={estilos.linhaUsuario}
                     testID={`resultado-usuario-${u.apelido}`}>
                     <Avatar url={u.avatarUrl} nome={u.nome} tamanho={44} />
-                    <View style={{ flex: 1 }}>
+                    <View style={estilos.flex}>
                       <Texto variante="corpoForte">@{u.apelido}</Texto>
                       <Texto variante="pequeno" cor={cores.textoSecundario} numberOfLines={1}>
                         {u.nome} · {u.seguidores} seguidores
                       </Texto>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={cores.textoTerciario} />
+                    <Icone nome="avancar" tamanho={18} cor={cores.textoTerciario} />
                   </Pressable>
                 ))
               )}
-            </Secao>
-            <Secao titulo="Hashtags">
+            </View>
+            <View style={estilos.secao}>
+              <TituloDeSecao titulo="Hashtags" icone="hashtag" />
               {hashtags.isLoading ? (
                 <Carregando telaCheia={false} />
               ) : (hashtags.data?.length ?? 0) === 0 ? (
@@ -94,47 +106,46 @@ export default function TelaExplorar() {
               ) : (
                 <View style={estilos.chips}>
                   {hashtags.data!.map((h) => (
-                    <Pressable
+                    <ChipDeHashtag
                       key={h.tag}
-                      onPress={() =>
+                      tag={h.tag}
+                      contagem={`${h.totalVideos} vídeo${h.totalVideos === 1 ? '' : 's'}`}
+                      aoPressionar={() =>
                         router.push({ pathname: '/hashtag/[tag]', params: { tag: h.tag } })
                       }
-                      style={estilos.chip}
-                      testID={`resultado-hashtag-${h.tag}`}>
-                      <Texto variante="corpoForte">#{h.tag}</Texto>
-                      <Texto variante="legenda" cor={cores.textoSecundario}>
-                        {h.totalVideos} vídeo{h.totalVideos === 1 ? '' : 's'}
-                      </Texto>
-                    </Pressable>
+                      testID={`resultado-hashtag-${h.tag}`}
+                    />
                   ))}
                 </View>
               )}
-            </Secao>
+            </View>
           </>
         ) : (
           <>
-            <BarraDeCanais />
+            <View style={estilos.secao}>
+              <TituloDeSecao titulo="Canais da torcida" icone="estadio" />
+              <BarraDeCanais />
+            </View>
             <RankingSemanal />
             {emAlta.data && emAlta.data.length > 0 ? (
-              <Secao titulo="Hashtags em alta">
+              <View style={estilos.secao}>
+                <TituloDeSecao titulo="Hashtags em alta" icone="tendencia" />
                 <View style={estilos.chips}>
                   {emAlta.data.map((h) => (
-                    <Pressable
+                    <ChipDeHashtag
                       key={h.tag}
-                      onPress={() =>
+                      tag={h.tag}
+                      contagem={String(h.totalVideos)}
+                      aoPressionar={() =>
                         router.push({ pathname: '/hashtag/[tag]', params: { tag: h.tag } })
                       }
-                      style={estilos.chip}>
-                      <Texto variante="corpoForte">#{h.tag}</Texto>
-                      <Texto variante="legenda" cor={cores.textoSecundario}>
-                        {h.totalVideos}
-                      </Texto>
-                    </Pressable>
+                    />
                   ))}
                 </View>
-              </Secao>
+              </View>
             ) : null}
-            <Secao titulo="🔥 Em alta">
+            <View style={estilos.secao}>
+              <TituloDeSecao titulo="Em alta" subtitulo="os vídeos mais vistos" icone="emAlta" />
               {trending.isLoading ? (
                 <Carregando telaCheia={false} />
               ) : (trending.data?.length ?? 0) === 0 ? (
@@ -142,7 +153,7 @@ export default function TelaExplorar() {
               ) : (
                 <GradeDeVideos videos={trending.data ?? []} origem="trending" />
               )}
-            </Secao>
+            </View>
           </>
         )}
       </ScrollView>
@@ -150,36 +161,53 @@ export default function TelaExplorar() {
   );
 }
 
-function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
+function ChipDeHashtag({
+  tag,
+  contagem,
+  aoPressionar,
+  testID,
+}: {
+  tag: string;
+  contagem: string;
+  aoPressionar: () => void;
+  testID?: string;
+}) {
   return (
-    <View style={estilos.secao}>
-      <Texto variante="destaque" style={estilos.tituloSecao}>
-        {titulo}
+    <Pressable onPress={aoPressionar} style={estilos.chip} testID={testID}>
+      <Texto variante="corpoForte">
+        <Texto variante="corpoForte" cor={cores.vermelhoVivo}>
+          #
+        </Texto>
+        {tag}
       </Texto>
-      {children}
-    </View>
+      <Texto variante="legenda" cor={cores.textoSecundario}>
+        {contagem}
+      </Texto>
+    </Pressable>
   );
 }
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
+  topo: { paddingHorizontal: espacos.lg, paddingTop: espacos.md, gap: 2 },
   busca: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacos.sm,
     marginHorizontal: espacos.lg,
-    marginVertical: espacos.sm,
+    marginVertical: espacos.md,
     paddingHorizontal: espacos.md,
-    height: 44,
+    height: 46,
     borderRadius: raios.md,
     backgroundColor: cores.fundoElevado,
     borderWidth: 1,
     borderColor: cores.borda,
   },
+  buscaFocada: { borderColor: cores.vermelho },
   input: { flex: 1, color: cores.texto, ...tipografia.corpo },
-  conteudo: { gap: espacos.lg, paddingBottom: espacos.xxxl, paddingTop: espacos.xs },
-  secao: { gap: espacos.sm },
-  tituloSecao: { paddingHorizontal: espacos.lg },
+  conteudo: { gap: espacos.xl, paddingBottom: espacos.xxxl },
+  secao: { gap: espacos.md },
+  flex: { flex: 1 },
   vazio: { paddingHorizontal: espacos.lg },
   linhaUsuario: {
     flexDirection: 'row',
@@ -192,10 +220,10 @@ const estilos = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: espacos.xs,
+    gap: espacos.xs + 2,
     paddingHorizontal: espacos.md,
     paddingVertical: espacos.sm,
-    borderRadius: raios.redondo,
+    borderRadius: raios.md,
     backgroundColor: cores.fundoElevado,
     borderWidth: 1,
     borderColor: cores.borda,

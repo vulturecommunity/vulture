@@ -1,20 +1,20 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios } from '@/theme';
 
+import { Icone, type NomeDeIcone } from './Icone';
 import { Texto } from './Texto';
 
-const ICONES = {
-  sucesso: 'checkmark-circle',
-  erro: 'alert-circle',
-  info: 'information-circle',
-} as const;
-const CORES = { sucesso: cores.sucesso, erro: cores.erro, info: cores.vermelho } as const;
+const ICONES: Record<'sucesso' | 'erro' | 'info', NomeDeIcone> = {
+  sucesso: 'ok',
+  erro: 'alerta',
+  info: 'info',
+};
+const CORES = { sucesso: cores.sucesso, erro: cores.erro, info: cores.vermelhoVivo } as const;
 
 /** Toast global (uiStore.mostrarAviso). Some sozinho depois de 3 segundos. */
 export function Aviso() {
@@ -36,7 +36,8 @@ export function Aviso() {
       style={[estilos.container, { top: insets.top + espacos.sm }]}
       pointerEvents="box-none">
       <Pressable onPress={limpar} style={estilos.caixa} testID="aviso">
-        <Ionicons name={ICONES[aviso.tipo]} size={20} color={CORES[aviso.tipo]} />
+        <View style={[estilos.barra, { backgroundColor: CORES[aviso.tipo] }]} />
+        <Icone nome={ICONES[aviso.tipo]} tamanho={18} cor={CORES[aviso.tipo]} />
         <Texto variante="pequeno" style={estilos.texto}>
           {aviso.texto}
         </Texto>
@@ -53,11 +54,14 @@ const estilos = StyleSheet.create({
     gap: espacos.sm,
     maxWidth: '90%',
     backgroundColor: cores.fundoCartao,
-    borderRadius: raios.lg,
-    paddingHorizontal: espacos.lg,
+    borderRadius: raios.md,
+    paddingRight: espacos.lg,
+    paddingLeft: espacos.md,
     paddingVertical: espacos.md,
     borderWidth: 1,
     borderColor: cores.borda,
+    overflow: 'hidden',
   },
+  barra: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
   texto: { flexShrink: 1 },
 });

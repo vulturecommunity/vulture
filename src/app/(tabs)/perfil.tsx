@@ -1,18 +1,17 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ConteudoDePerfil } from '@/components/perfil/ConteudoDePerfil';
-import { Carregando, Erro, Sheet, Texto } from '@/components/ui';
+import { Carregando, Erro, Icone, Sheet, Texto, type NomeDeIcone } from '@/components/ui';
 import { usePerfil } from '@/hooks/usePerfil';
 import { dataService } from '@/services/data';
 import { MockDataService } from '@/services/data/mock/MockDataService';
 import { queryClient } from '@/services/queryClient';
 import { useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 
 /** Meu perfil: grade de vídeos, curtidos, salvos e menu de configurações. */
 export default function TelaPerfil() {
@@ -50,15 +49,16 @@ export default function TelaPerfil() {
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
       <View style={estilos.topo}>
-        <View style={estilos.espacador} />
-        <Texto variante="destaque">{sessao?.visitante ? 'Visitante (demo)' : 'Meu perfil'}</Texto>
+        <Texto variante="rotulo" cor={cores.textoSecundario}>
+          {sessao?.visitante ? 'Visitante · demo' : 'Meu perfil'}
+        </Texto>
         <Pressable
           onPress={() => setMenuAberto(true)}
           hitSlop={12}
           accessibilityLabel="Configurações"
           testID="botao-menu-perfil"
-          style={estilos.espacador}>
-          <Ionicons name="menu" size={26} color={cores.texto} />
+          style={estilos.botaoMenu}>
+          <Icone nome="configuracoes" tamanho={18} cor={cores.texto} />
         </Pressable>
       </View>
 
@@ -81,7 +81,7 @@ export default function TelaPerfil() {
         titulo="Configurações">
         <View style={estilos.menu}>
           <ItemMenu
-            icone="create-outline"
+            icone="editar"
             rotulo="Editar perfil"
             aoPressionar={() => {
               setMenuAberto(false);
@@ -89,7 +89,7 @@ export default function TelaPerfil() {
             }}
           />
           <ItemMenu
-            icone="notifications-outline"
+            icone="sino"
             rotulo="Notificações"
             aoPressionar={() => {
               setMenuAberto(false);
@@ -97,7 +97,7 @@ export default function TelaPerfil() {
             }}
           />
           <ItemMenu
-            icone="ban-outline"
+            icone="bloquear"
             rotulo="Contas bloqueadas"
             aoPressionar={() => {
               setMenuAberto(false);
@@ -105,7 +105,7 @@ export default function TelaPerfil() {
             }}
           />
           <ItemMenu
-            icone="information-circle-outline"
+            icone="info"
             rotulo={`Driver de dados: ${dataService().nome}`}
             aoPressionar={() =>
               mostrarAviso(
@@ -117,14 +117,10 @@ export default function TelaPerfil() {
             }
           />
           {dataService().nome === 'mock' ? (
-            <ItemMenu
-              icone="refresh-outline"
-              rotulo="Resetar demonstração"
-              aoPressionar={resetarDemo}
-            />
+            <ItemMenu icone="reiniciar" rotulo="Resetar demonstração" aoPressionar={resetarDemo} />
           ) : null}
           <ItemMenu
-            icone="log-out-outline"
+            icone="sair"
             rotulo="Sair"
             cor={cores.erro}
             aoPressionar={() => {
@@ -146,7 +142,7 @@ function ItemMenu({
   cor = cores.texto,
   testID,
 }: {
-  icone: keyof typeof Ionicons.glyphMap;
+  icone: NomeDeIcone;
   rotulo: string;
   aoPressionar: () => void;
   cor?: string;
@@ -155,19 +151,23 @@ function ItemMenu({
   return (
     <Pressable
       onPress={aoPressionar}
-      style={estilos.itemMenu}
+      style={({ pressed }) => [estilos.itemMenu, pressed && estilos.itemPressionado]}
       accessibilityRole="button"
       testID={testID}>
-      <Ionicons name={icone} size={22} color={cor} />
-      <Texto variante="corpo" cor={cor}>
+      <View style={estilos.iconeMenu}>
+        <Icone nome={icone} tamanho={18} cor={cor} />
+      </View>
+      <Texto variante="corpo" cor={cor} style={estilos.flex}>
         {rotulo}
       </Texto>
+      <Icone nome="avancar" tamanho={16} cor={cores.textoTerciario} />
     </Pressable>
   );
 }
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
+  flex: { flex: 1 },
   topo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -175,13 +175,32 @@ const estilos = StyleSheet.create({
     paddingHorizontal: espacos.lg,
     paddingVertical: espacos.sm,
   },
-  espacador: { width: 32, alignItems: 'flex-end' },
-  menu: { paddingVertical: espacos.sm },
+  botaoMenu: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menu: { paddingVertical: espacos.sm, paddingHorizontal: espacos.sm },
   itemMenu: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacos.md,
-    paddingHorizontal: espacos.xl,
-    paddingVertical: espacos.md,
+    paddingHorizontal: espacos.md,
+    paddingVertical: espacos.sm + 2,
+    borderRadius: raios.md,
+  },
+  itemPressionado: { backgroundColor: cores.fundoCartao },
+  iconeMenu: {
+    width: 36,
+    height: 36,
+    borderRadius: raios.sm + 2,
+    backgroundColor: cores.fundoCartao,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

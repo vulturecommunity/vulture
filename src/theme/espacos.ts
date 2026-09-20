@@ -12,8 +12,8 @@ export const espacos = {
 
 export const raios = {
   sm: 6,
-  md: 10,
-  lg: 16,
-  xl: 24,
+  md: 12,
+  lg: 18,
+  xl: 26,
   redondo: 999,
 } as const;

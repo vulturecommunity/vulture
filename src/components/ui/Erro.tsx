@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 
 import { cores, espacos } from '@/theme';
 import { mensagemDeErro } from '@/utils/erros';
 
 import { Botao } from './Botao';
+import { Icone } from './Icone';
 import { Texto } from './Texto';
 
 export interface ErroProps {
@@ -16,7 +16,9 @@ export interface ErroProps {
 export function Erro({ erro, aoTentarNovamente, telaCheia = true }: ErroProps) {
   return (
     <View style={[estilos.container, telaCheia && estilos.telaCheia]}>
-      <Ionicons name="alert-circle-outline" size={40} color={cores.erro} />
+      <View style={estilos.circulo}>
+        <Icone nome="alerta" tamanho={26} cor={cores.erro} />
+      </View>
       <Texto variante="destaque" centralizado>
         Ops, algo deu errado
       </Texto>
@@ -24,7 +26,7 @@ export function Erro({ erro, aoTentarNovamente, telaCheia = true }: ErroProps) {
         {mensagemDeErro(erro)}
       </Texto>
       {aoTentarNovamente ? (
-        <Botao titulo="Tentar novamente" variante="secundario" onPress={aoTentarNovamente} />
+        <Botao titulo="Tentar novamente" variante="contorno" onPress={aoTentarNovamente} />
       ) : null}
     </View>
   );
@@ -38,4 +40,13 @@ const estilos = StyleSheet.create({
     padding: espacos.xl,
   },
   telaCheia: { flex: 1, backgroundColor: cores.fundo },
+  circulo: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,77,90,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: espacos.xs,
+  },
 });

@@ -20,10 +20,10 @@ const temaEscuro = {
     ...DarkTheme.colors,
     primary: cores.vermelho,
     background: cores.fundo,
-    card: cores.pretoPuro,
+    card: cores.fundo,
     text: cores.texto,
     border: cores.borda,
-    notification: cores.vermelho,
+    notification: cores.vermelhoVivo,
   },
 };
 

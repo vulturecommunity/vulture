@@ -18,10 +18,15 @@ export function BarraDeCanais() {
         <Pressable
           key={canal}
           onPress={() => router.push({ pathname: '/hashtag/[tag]', params: { tag: canal } })}
-          style={estilos.canal}
+          style={({ pressed }) => [estilos.canal, pressed && estilos.pressionado]}
           accessibilityRole="button"
           testID={`canal-${canal}`}>
-          <Texto variante="corpoForte">#{canal}</Texto>
+          <Texto variante="corpoForte">
+            <Texto variante="corpoForte" cor={cores.vermelhoVivo}>
+              #
+            </Texto>
+            {canal}
+          </Texto>
         </Pressable>
       ))}
     </ScrollView>
@@ -32,8 +37,11 @@ const estilos = StyleSheet.create({
   lista: { paddingHorizontal: espacos.lg, gap: espacos.sm },
   canal: {
     paddingHorizontal: espacos.lg,
-    paddingVertical: espacos.sm,
-    borderRadius: raios.redondo,
-    backgroundColor: cores.vermelho,
+    paddingVertical: espacos.sm + 2,
+    borderRadius: raios.md,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
   },
+  pressionado: { borderColor: cores.vermelho },
 });

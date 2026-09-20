@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -6,17 +5,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedVertical } from '@/components/feed/FeedVertical';
 import { CardsDePartida } from '@/components/partidas/CardsDePartida';
-import { Erro, Texto } from '@/components/ui';
+import { Erro, Icone, Listras, Texto } from '@/components/ui';
 import { useFeed } from '@/hooks/useFeed';
 import { useNotificacoesNaoLidas } from '@/hooks/useNotificacoes';
 import type { AbaDoFeed } from '@/services/data/types';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 
 const ABAS: { id: AbaDoFeed; rotulo: string }[] = [
+  { id: 'paraVoce', rotulo: 'Para você' },
   { id: 'seguindo', rotulo: 'Seguindo' },
-  { id: 'paraVoce', rotulo: 'Para Você' },
 ];
 
 export default function TelaFeed() {
@@ -75,41 +74,50 @@ export default function TelaFeed() {
       <View
         style={[estilos.topo, { paddingTop: insets.top + espacos.sm }]}
         pointerEvents="box-none">
-        <View style={estilos.abas}>
-          {ABAS.map((item) => {
-            const ativa = item.id === aba;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => setAba(item.id)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: ativa }}
-                testID={`aba-${item.id}`}
-                style={estilos.aba}>
-                <Texto
-                  variante="destaque"
-                  cor={ativa ? cores.branco : 'rgba(255,255,255,0.6)'}
-                  style={estilos.sombra}>
-                  {item.rotulo}
+        <View style={estilos.linhaMarca} pointerEvents="box-none">
+          <View style={estilos.marca}>
+            <Listras altura={14} faixas={6} style={estilos.marcaListras} />
+            <Texto variante="marca" style={estilos.sombra}>
+              VULTURE
+            </Texto>
+          </View>
+          <View style={estilos.seletor}>
+            {ABAS.map((item) => {
+              const ativa = item.id === aba;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => setAba(item.id)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: ativa }}
+                  testID={`aba-${item.id}`}
+                  style={[estilos.opcao, ativa && estilos.opcaoAtiva]}>
+                  <Texto
+                    variante="pequeno"
+                    cor={ativa ? cores.branco : cores.textoSecundario}
+                    style={ativa && estilos.opcaoTextoAtivo}>
+                    {item.rotulo}
+                  </Texto>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable
+            onPress={() => router.push('/notificacoes')}
+            style={estilos.sino}
+            hitSlop={8}
+            accessibilityLabel="Notificações"
+            testID="botao-notificacoes">
+            <Icone nome="sino" tamanho={20} cor={cores.branco} />
+            {naoLidas > 0 ? (
+              <View style={estilos.badge}>
+                <Texto variante="legenda" style={estilos.badgeTexto}>
+                  {naoLidas > 9 ? '9+' : naoLidas}
                 </Texto>
-                {ativa ? <View style={estilos.indicador} /> : null}
-              </Pressable>
-            );
-          })}
+              </View>
+            ) : null}
+          </Pressable>
         </View>
-        <Pressable
-          onPress={() => router.push('/notificacoes')}
-          style={[estilos.sino, { top: insets.top + espacos.sm }]}
-          hitSlop={8}
-          accessibilityLabel="Notificações"
-          testID="botao-notificacoes">
-          <Ionicons name="notifications-outline" size={26} color={cores.branco} />
-          {naoLidas > 0 ? (
-            <View style={estilos.badge}>
-              <Texto variante="legenda">{naoLidas > 9 ? '9+' : naoLidas}</Texto>
-            </View>
-          ) : null}
-        </Pressable>
         <CardsDePartida />
       </View>
     </View>
@@ -119,21 +127,59 @@ export default function TelaFeed() {
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.pretoPuro },
   topo: { position: 'absolute', top: 0, left: 0, right: 0, gap: espacos.sm },
-  abas: { flexDirection: 'row', justifyContent: 'center', gap: espacos.xl },
-  aba: { alignItems: 'center', gap: 4, paddingVertical: espacos.xs },
-  indicador: { width: 28, height: 3, borderRadius: 2, backgroundColor: cores.vermelho },
+  linhaMarca: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacos.sm,
+    paddingHorizontal: espacos.md,
+  },
+  marca: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs + 2 },
+  marcaListras: { width: 18 },
   sombra: { textShadowColor: cores.sombra, textShadowRadius: 6 },
-  sino: { position: 'absolute', right: espacos.lg },
+  seletor: {
+    flex: 1,
+    flexDirection: 'row',
+    alignSelf: 'center',
+    marginLeft: espacos.xs,
+    padding: 3,
+    borderRadius: raios.redondo,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    maxWidth: 210,
+  },
+  opcao: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderRadius: raios.redondo,
+  },
+  opcaoAtiva: { backgroundColor: cores.vermelho },
+  opcaoTextoAtivo: { fontWeight: '700' },
+  sino: {
+    marginLeft: 'auto',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -6,
+    top: -3,
+    right: -3,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
     paddingHorizontal: 4,
-    backgroundColor: cores.vermelho,
+    backgroundColor: cores.vermelhoVivo,
+    borderWidth: 2,
+    borderColor: cores.pretoPuro,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badgeTexto: { fontSize: 10, lineHeight: 12 },
 });

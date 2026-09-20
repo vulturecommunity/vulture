@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -14,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Botao, Input, Texto } from '@/components/ui';
+import { Botao, Cabecalho, Icone, Input, Texto } from '@/components/ui';
 import { ICONE_INTERESSE, INTERESSES } from '@/constants/interesses';
 import { usePublicar } from '@/hooks/usePublicar';
 import { useCriacaoStore } from '@/stores/criacaoStore';
@@ -82,7 +81,7 @@ export default function TelaPreview() {
     try {
       await publicar.mutateAsync({ salvarNaGaleria });
       limpar();
-      mostrarAviso('Publicado! Seu vídeo já está no feed. 🔴⚫', 'sucesso');
+      mostrarAviso('Publicado! Seu vídeo já está no feed.', 'sucesso');
       router.dismissAll();
       router.replace('/(tabs)');
     } catch {
@@ -97,27 +96,12 @@ export default function TelaPreview() {
 
   return (
     <KeyboardAvoidingView
-      style={estilos.tela}
+      style={[estilos.tela, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Cabecalho titulo="Nova publicação" aoVoltar={refazer} rotuloVoltar="Refazer" />
       <ScrollView
-        contentContainerStyle={[
-          estilos.conteudo,
-          { paddingTop: insets.top + espacos.sm, paddingBottom: insets.bottom + espacos.xl },
-        ]}
+        contentContainerStyle={[estilos.conteudo, { paddingBottom: insets.bottom + espacos.xl }]}
         keyboardShouldPersistTaps="handled">
-        <View style={estilos.cabecalho}>
-          <Pressable
-            onPress={refazer}
-            hitSlop={12}
-            disabled={publicando}
-            accessibilityLabel="Refazer"
-            style={estilos.voltar}>
-            <Ionicons name="arrow-back" size={26} color={cores.texto} />
-          </Pressable>
-          <Texto variante="destaque">Nova publicação</Texto>
-          <View style={estilos.voltar} />
-        </View>
-
         <View style={estilos.linhaMidia}>
           <View style={estilos.caixaMidia}>
             {midia.tipo === 'video' ? (
@@ -126,10 +110,10 @@ export default function TelaPreview() {
               <Image source={{ uri: midia.uri }} style={estilos.midia} contentFit="cover" />
             )}
             <View style={estilos.etiqueta}>
-              <Ionicons
-                name={midia.tipo === 'video' ? 'videocam' : 'image'}
-                size={12}
-                color={cores.branco}
+              <Icone
+                nome={midia.tipo === 'video' ? 'video' : 'foto'}
+                tamanho={11}
+                cor={cores.branco}
               />
               <Texto variante="legenda">{formatarDuracao(midia.duracao)}</Texto>
             </View>
@@ -152,7 +136,9 @@ export default function TelaPreview() {
         </View>
 
         <View style={estilos.bloco}>
-          <Texto variante="corpoForte">Hashtags sugeridas</Texto>
+          <Texto variante="rotulo" cor={cores.textoSecundario}>
+            Hashtags sugeridas
+          </Texto>
           <View style={estilos.chips}>
             {SUGESTOES.map((tag) => {
               const ativa = hashtags.some((h) => h.toLowerCase() === tag.toLowerCase());
@@ -164,7 +150,10 @@ export default function TelaPreview() {
                   style={[estilos.chip, ativa && estilos.chipAtivo]}
                   testID={`sugestao-${tag}`}>
                   <Texto variante="pequeno" cor={ativa ? cores.branco : cores.textoSecundario}>
-                    #{tag}
+                    <Texto variante="pequeno" cor={ativa ? cores.branco : cores.vermelhoVivo}>
+                      #
+                    </Texto>
+                    {tag}
                   </Texto>
                 </Pressable>
               );
@@ -173,30 +162,43 @@ export default function TelaPreview() {
         </View>
 
         <View style={estilos.bloco}>
-          <Texto variante="corpoForte">Categoria</Texto>
+          <Texto variante="rotulo" cor={cores.textoSecundario}>
+            Categoria
+          </Texto>
           <View style={estilos.chips}>
-            {INTERESSES.map((i) => (
-              <Pressable
-                key={i}
-                onPress={() => definirCategoria(i)}
-                disabled={publicando}
-                style={[estilos.chip, categoria === i && estilos.chipAtivo]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: categoria === i }}
-                testID={`categoria-${i}`}>
-                <Texto
-                  variante="pequeno"
-                  cor={categoria === i ? cores.branco : cores.textoSecundario}>
-                  {ICONE_INTERESSE[i]} {i}
-                </Texto>
-              </Pressable>
-            ))}
+            {INTERESSES.map((i) => {
+              const ativa = categoria === i;
+              return (
+                <Pressable
+                  key={i}
+                  onPress={() => definirCategoria(i)}
+                  disabled={publicando}
+                  style={[estilos.chip, ativa && estilos.chipAtivo]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: ativa }}
+                  testID={`categoria-${i}`}>
+                  <Icone
+                    nome={ICONE_INTERESSE[i]}
+                    tamanho={13}
+                    cor={ativa ? cores.branco : cores.vermelhoVivo}
+                  />
+                  <Texto variante="pequeno" cor={ativa ? cores.branco : cores.textoSecundario}>
+                    {i}
+                  </Texto>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
         {midia.origem === 'camera' ? (
           <View style={estilos.linhaSwitch}>
-            <Texto variante="corpo">Salvar também na galeria do celular</Texto>
+            <View style={estilos.flex}>
+              <Texto variante="corpo">Salvar na galeria</Texto>
+              <Texto variante="pequeno" cor={cores.textoTerciario}>
+                Guarda uma cópia no seu celular
+              </Texto>
+            </View>
             <Switch
               value={salvarNaGaleria}
               onValueChange={setSalvarNaGaleria}
@@ -227,16 +229,17 @@ export default function TelaPreview() {
         <View style={estilos.rodape}>
           <Botao
             titulo="Refazer"
-            variante="secundario"
+            variante="contorno"
             onPress={refazer}
             disabled={publicando}
-            style={{ flex: 1 }}
+            style={estilos.flex}
           />
           <Botao
             titulo="Publicar"
             onPress={aoPublicar}
             carregando={publicando}
-            style={{ flex: 2 }}
+            icone={<Icone nome="enviar" tamanho={16} cor={cores.branco} />}
+            style={estilos.flex2}
             testID="botao-publicar"
           />
         </View>
@@ -248,9 +251,9 @@ export default function TelaPreview() {
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
   centro: { alignItems: 'center', justifyContent: 'center', gap: espacos.md },
-  conteudo: { paddingHorizontal: espacos.lg, gap: espacos.lg },
-  cabecalho: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  voltar: { width: 40, padding: espacos.xs },
+  flex: { flex: 1 },
+  flex2: { flex: 2 },
+  conteudo: { paddingHorizontal: espacos.lg, paddingTop: espacos.xs, gap: espacos.lg },
   linhaMidia: { flexDirection: 'row', gap: espacos.md },
   caixaMidia: {
     width: 120,
@@ -258,18 +261,20 @@ const estilos = StyleSheet.create({
     borderRadius: raios.md,
     overflow: 'hidden',
     backgroundColor: cores.pretoPuro,
+    borderWidth: 1,
+    borderColor: cores.borda,
   },
   midia: { width: '100%', height: '100%' },
   etiqueta: {
     position: 'absolute',
-    bottom: espacos.xs,
-    left: espacos.xs,
+    bottom: espacos.xs + 2,
+    left: espacos.xs + 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: cores.vidro,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: raios.sm,
   },
   colunaLegenda: { flex: 1, gap: espacos.xs },
@@ -277,9 +282,12 @@ const estilos = StyleSheet.create({
   bloco: { gap: espacos.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: espacos.sm },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacos.xs + 1,
     paddingHorizontal: espacos.md,
-    paddingVertical: espacos.xs + 2,
-    borderRadius: raios.redondo,
+    paddingVertical: espacos.sm,
+    borderRadius: raios.md,
     borderWidth: 1,
     borderColor: cores.borda,
     backgroundColor: cores.fundoElevado,
@@ -290,9 +298,14 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: espacos.md,
+    padding: espacos.md,
+    borderRadius: raios.md,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
   },
   progresso: { gap: espacos.xs },
-  trilha: { height: 8, borderRadius: 4, backgroundColor: cores.fundoCartao, overflow: 'hidden' },
-  barra: { height: 8, backgroundColor: cores.vermelho },
+  trilha: { height: 6, borderRadius: 3, backgroundColor: cores.fundoCartao, overflow: 'hidden' },
+  barra: { height: 6, backgroundColor: cores.vermelhoVivo },
   rodape: { flexDirection: 'row', gap: espacos.md },
 });

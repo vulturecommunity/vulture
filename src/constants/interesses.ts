@@ -1,13 +1,15 @@
+import type { NomeDeIcone } from '@/components/ui/Icone';
+
 /** Interesses escolhidos no onboarding e usados como categoria dos vídeos. */
 export const INTERESSES = ['Jogos', 'Bastidores', 'Torcida', 'Memes', 'Análises'] as const;
 export type Interesse = (typeof INTERESSES)[number];
 
-export const ICONE_INTERESSE: Record<Interesse, string> = {
-  Jogos: '⚽',
-  Bastidores: '🎬',
-  Torcida: '🔴',
-  Memes: '😂',
-  Análises: '📊',
+export const ICONE_INTERESSE: Record<Interesse, NomeDeIcone> = {
+  Jogos: 'bola',
+  Bastidores: 'filme',
+  Torcida: 'torcida',
+  Memes: 'sorriso',
+  Análises: 'grafico',
 };
 
 /** Canais temáticos exibidos no topo do Explorar. */

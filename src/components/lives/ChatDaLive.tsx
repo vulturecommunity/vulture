@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { Avatar, Texto } from '@/components/ui';
+import { Avatar, Icone, Texto } from '@/components/ui';
 import { REACOES, type Reacao } from '@/constants/interesses';
 import { cores, espacos, raios, tipografia } from '@/theme';
 import type { MensagemLive } from '@/types';
@@ -19,7 +18,7 @@ function ItemMensagem({ mensagem }: { mensagem: MensagemLive }) {
     <View style={estilos.mensagem}>
       <Avatar url={mensagem.autor.avatarUrl} nome={mensagem.autor.apelido} tamanho={26} />
       <Texto variante="pequeno" style={estilos.textoMensagem}>
-        <Texto variante="pequeno" cor={cores.textoSecundario}>
+        <Texto variante="pequeno" cor={cores.vermelhoVivo} style={estilos.autorMensagem}>
           @{mensagem.autor.apelido}{' '}
         </Texto>
         {mensagem.tipo === 'reacao' ? `reagiu ${mensagem.texto}` : mensagem.texto}
@@ -28,7 +27,7 @@ function ItemMensagem({ mensagem }: { mensagem: MensagemLive }) {
   );
 }
 
-/** Chat da live (lista + caixa de envio) e barra de reações temáticas 🔴⚫🦅🏆. */
+/** Chat da live (lista + caixa de envio) e barra de reações temáticas. */
 export function ChatDaLive({ mensagens, aoEnviar, aoReagir, desabilitado }: ChatDaLiveProps) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -69,7 +68,7 @@ export function ChatDaLive({ mensagens, aoEnviar, aoReagir, desabilitado }: Chat
             key={r}
             onPress={() => aoReagir(r)}
             disabled={desabilitado}
-            style={estilos.reacao}
+            style={({ pressed }) => [estilos.reacao, pressed && estilos.reacaoPressionada]}
             accessibilityLabel={`Reagir com ${r}`}
             testID={`reacao-${r}`}>
             <Texto style={estilos.emoji}>{r}</Texto>
@@ -87,6 +86,7 @@ export function ChatDaLive({ mensagens, aoEnviar, aoReagir, desabilitado }: Chat
           onSubmitEditing={enviar}
           returnKeyType="send"
           maxLength={200}
+          selectionColor={cores.vermelho}
           testID="campo-chat"
         />
         <Pressable
@@ -95,7 +95,7 @@ export function ChatDaLive({ mensagens, aoEnviar, aoReagir, desabilitado }: Chat
           style={[estilos.enviar, (desabilitado || !texto.trim()) && estilos.enviarInativo]}
           accessibilityLabel="Enviar"
           testID="botao-enviar-chat">
-          <Ionicons name="send" size={18} color={cores.branco} />
+          <Icone nome="enviar" tamanho={18} cor={cores.branco} />
         </Pressable>
       </View>
     </View>
@@ -112,21 +112,27 @@ const estilos = StyleSheet.create({
     gap: espacos.sm,
     alignSelf: 'flex-start',
     maxWidth: '85%',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: raios.lg,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    borderRadius: raios.md,
     paddingHorizontal: espacos.sm,
-    paddingVertical: espacos.xs,
+    paddingVertical: espacos.xs + 1,
   },
   textoMensagem: { flexShrink: 1 },
+  autorMensagem: { fontWeight: '700' },
   reacoes: { flexDirection: 'row', gap: espacos.sm, paddingHorizontal: espacos.lg },
   reacao: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: raios.md,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  reacaoPressionada: { borderColor: cores.vermelho, backgroundColor: cores.vermelhoSuave },
   emoji: { fontSize: 22 },
   caixa: {
     flexDirection: 'row',
@@ -138,15 +144,17 @@ const estilos = StyleSheet.create({
     flex: 1,
     ...tipografia.corpo,
     color: cores.texto,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: raios.redondo,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    borderRadius: raios.md,
     paddingHorizontal: espacos.lg,
-    height: 42,
+    height: 44,
   },
   enviar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: raios.md,
     backgroundColor: cores.vermelho,
     alignItems: 'center',
     justifyContent: 'center',

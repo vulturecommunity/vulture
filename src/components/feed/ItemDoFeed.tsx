@@ -1,19 +1,19 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
-import { Texto } from '@/components/ui';
+import { Avatar, Icone, Texto } from '@/components/ui';
+import { ICONE_INTERESSE } from '@/constants/interesses';
 import { useCompartilhar, useCurtir, useSalvar } from '@/hooks/useInteracoes';
 import { dataService } from '@/services/data';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 import type { Video } from '@/types';
 
-import { AcoesLaterais } from './AcoesLaterais';
+import { BarraDeAcoes } from './BarraDeAcoes';
 import { CoracaoAnimado } from './CoracaoAnimado';
 import { LegendaComHashtags } from './LegendaComHashtags';
 import { PlayerDeVideo } from './PlayerDeVideo';
@@ -103,6 +103,11 @@ function ItemDoFeedBase({
     });
   }, [abrirDenuncia, video]);
 
+  const abrirPerfil = useCallback(() => {
+    if (meuId === video.autorId) router.push('/(tabs)/perfil');
+    else router.push({ pathname: '/usuario/[id]', params: { id: video.autorId } });
+  }, [meuId, router, video.autorId]);
+
   return (
     <View style={[estilos.item, { height: altura }]} testID={`item-feed-${video.id}`}>
       <GestureDetector gesture={gestos}>
@@ -117,50 +122,68 @@ function ItemDoFeedBase({
           <CoracaoAnimado disparo={coracao.disparo} x={coracao.x} y={coracao.y} />
           {mostrarMudo ? (
             <View style={estilos.indicadorMudo} pointerEvents="none">
-              <Ionicons
-                name={mudo ? 'volume-mute' : 'volume-high'}
-                size={40}
-                color={cores.branco}
-              />
+              <View style={estilos.seloMudo}>
+                <Icone nome={mudo ? 'somDesligado' : 'somLigado'} tamanho={26} cor={cores.branco} />
+              </View>
             </View>
           ) : null}
         </View>
       </GestureDetector>
 
       <View
-        style={[estilos.overlay, { paddingBottom: recuoInferior + espacos.lg }]}
+        style={[estilos.overlay, { paddingBottom: recuoInferior + espacos.md }]}
         pointerEvents="box-none">
-        <View style={estilos.info} pointerEvents="box-none">
-          <Pressable
-            onPress={() =>
-              meuId === video.autorId
-                ? router.push('/(tabs)/perfil')
-                : router.push({ pathname: '/usuario/[id]', params: { id: video.autorId } })
-            }
-            accessibilityRole="link">
-            <Texto variante="destaque" style={estilos.sombra}>
-              @{video.autor.apelido}
-            </Texto>
-          </Pressable>
-          {video.legenda ? (
-            <LegendaComHashtags texto={video.legenda} style={estilos.sombra} numberOfLines={3} />
-          ) : null}
+        <View style={estilos.painel}>
+          <View style={estilos.linhaAutor}>
+            <Pressable
+              onPress={abrirPerfil}
+              accessibilityRole="button"
+              accessibilityLabel={`Perfil de @${video.autor.apelido}`}
+              style={estilos.autor}>
+              <Avatar url={video.autor.avatarUrl} nome={video.autor.nome} tamanho={40} borda />
+              <View style={estilos.nomes}>
+                <Texto variante="corpoForte" numberOfLines={1}>
+                  @{video.autor.apelido}
+                </Texto>
+                <Texto variante="legenda" cor={cores.textoSecundario} numberOfLines={1}>
+                  {video.autor.nome}
+                </Texto>
+              </View>
+            </Pressable>
+            <View style={estilos.categoria}>
+              <Icone
+                nome={ICONE_INTERESSE[video.categoria]}
+                tamanho={12}
+                cor={cores.vermelhoVivo}
+              />
+              <Texto variante="rotulo" cor={cores.textoSecundario}>
+                {video.categoria}
+              </Texto>
+            </View>
+          </View>
+
+          {video.legenda ? <LegendaComHashtags texto={video.legenda} numberOfLines={3} /> : null}
+
           <View style={estilos.linhaAudio}>
-            <Ionicons name="musical-notes" size={14} color={cores.branco} />
-            <Texto variante="pequeno" style={[estilos.sombra, estilos.audio]} numberOfLines={1}>
+            <Icone nome="microfone" tamanho={13} cor={cores.textoSecundario} />
+            <Texto
+              variante="pequeno"
+              cor={cores.textoSecundario}
+              numberOfLines={1}
+              style={estilos.audio}>
               {video.audio || `Som original - ${video.autor.apelido}`}
             </Texto>
           </View>
+
+          <BarraDeAcoes
+            video={video}
+            aoCurtir={() => alternarCurtida(video)}
+            aoComentar={() => abrirComentarios(video.id)}
+            aoSalvar={() => alternarSalvo(video)}
+            aoCompartilhar={() => compartilhar(video)}
+            aoMais={abrirMais}
+          />
         </View>
-        <AcoesLaterais
-          video={video}
-          souOAutor={meuId === video.autorId}
-          aoCurtir={() => alternarCurtida(video)}
-          aoComentar={() => abrirComentarios(video.id)}
-          aoSalvar={() => alternarSalvo(video)}
-          aoCompartilhar={() => compartilhar(video)}
-          aoMais={abrirMais}
-        />
       </View>
     </View>
   );
@@ -174,22 +197,42 @@ const estilos = StyleSheet.create({
   item: { width: '100%', backgroundColor: cores.pretoPuro },
   placeholder: { ...ABSOLUTO, backgroundColor: cores.pretoPuro },
   overlay: {
-    ...ABSOLUTO,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: espacos.md,
   },
-  info: { flex: 1, gap: espacos.xs, paddingRight: espacos.md },
+  painel: {
+    backgroundColor: cores.vidro,
+    borderRadius: raios.lg,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    padding: espacos.md,
+    gap: espacos.sm,
+  },
+  linhaAutor: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
+  autor: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm, flex: 1 },
+  nomes: { flexShrink: 1 },
+  categoria: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacos.xs,
+    paddingHorizontal: espacos.sm,
+    paddingVertical: 4,
+    borderRadius: raios.sm,
+    backgroundColor: cores.vidroClaro,
+  },
   linhaAudio: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs },
   audio: { flex: 1 },
-  sombra: {
-    textShadowColor: cores.sombra,
-    textShadowRadius: 6,
-    textShadowOffset: { width: 0, height: 1 },
-  },
-  indicadorMudo: {
-    ...ABSOLUTO,
+  indicadorMudo: { ...ABSOLUTO, alignItems: 'center', justifyContent: 'center' },
+  seloMudo: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
     alignItems: 'center',
     justifyContent: 'center',
   },

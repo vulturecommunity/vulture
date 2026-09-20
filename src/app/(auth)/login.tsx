@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Botao, Input, Texto } from '@/components/ui';
+import { Botao, Input, Listras, Texto } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 import { emailValido, senhaValida } from '@/utils/validacao';
 
 export default function TelaLogin() {
@@ -47,28 +47,38 @@ export default function TelaLogin() {
     <KeyboardAvoidingView
       style={estilos.tela}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Listras altura={6} style={[estilos.faixaTopo, { marginTop: insets.top }]} />
       <ScrollView
         contentContainerStyle={[
           estilos.conteudo,
-          { paddingTop: insets.top + espacos.xxl, paddingBottom: insets.bottom + espacos.xl },
+          { paddingTop: espacos.xxl, paddingBottom: insets.bottom + espacos.xl },
         ]}
         keyboardShouldPersistTaps="handled">
         <View style={estilos.cabecalho}>
-          <Image
-            source={require('@/assets/images/logo.png')}
-            style={estilos.logo}
-            contentFit="contain"
-            accessibilityLabel="Logo do Vulture"
-          />
-          <Texto variante="titulo">VULTURE</Texto>
+          <View style={estilos.logoAro}>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={estilos.logo}
+              contentFit="contain"
+              accessibilityLabel="Logo do Vulture"
+            />
+          </View>
+          <Texto variante="titulo" style={estilos.marca}>
+            VULTURE
+          </Texto>
+          <Listras altura={4} faixas={8} style={estilos.sublinhado} />
           <Texto variante="corpo" cor={cores.textoSecundario} centralizado>
             A rede da torcida. Vídeos, lives e resenha rubro-negra.
           </Texto>
         </View>
 
-        <View style={estilos.formulario}>
+        <View style={estilos.cartao}>
+          <Texto variante="rotulo" cor={cores.textoSecundario}>
+            Entrar na sua conta
+          </Texto>
           <Input
             rotulo="E-mail"
+            icone="perfil"
             placeholder="voce@exemplo.com"
             autoCapitalize="none"
             autoComplete="email"
@@ -83,6 +93,7 @@ export default function TelaLogin() {
           />
           <Input
             rotulo="Senha"
+            icone="cadeado"
             placeholder="mínimo 6 caracteres"
             secureTextEntry
             autoComplete="password"
@@ -110,7 +121,7 @@ export default function TelaLogin() {
           />
           <Botao
             titulo="Criar conta"
-            variante="secundario"
+            variante="contorno"
             onPress={() => router.push('/(auth)/cadastro')}
             disabled={ocupado}
             largo
@@ -118,7 +129,6 @@ export default function TelaLogin() {
         </View>
 
         <View style={estilos.rodape}>
-          <View style={estilos.divisor} />
           <Botao
             titulo="Entrar como visitante (modo demo)"
             variante="fantasma"
@@ -138,10 +148,30 @@ export default function TelaLogin() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
-  conteudo: { flexGrow: 1, paddingHorizontal: espacos.xl, gap: espacos.xxl },
+  faixaTopo: { borderRadius: 0 },
+  conteudo: { flexGrow: 1, paddingHorizontal: espacos.xl, gap: espacos.xl },
   cabecalho: { alignItems: 'center', gap: espacos.sm },
-  logo: { width: 96, height: 96, marginBottom: espacos.sm },
-  formulario: { gap: espacos.md },
+  logoAro: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 2,
+    borderColor: cores.vermelho,
+    backgroundColor: cores.fundoElevado,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: espacos.xs,
+  },
+  logo: { width: 84, height: 84 },
+  marca: { letterSpacing: 6 },
+  sublinhado: { width: 56, marginBottom: espacos.xs },
+  cartao: {
+    gap: espacos.md,
+    padding: espacos.lg,
+    borderRadius: raios.lg,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
+  },
   rodape: { marginTop: 'auto', gap: espacos.md },
-  divisor: { height: StyleSheet.hairlineWidth, backgroundColor: cores.borda },
 });

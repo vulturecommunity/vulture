@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -11,12 +10,25 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SeletorDeInteresses } from '@/components/perfil/SeletorDeInteresses';
-import { Avatar, Botao, Input, Texto } from '@/components/ui';
+import { Avatar, Botao, Icone, Input, Listras, Texto } from '@/components/ui';
 import type { Interesse } from '@/constants/interesses';
 import { useEscolherImagem } from '@/hooks/useEscolherImagem';
 import { useAuthStore } from '@/stores/authStore';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 import { apelidoValido, normalizarApelido } from '@/utils/validacao';
+
+function Passo({ numero, titulo }: { numero: number; titulo: string }) {
+  return (
+    <View style={estilos.passo}>
+      <View style={estilos.numero}>
+        <Texto variante="legenda" style={estilos.numeroTexto}>
+          {numero}
+        </Texto>
+      </View>
+      <Texto variante="destaque">{titulo}</Texto>
+    </View>
+  );
+}
 
 export default function TelaOnboarding() {
   const insets = useSafeAreaInsets();
@@ -57,38 +69,44 @@ export default function TelaOnboarding() {
     <KeyboardAvoidingView
       style={estilos.tela}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Listras altura={6} style={[estilos.faixaTopo, { marginTop: insets.top }]} />
       <ScrollView
         contentContainerStyle={[
           estilos.conteudo,
-          { paddingTop: insets.top + espacos.xl, paddingBottom: insets.bottom + espacos.xl },
+          { paddingTop: espacos.xl, paddingBottom: insets.bottom + espacos.xl },
         ]}
         keyboardShouldPersistTaps="handled">
         <View style={estilos.cabecalho}>
-          <Texto variante="titulo">Bem-vindo à nação 🔴⚫</Texto>
+          <Texto variante="rotulo" cor={cores.vermelhoVivo}>
+            Bem-vindo à nação
+          </Texto>
+          <Texto variante="titulo">Monte seu perfil em 3 passos</Texto>
           <Texto variante="corpo" cor={cores.textoSecundario}>
-            Monte seu perfil em 3 passos rápidos.
+            Leva menos de um minuto.
           </Texto>
         </View>
 
         <View style={estilos.bloco}>
-          <Texto variante="destaque">1. Sua foto</Texto>
-          <Pressable
-            onPress={aoEscolherFoto}
-            style={estilos.areaFoto}
-            accessibilityLabel="Escolher foto de perfil"
-            disabled={escolhendo}>
-            <Avatar url={foto} nome={nome || 'V'} tamanho={96} borda />
-            <View style={estilos.iconeCamera}>
-              <Ionicons name="camera" size={16} color={cores.branco} />
-            </View>
-          </Pressable>
-          <Texto variante="pequeno" cor={cores.textoTerciario}>
-            Opcional — toque para escolher da galeria.
-          </Texto>
+          <Passo numero={1} titulo="Sua foto" />
+          <View style={estilos.linhaFoto}>
+            <Pressable
+              onPress={aoEscolherFoto}
+              style={estilos.areaFoto}
+              accessibilityLabel="Escolher foto de perfil"
+              disabled={escolhendo}>
+              <Avatar url={foto} nome={nome || 'V'} tamanho={92} borda />
+              <View style={estilos.iconeCamera}>
+                <Icone nome="camera" tamanho={14} cor={cores.branco} />
+              </View>
+            </Pressable>
+            <Texto variante="pequeno" cor={cores.textoTerciario} style={estilos.flex}>
+              Opcional — toque para escolher da galeria.
+            </Texto>
+          </View>
         </View>
 
         <View style={estilos.bloco}>
-          <Texto variante="destaque">2. Seu apelido</Texto>
+          <Passo numero={2} titulo="Seu apelido" />
           <Input
             prefixo="@"
             placeholder="seu_apelido"
@@ -103,7 +121,7 @@ export default function TelaOnboarding() {
         </View>
 
         <View style={estilos.bloco}>
-          <Texto variante="destaque">3. Seus interesses (até 3)</Texto>
+          <Passo numero={3} titulo="Seus interesses (até 3)" />
           <SeletorDeInteresses selecionados={interesses} aoMudar={setInteresses} maximo={3} />
         </View>
 
@@ -138,9 +156,22 @@ export default function TelaOnboarding() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
+  faixaTopo: { borderRadius: 0 },
+  flex: { flex: 1 },
   conteudo: { flexGrow: 1, paddingHorizontal: espacos.xl, gap: espacos.xl },
   cabecalho: { gap: espacos.xs },
-  bloco: { gap: espacos.sm },
+  bloco: { gap: espacos.md },
+  passo: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
+  numero: {
+    width: 24,
+    height: 24,
+    borderRadius: raios.sm,
+    backgroundColor: cores.vermelho,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numeroTexto: { fontWeight: '800' },
+  linhaFoto: { flexDirection: 'row', alignItems: 'center', gap: espacos.lg },
   areaFoto: { alignSelf: 'flex-start' },
   iconeCamera: {
     position: 'absolute',

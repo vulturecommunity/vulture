@@ -1,33 +1,40 @@
-import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 
 import { cores, espacos } from '@/theme';
 
 import { Botao } from './Botao';
+import { Icone, type NomeDeIcone } from './Icone';
 import { Texto } from './Texto';
 
 export interface EstadoVazioProps {
-  icone?: keyof typeof Ionicons.glyphMap;
+  icone?: NomeDeIcone;
   titulo: string;
   descricao?: string;
   acao?: { titulo: string; aoPressionar: () => void };
 }
 
 /** Estado vazio padrão para listas e telas sem conteúdo. */
-export function EstadoVazio({ icone = 'film-outline', titulo, descricao, acao }: EstadoVazioProps) {
+export function EstadoVazio({ icone = 'filme', titulo, descricao, acao }: EstadoVazioProps) {
   return (
     <View style={estilos.container}>
-      <Ionicons name={icone} size={48} color={cores.textoTerciario} />
+      <View style={estilos.circulo}>
+        <Icone nome={icone} tamanho={28} cor={cores.textoSecundario} />
+      </View>
       <Texto variante="destaque" centralizado>
         {titulo}
       </Texto>
       {descricao ? (
-        <Texto variante="corpo" cor={cores.textoSecundario} centralizado>
+        <Texto variante="corpo" cor={cores.textoSecundario} centralizado style={estilos.descricao}>
           {descricao}
         </Texto>
       ) : null}
       {acao ? (
-        <Botao titulo={acao.titulo} onPress={acao.aoPressionar} variante="secundario" />
+        <Botao
+          titulo={acao.titulo}
+          onPress={acao.aoPressionar}
+          variante="contorno"
+          style={estilos.botao}
+        />
       ) : null}
     </View>
   );
@@ -41,4 +48,17 @@ const estilos = StyleSheet.create({
     gap: espacos.md,
     padding: espacos.xl,
   },
+  circulo: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: espacos.xs,
+  },
+  descricao: { maxWidth: 300 },
+  botao: { marginTop: espacos.xs },
 });

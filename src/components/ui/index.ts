@@ -1,8 +1,12 @@
 export { Avatar } from './Avatar';
 export { Botao } from './Botao';
+export { Cabecalho } from './Cabecalho';
 export { Carregando } from './Carregando';
 export { Erro } from './Erro';
 export { EstadoVazio } from './EstadoVazio';
+export { Icone, type NomeDeIcone } from './Icone';
 export { Input } from './Input';
+export { Listras } from './Listras';
 export { Sheet } from './Sheet';
 export { Texto } from './Texto';
+export { TituloDeSecao } from './TituloDeSecao';

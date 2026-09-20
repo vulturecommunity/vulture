@@ -8,8 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-const VERMELHO = [227, 6, 19, 255];
-const PRETO = [17, 17, 17, 255];
+const VERMELHO = [200, 16, 46, 255];
+const PRETO = [10, 10, 11, 255];
 const BRANCO = [255, 255, 255, 255];
 const TRANSPARENTE = [0, 0, 0, 0];
 
@@ -232,7 +232,7 @@ function svg() {
   return [
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">',
     '  <!-- Silhueta própria de urubu (mascote da torcida). Não é marca registrada. -->',
-    '  <circle cx="50" cy="50" r="50" fill="#E30613" />',
+    '  <circle cx="50" cy="50" r="50" fill="#C8102E" />',
     '  <g fill="#FFFFFF" transform="translate(12 12) scale(0.76)">',
     ...partes,
     '  </g>',
@@ -242,7 +242,7 @@ function svg() {
       (12 + OLHO.cy * 76) +
       '" r="' +
       OLHO.r * 76 +
-      '" fill="#E30613" />',
+      '" fill="#C8102E" />',
     '</svg>',
     '',
   ].join('\n');

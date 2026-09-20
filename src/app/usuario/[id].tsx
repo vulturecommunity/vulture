@@ -1,12 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ConteudoDePerfil } from '@/components/perfil/ConteudoDePerfil';
-import { Carregando, Erro, Texto } from '@/components/ui';
+import { Cabecalho, Carregando, Erro } from '@/components/ui';
 import { usePerfil } from '@/hooks/usePerfil';
-import { cores, espacos } from '@/theme';
+import { cores } from '@/theme';
 
 /** Perfil de outro torcedor. */
 export default function TelaUsuario() {
@@ -17,19 +16,10 @@ export default function TelaUsuario() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <View style={estilos.topo}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityLabel="Voltar"
-          style={estilos.lado}>
-          <Ionicons name="arrow-back" size={26} color={cores.texto} />
-        </Pressable>
-        <Texto variante="destaque" numberOfLines={1}>
-          {perfil.data ? `@${perfil.data.apelido}` : 'Perfil'}
-        </Texto>
-        <View style={estilos.lado} />
-      </View>
+      <Cabecalho
+        titulo={perfil.data ? `@${perfil.data.apelido}` : 'Perfil'}
+        aoVoltar={() => router.back()}
+      />
       {perfil.isLoading ? (
         <Carregando />
       ) : perfil.isError ? (
@@ -47,12 +37,4 @@ export default function TelaUsuario() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
-  topo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: espacos.lg,
-    paddingVertical: espacos.sm,
-  },
-  lado: { width: 32 },
 });

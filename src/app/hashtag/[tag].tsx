@@ -1,15 +1,14 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedVertical } from '@/components/feed/FeedVertical';
-import { Erro, Texto } from '@/components/ui';
+import { Erro, Icone, Texto } from '@/components/ui';
 import { useFeed } from '@/hooks/useFeed';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 
 /** Feed vertical filtrado por hashtag. */
 export default function TelaHashtag() {
@@ -52,11 +51,12 @@ export default function TelaHashtag() {
           hitSlop={12}
           accessibilityLabel="Voltar"
           style={estilos.voltar}>
-          <Ionicons name="arrow-back" size={26} color={cores.branco} />
+          <Icone nome="voltar" tamanho={20} cor={cores.branco} />
         </Pressable>
-        <Texto variante="destaque" style={estilos.titulo}>
-          #{tag}
-        </Texto>
+        <View style={estilos.etiqueta}>
+          <Icone nome="hashtag" tamanho={14} cor={cores.vermelhoVivo} />
+          <Texto variante="corpoForte">{tag}</Texto>
+        </View>
       </View>
     </View>
   );
@@ -74,6 +74,25 @@ const estilos = StyleSheet.create({
     paddingHorizontal: espacos.lg,
     gap: espacos.md,
   },
-  voltar: { padding: espacos.xs },
-  titulo: { textShadowColor: cores.sombra, textShadowRadius: 6 },
+  voltar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  etiqueta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacos.xs,
+    paddingHorizontal: espacos.md,
+    height: 38,
+    borderRadius: raios.redondo,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+  },
 });

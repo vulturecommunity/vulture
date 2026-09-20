@@ -1,10 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Botao, Input, Sheet, Texto } from '@/components/ui';
+import { Botao, Icone, Input, Sheet, Texto, type NomeDeIcone } from '@/components/ui';
 import { dataService } from '@/services/data';
 import { chaves } from '@/services/queryClient';
 import { useAuthStore } from '@/stores/authStore';
@@ -89,7 +88,7 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
         <View style={estilos.opcoes}>
           {meu && alvo.tipo === 'video' ? (
             <Opcao
-              icone="trash-outline"
+              icone="excluir"
               rotulo="Excluir meu vídeo"
               cor={cores.erro}
               aoPressionar={() => excluir.mutate()}
@@ -98,7 +97,7 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
           ) : null}
           {!meu ? (
             <Opcao
-              icone="flag-outline"
+              icone="denunciar"
               rotulo="Denunciar"
               aoPressionar={() => setEtapa('motivo')}
               testID="opcao-denunciar"
@@ -106,7 +105,7 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
           ) : null}
           {!meu && alvo.autorId ? (
             <Opcao
-              icone="ban-outline"
+              icone="bloquear"
               rotulo={`Bloquear @${alvo.autorApelido ?? 'usuário'}`}
               cor={cores.erro}
               aoPressionar={() => bloquear.mutate()}
@@ -114,7 +113,7 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
               testID="opcao-bloquear"
             />
           ) : null}
-          <Opcao icone="close-outline" rotulo="Cancelar" aoPressionar={fechar} />
+          <Opcao icone="fechar" rotulo="Cancelar" aoPressionar={fechar} />
         </View>
       ) : etapa === 'motivo' ? (
         <ScrollView contentContainerStyle={estilos.motivos} keyboardShouldPersistTaps="handled">
@@ -127,9 +126,9 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
               accessibilityState={{ selected: motivo === m }}
               testID={`motivo-${m}`}>
               <Texto variante="corpo">{m}</Texto>
-              {motivo === m ? (
-                <Ionicons name="checkmark-circle" size={20} color={cores.vermelho} />
-              ) : null}
+              <View style={[estilos.radio, motivo === m && estilos.radioAtivo]}>
+                {motivo === m ? <View style={estilos.radioMiolo} /> : null}
+              </View>
             </Pressable>
           ))}
           <Input
@@ -150,7 +149,9 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
         </ScrollView>
       ) : (
         <View style={estilos.enviado}>
-          <Ionicons name="shield-checkmark" size={48} color={cores.sucesso} />
+          <View style={estilos.circuloOk}>
+            <Icone nome="escudoOk" tamanho={30} cor={cores.sucesso} />
+          </View>
           <Texto variante="destaque" centralizado>
             Denúncia recebida
           </Texto>
@@ -172,7 +173,7 @@ function Opcao({
   ocupado,
   testID,
 }: {
-  icone: keyof typeof Ionicons.glyphMap;
+  icone: NomeDeIcone;
   rotulo: string;
   aoPressionar: () => void;
   cor?: string;
@@ -183,10 +184,12 @@ function Opcao({
     <Pressable
       onPress={aoPressionar}
       disabled={ocupado}
-      style={estilos.opcao}
+      style={({ pressed }) => [estilos.opcao, pressed && estilos.opcaoPressionada]}
       accessibilityRole="button"
       testID={testID}>
-      <Ionicons name={icone} size={22} color={cor} />
+      <View style={estilos.iconeOpcao}>
+        <Icone nome={icone} tamanho={18} cor={cor} />
+      </View>
       <Texto variante="corpo" cor={cor}>
         {rotulo}
       </Texto>
@@ -196,13 +199,23 @@ function Opcao({
 
 const estilos = StyleSheet.create({
   tituloMotivo: { paddingHorizontal: espacos.lg, paddingTop: espacos.xs },
-  opcoes: { paddingVertical: espacos.sm },
+  opcoes: { paddingVertical: espacos.sm, paddingHorizontal: espacos.sm },
   opcao: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacos.md,
-    paddingHorizontal: espacos.xl,
-    paddingVertical: espacos.md,
+    paddingHorizontal: espacos.md,
+    paddingVertical: espacos.sm + 2,
+    borderRadius: raios.md,
+  },
+  opcaoPressionada: { backgroundColor: cores.fundoCartao },
+  iconeOpcao: {
+    width: 36,
+    height: 36,
+    borderRadius: raios.sm + 2,
+    backgroundColor: cores.fundoCartao,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   motivos: { padding: espacos.lg, gap: espacos.sm },
   motivo: {
@@ -212,7 +225,28 @@ const estilos = StyleSheet.create({
     padding: espacos.md,
     borderRadius: raios.md,
     backgroundColor: cores.fundoCartao,
+    borderWidth: 1,
+    borderColor: cores.borda,
   },
-  motivoAtivo: { borderWidth: 1, borderColor: cores.vermelho },
+  motivoAtivo: { borderColor: cores.vermelho },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: cores.borda,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioAtivo: { borderColor: cores.vermelho },
+  radioMiolo: { width: 10, height: 10, borderRadius: 5, backgroundColor: cores.vermelho },
   enviado: { alignItems: 'center', gap: espacos.md, padding: espacos.xl },
+  circuloOk: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(47,191,113,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

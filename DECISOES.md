@@ -77,6 +77,16 @@ Registro das escolhas feitas durante a construção do MVP, com o porquê e o qu
 | **Ranking semanal = soma de curtidas dos vídeos dos últimos 7 dias por autor** | Simples de explicar e de calcular nos dois drivers (RPC `ranking_semanal` no Supabase).                                       |
 | **Reações 🔴⚫🦅🏆 só na live**                                                | Requisito: no feed permanece o coração.                                                                                       |
 
+## Identidade visual
+
+| Decisão                                                                                | Motivo / trade-off                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nenhum elemento visual que lembre TikTok/Kwai**                                      | Evitar confusão de marca: sem o "+" com sombras coloridas, sem coluna lateral de ícones brancos, sem abas centralizadas no topo. As ações ficam numa barra horizontal dentro de um painel de vidro. |
+| **Ícones Feather + Material via `components/ui/Icone`**                                | Uma única fonte de ícones de traço fino, distinta da família usada pelos concorrentes; trocar a família inteira é mudar um arquivo.                                                                 |
+| **Paleta rubro-negra sóbria (`#C8102E` sobre `#0A0A0B`) + dourado só para conquistas** | Identidade da torcida sem escudo, uniforme ou marca registrada. A faixa `Listras` (dois tons de vermelho) é o único motivo decorativo.                                                              |
+| **Tipografia do sistema com pesos 800/900, caixa alta e espaçamento nos rótulos**      | Visual esportivo/profissional sem carregar fontes externas (zero dependências novas, sem download no `expo start`).                                                                                 |
+| **Cabeçalhos, chips e estados vazios padronizados (`Cabecalho`, `TituloDeSecao`)**     | Consistência entre as 20+ telas com menos código duplicado.                                                                                                                                         |
+
 ## Testes
 
 | Decisão                                                                                                                 | Motivo / trade-off                                                                                                                                                           |

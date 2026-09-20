@@ -51,7 +51,7 @@ describe('camada temática e perfil', () => {
     await servico.entrarComoVisitante();
     await renderizar(<RankingSemanal />);
     await waitFor(() => expect(screen.getByTestId('ranking-1')).toBeTruthy());
-    expect(screen.getByText('🏆 Torcedores da semana')).toBeTruthy();
+    expect(screen.getByText('Torcedores da semana')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('ranking-1'));
     expect(router.push).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/usuario/[id]' }),

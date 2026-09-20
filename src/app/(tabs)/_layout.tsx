@@ -1,23 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 
 import { BotaoGravar } from '@/components/navegacao/BotaoGravar';
+import { Icone, type NomeDeIcone } from '@/components/ui';
 import { cores } from '@/theme';
 
-type NomeIcone = keyof typeof Ionicons.glyphMap;
-
-function icone(ativo: NomeIcone, inativo: NomeIcone) {
-  function IconeDaAba({
-    focused,
-    color,
-    size,
-  }: {
-    focused: boolean;
-    color: ColorValue;
-    size: number;
-  }) {
-    return <Ionicons name={focused ? ativo : inativo} size={size} color={color} />;
+function icone(nome: NomeDeIcone) {
+  function IconeDaAba({ color, size }: { focused: boolean; color: ColorValue; size: number }) {
+    return <Icone nome={nome} tamanho={size - 2} cor={String(color)} />;
   }
   return IconeDaAba;
 }
@@ -28,23 +18,24 @@ export default function LayoutAbas() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: cores.pretoPuro,
-          borderTopColor: cores.borda,
-          borderTopWidth: 0.5,
+          backgroundColor: cores.fundo,
+          borderTopWidth: 2,
+          borderTopColor: cores.vermelho,
+          height: 64,
+          paddingTop: 6,
         },
-        tabBarActiveTintColor: cores.branco,
+        tabBarActiveTintColor: cores.vermelhoVivo,
         tabBarInactiveTintColor: cores.textoTerciario,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 0.6,
+          textTransform: 'uppercase',
+        },
         sceneStyle: { backgroundColor: cores.fundo },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{ title: 'Início', tabBarIcon: icone('home', 'home-outline') }}
-      />
-      <Tabs.Screen
-        name="explorar"
-        options={{ title: 'Explorar', tabBarIcon: icone('compass', 'compass-outline') }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Início', tabBarIcon: icone('inicio') }} />
+      <Tabs.Screen name="explorar" options={{ title: 'Explorar', tabBarIcon: icone('explorar') }} />
       <Tabs.Screen
         name="gravar"
         options={{
@@ -52,14 +43,8 @@ export default function LayoutAbas() {
           tabBarButton: () => <BotaoGravar />,
         }}
       />
-      <Tabs.Screen
-        name="lives"
-        options={{ title: 'Lives', tabBarIcon: icone('radio', 'radio-outline') }}
-      />
-      <Tabs.Screen
-        name="perfil"
-        options={{ title: 'Perfil', tabBarIcon: icone('person', 'person-outline') }}
-      />
+      <Tabs.Screen name="lives" options={{ title: 'Lives', tabBarIcon: icone('lives') }} />
+      <Tabs.Screen name="perfil" options={{ title: 'Perfil', tabBarIcon: icone('perfil') }} />
     </Tabs>
   );
 }

@@ -1,11 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedVertical } from '@/components/feed/FeedVertical';
-import { Erro } from '@/components/ui';
+import { Erro, Icone } from '@/components/ui';
 import { useListaDeVideos, type OrigemDaLista } from '@/hooks/useListasDeVideos';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -54,7 +53,7 @@ export default function TelaVideo() {
         hitSlop={12}
         accessibilityLabel="Voltar"
         style={[estilos.voltar, { top: insets.top + espacos.sm }]}>
-        <Ionicons name="arrow-back" size={26} color={cores.branco} />
+        <Icone nome="voltar" tamanho={20} cor={cores.branco} />
       </Pressable>
     </View>
   );
@@ -62,5 +61,16 @@ export default function TelaVideo() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.pretoPuro },
-  voltar: { position: 'absolute', left: espacos.lg, padding: espacos.xs },
+  voltar: {
+    position: 'absolute',
+    left: espacos.lg,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: cores.vidro,
+    borderWidth: 1,
+    borderColor: cores.bordaClara,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

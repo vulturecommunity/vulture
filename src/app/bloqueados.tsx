@@ -1,11 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar, Botao, Carregando, EstadoVazio, Texto } from '@/components/ui';
+import { Avatar, Botao, Cabecalho, Carregando, EstadoVazio, Texto } from '@/components/ui';
 import { useBloqueados, useDesbloquear } from '@/hooks/usePerfil';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 
 /** Lista de contas bloqueadas, com opção de desbloquear. */
 export default function TelaBloqueados() {
@@ -16,27 +15,17 @@ export default function TelaBloqueados() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <View style={estilos.topo}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityLabel="Voltar"
-          style={estilos.lado}>
-          <Ionicons name="arrow-back" size={26} color={cores.texto} />
-        </Pressable>
-        <Texto variante="destaque">Contas bloqueadas</Texto>
-        <View style={estilos.lado} />
-      </View>
+      <Cabecalho titulo="Contas bloqueadas" aoVoltar={() => router.back()} />
       {bloqueados.isLoading ? (
         <Carregando />
       ) : (
         <FlatList
           data={bloqueados.data ?? []}
           keyExtractor={(u) => u.id}
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={estilos.lista}
           ListEmptyComponent={
             <EstadoVazio
-              icone="shield-checkmark-outline"
+              icone="escudoOk"
               titulo="Nenhuma conta bloqueada"
               descricao="Quem você bloquear aparece aqui."
             />
@@ -44,7 +33,7 @@ export default function TelaBloqueados() {
           renderItem={({ item }) => (
             <View style={estilos.linha}>
               <Avatar url={item.avatarUrl} nome={item.nome} tamanho={44} />
-              <View style={{ flex: 1 }}>
+              <View style={estilos.flex}>
                 <Texto variante="corpoForte">@{item.apelido}</Texto>
                 <Texto variante="pequeno" cor={cores.textoSecundario}>
                   {item.nome}
@@ -52,7 +41,7 @@ export default function TelaBloqueados() {
               </View>
               <Botao
                 titulo="Desbloquear"
-                variante="secundario"
+                variante="contorno"
                 tamanho="pequeno"
                 onPress={() => desbloquear.mutate(item.id)}
                 carregando={desbloquear.isPending}
@@ -67,19 +56,16 @@ export default function TelaBloqueados() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
-  topo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: espacos.lg,
-    paddingVertical: espacos.sm,
-  },
-  lado: { width: 32 },
+  flex: { flex: 1 },
+  lista: { flexGrow: 1, paddingHorizontal: espacos.lg, paddingTop: espacos.xs, gap: espacos.sm },
   linha: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacos.md,
-    paddingHorizontal: espacos.lg,
-    paddingVertical: espacos.md,
+    padding: espacos.md,
+    borderRadius: raios.md,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
   },
 });

@@ -1,20 +1,34 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar, Carregando, EstadoVazio, Texto } from '@/components/ui';
+import {
+  Avatar,
+  Cabecalho,
+  Carregando,
+  EstadoVazio,
+  Icone,
+  Texto,
+  type NomeDeIcone,
+} from '@/components/ui';
 import { useMarcarNotificacoesComoLidas, useNotificacoes } from '@/hooks/useNotificacoes';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 import type { Notificacao } from '@/types';
 import { tempoRelativo } from '@/utils/formatadores';
 
-const ICONES: Record<Notificacao['tipo'], keyof typeof Ionicons.glyphMap> = {
-  curtida: 'heart',
-  comentario: 'chatbubble-ellipses',
-  seguiu: 'person-add',
-  sistema: 'megaphone',
+const ICONES: Record<Notificacao['tipo'], NomeDeIcone> = {
+  curtida: 'curtido',
+  comentario: 'comentar',
+  seguiu: 'seguiu',
+  sistema: 'megafone',
+};
+
+const CORES: Record<Notificacao['tipo'], string> = {
+  curtida: cores.vermelhoVivo,
+  comentario: cores.textoSecundario,
+  seguiu: cores.sucesso,
+  sistema: cores.dourado,
 };
 
 /** Lista de eventos: curtiu, comentou, seguiu, avisos do app. */
@@ -38,29 +52,19 @@ export default function TelaNotificacoes() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <View style={estilos.topo}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityLabel="Voltar"
-          style={estilos.lado}>
-          <Ionicons name="arrow-back" size={26} color={cores.texto} />
-        </Pressable>
-        <Texto variante="destaque">Notificações</Texto>
-        <View style={estilos.lado} />
-      </View>
+      <Cabecalho titulo="Notificações" aoVoltar={() => router.back()} />
       {notificacoes.isLoading ? (
         <Carregando />
       ) : (
         <FlatList
           data={notificacoes.data ?? []}
           keyExtractor={(n) => n.id}
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={estilos.lista}
           onRefresh={() => notificacoes.refetch()}
           refreshing={notificacoes.isRefetching}
           ListEmptyComponent={
             <EstadoVazio
-              icone="notifications-off-outline"
+              icone="sinoMudo"
               titulo="Nada por aqui ainda"
               descricao="Curtidas, comentários e novos seguidores aparecem aqui."
             />
@@ -68,16 +72,21 @@ export default function TelaNotificacoes() {
           renderItem={({ item }) => (
             <Pressable
               onPress={() => abrir(item)}
-              style={[estilos.linha, !item.lida && estilos.naoLida]}
+              style={({ pressed }) => [
+                estilos.linha,
+                !item.lida && estilos.naoLida,
+                pressed && estilos.pressionada,
+              ]}
               testID={`notificacao-${item.id}`}>
+              {!item.lida ? <View style={estilos.marcador} /> : null}
               {item.de ? (
                 <Avatar url={item.de.avatarUrl} nome={item.de.apelido} tamanho={44} />
               ) : (
                 <View style={estilos.iconeSistema}>
-                  <Ionicons name="megaphone" size={20} color={cores.branco} />
+                  <Icone nome="megafone" tamanho={20} cor={cores.branco} />
                 </View>
               )}
-              <View style={{ flex: 1 }}>
+              <View style={estilos.flex}>
                 <Texto variante="corpo">
                   {item.de ? <Texto variante="corpoForte">@{item.de.apelido} </Texto> : null}
                   {item.texto}
@@ -86,11 +95,9 @@ export default function TelaNotificacoes() {
                   {tempoRelativo(item.criadoEm)}
                 </Texto>
               </View>
-              <Ionicons
-                name={ICONES[item.tipo]}
-                size={18}
-                color={item.tipo === 'curtida' ? cores.vermelho : cores.textoSecundario}
-              />
+              <View style={estilos.tipo}>
+                <Icone nome={ICONES[item.tipo]} tamanho={16} cor={CORES[item.tipo]} />
+              </View>
             </Pressable>
           )}
         />
@@ -101,27 +108,40 @@ export default function TelaNotificacoes() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
-  topo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: espacos.lg,
-    paddingVertical: espacos.sm,
-  },
-  lado: { width: 32 },
+  flex: { flex: 1 },
+  lista: { flexGrow: 1, paddingHorizontal: espacos.md, paddingTop: espacos.xs, gap: espacos.xs },
   linha: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacos.md,
-    paddingHorizontal: espacos.lg,
+    paddingHorizontal: espacos.md,
     paddingVertical: espacos.md,
+    borderRadius: raios.md,
+    overflow: 'hidden',
   },
-  naoLida: { backgroundColor: cores.vermelhoSuave },
+  naoLida: { backgroundColor: cores.fundoElevado },
+  pressionada: { backgroundColor: cores.fundoCartao },
+  marcador: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: cores.vermelho,
+  },
   iconeSistema: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: cores.vermelho,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: cores.fundoCartao,
     alignItems: 'center',
     justifyContent: 'center',
   },

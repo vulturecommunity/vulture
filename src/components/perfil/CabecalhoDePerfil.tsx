@@ -1,8 +1,8 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Avatar, Botao, Texto } from '@/components/ui';
+import { Avatar, Botao, Icone, Listras, Texto } from '@/components/ui';
 import { ICONE_INTERESSE } from '@/constants/interesses';
-import { cores, espacos } from '@/theme';
+import { cores, espacos, raios } from '@/theme';
 import type { Perfil } from '@/types';
 import { formatarContador } from '@/utils/formatadores';
 
@@ -20,14 +20,14 @@ function Contador({ valor, rotulo, testID }: { valor: number; rotulo: string; te
       <Texto variante="destaque" testID={testID}>
         {formatarContador(valor)}
       </Texto>
-      <Texto variante="legenda" cor={cores.textoSecundario}>
+      <Texto variante="rotulo" cor={cores.textoSecundario}>
         {rotulo}
       </Texto>
     </View>
   );
 }
 
-/** Topo do perfil: avatar, nome, contadores, bio, interesses e botão de ação. */
+/** Topo do perfil: faixa da identidade, avatar, nome, contadores, bio, interesses e ações. */
 export function CabecalhoDePerfil({
   perfil,
   aoEditar,
@@ -37,65 +37,121 @@ export function CabecalhoDePerfil({
 }: CabecalhoDePerfilProps) {
   return (
     <View style={estilos.container} testID="cabecalho-perfil">
-      <Avatar url={perfil.avatarUrl} nome={perfil.nome} tamanho={92} borda />
-      <Texto variante="subtitulo">@{perfil.apelido}</Texto>
-      {perfil.nome !== perfil.apelido ? (
-        <Texto variante="corpo" cor={cores.textoSecundario}>
-          {perfil.nome}
-        </Texto>
-      ) : null}
-      <View style={estilos.contadores}>
-        <Contador valor={perfil.seguindo} rotulo="Seguindo" />
-        <Contador valor={perfil.seguidores} rotulo="Seguidores" testID="total-seguidores" />
-        <Contador valor={perfil.curtidasRecebidas} rotulo="Curtidas" />
-      </View>
-      {perfil.bio ? (
-        <Texto variante="corpo" centralizado style={estilos.bio}>
-          {perfil.bio}
-        </Texto>
-      ) : null}
-      {perfil.interesses.length > 0 ? (
-        <Texto variante="pequeno" cor={cores.textoSecundario} centralizado>
-          {perfil.interesses.map((i) => `${ICONE_INTERESSE[i]} ${i}`).join('  ·  ')}
-        </Texto>
-      ) : null}
-      <View style={estilos.acoes}>
-        {perfil.souEu ? (
-          <Botao
-            titulo="Editar perfil"
-            variante="secundario"
-            onPress={aoEditar}
-            style={estilos.botao}
-            testID="botao-editar-perfil"
-          />
-        ) : (
-          <>
-            <Botao
-              titulo={perfil.estouSeguindo ? 'Seguindo' : 'Seguir'}
-              variante={perfil.estouSeguindo ? 'secundario' : 'primario'}
-              onPress={aoSeguir}
-              carregando={ocupado}
-              style={estilos.botao}
-              testID="botao-seguir"
-            />
-            <Botao titulo="•••" variante="secundario" onPress={aoMais} testID="botao-mais-perfil" />
-          </>
-        )}
+      <Listras altura={56} faixas={22} style={estilos.faixa} />
+      <View style={estilos.corpo}>
+        <View style={estilos.linhaTopo}>
+          <Avatar url={perfil.avatarUrl} nome={perfil.nome} tamanho={88} borda />
+          <View style={estilos.acoes}>
+            {perfil.souEu ? (
+              <Botao
+                titulo="Editar perfil"
+                variante="contorno"
+                tamanho="pequeno"
+                icone={<Icone nome="editar" tamanho={14} cor={cores.texto} />}
+                onPress={aoEditar}
+                testID="botao-editar-perfil"
+              />
+            ) : (
+              <>
+                <Botao
+                  titulo={perfil.estouSeguindo ? 'Seguindo' : 'Seguir'}
+                  variante={perfil.estouSeguindo ? 'contorno' : 'primario'}
+                  tamanho="pequeno"
+                  onPress={aoSeguir}
+                  carregando={ocupado}
+                  style={estilos.botaoSeguir}
+                  testID="botao-seguir"
+                />
+                <Pressable
+                  onPress={aoMais}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mais opções"
+                  style={estilos.botaoMais}
+                  testID="botao-mais-perfil">
+                  <Icone nome="mais" tamanho={18} cor={cores.texto} />
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+
+        <View style={estilos.nomes}>
+          <Texto variante="subtitulo">@{perfil.apelido}</Texto>
+          {perfil.nome !== perfil.apelido ? (
+            <Texto variante="corpo" cor={cores.textoSecundario}>
+              {perfil.nome}
+            </Texto>
+          ) : null}
+        </View>
+
+        {perfil.bio ? <Texto variante="corpo">{perfil.bio}</Texto> : null}
+
+        {perfil.interesses.length > 0 ? (
+          <View style={estilos.interesses}>
+            {perfil.interesses.map((i) => (
+              <View key={i} style={estilos.interesse}>
+                <Icone nome={ICONE_INTERESSE[i]} tamanho={12} cor={cores.vermelhoVivo} />
+                <Texto variante="legenda" cor={cores.textoSecundario}>
+                  {i}
+                </Texto>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={estilos.contadores}>
+          <Contador valor={perfil.seguindo} rotulo="Seguindo" />
+          <View style={estilos.divisor} />
+          <Contador valor={perfil.seguidores} rotulo="Seguidores" testID="total-seguidores" />
+          <View style={estilos.divisor} />
+          <Contador valor={perfil.curtidasRecebidas} rotulo="Curtidas" />
+        </View>
       </View>
     </View>
   );
 }
 
 const estilos = StyleSheet.create({
-  container: {
+  container: { backgroundColor: cores.fundo },
+  faixa: { borderRadius: 0, opacity: 0.9 },
+  corpo: { paddingHorizontal: espacos.lg, gap: espacos.md, marginTop: -40 },
+  linhaTopo: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  acoes: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm, paddingBottom: espacos.xs },
+  botaoSeguir: { minWidth: 110 },
+  botaoMais: {
+    width: 36,
+    height: 36,
+    borderRadius: raios.sm + 2,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    backgroundColor: cores.fundoElevado,
     alignItems: 'center',
-    gap: espacos.sm,
-    paddingHorizontal: espacos.xl,
-    paddingVertical: espacos.lg,
+    justifyContent: 'center',
   },
-  contadores: { flexDirection: 'row', gap: espacos.xxl, marginVertical: espacos.xs },
-  contador: { alignItems: 'center' },
-  bio: { maxWidth: 320 },
-  acoes: { flexDirection: 'row', gap: espacos.sm, marginTop: espacos.xs },
-  botao: { minWidth: 160 },
+  nomes: { gap: 2 },
+  interesses: { flexDirection: 'row', flexWrap: 'wrap', gap: espacos.sm },
+  interesse: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacos.xs,
+    paddingHorizontal: espacos.sm,
+    paddingVertical: 4,
+    borderRadius: raios.sm,
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
+  },
+  contadores: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: cores.fundoElevado,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    borderRadius: raios.md,
+    paddingVertical: espacos.md,
+    marginTop: espacos.xs,
+  },
+  contador: { flex: 1, alignItems: 'center', gap: 2 },
+  divisor: { width: 1, height: 28, backgroundColor: cores.borda },
 });

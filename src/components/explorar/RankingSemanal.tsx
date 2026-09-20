@@ -1,12 +1,16 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Avatar, Texto } from '@/components/ui';
+import { Avatar, Icone, Texto, TituloDeSecao } from '@/components/ui';
 import { useRankingSemanal } from '@/hooks/useExplorar';
 import { cores, espacos, raios } from '@/theme';
 import { formatarContador } from '@/utils/formatadores';
 
-const MEDALHAS = ['🥇', '🥈', '🥉'];
+const COR_POSICAO: Record<number, string> = {
+  1: cores.dourado,
+  2: '#B9BDC5',
+  3: '#B5794C',
+};
 
 /** Ranking semanal de torcedores por curtidas recebidas. */
 export function RankingSemanal() {
@@ -16,38 +20,49 @@ export function RankingSemanal() {
 
   return (
     <View style={estilos.container} testID="ranking-semanal">
-      <View style={estilos.cabecalho}>
-        <Texto variante="destaque">🏆 Torcedores da semana</Texto>
-        <Texto variante="legenda" cor={cores.textoSecundario}>
-          por curtidas recebidas
-        </Texto>
+      <TituloDeSecao
+        titulo="Torcedores da semana"
+        subtitulo="por curtidas recebidas"
+        icone="trofeu"
+        semMargem
+      />
+      <View style={estilos.lista}>
+        {data.slice(0, 5).map((item) => {
+          const destaque = COR_POSICAO[item.posicao];
+          return (
+            <Pressable
+              key={item.usuario.id}
+              onPress={() =>
+                router.push({ pathname: '/usuario/[id]', params: { id: item.usuario.id } })
+              }
+              style={({ pressed }) => [estilos.linha, pressed && estilos.pressionado]}
+              accessibilityRole="button"
+              testID={`ranking-${item.posicao}`}>
+              <View style={[estilos.posicao, destaque ? { backgroundColor: destaque } : null]}>
+                <Texto
+                  variante="legenda"
+                  cor={destaque ? cores.preto : cores.textoSecundario}
+                  style={estilos.posicaoTexto}>
+                  {item.posicao}
+                </Texto>
+              </View>
+              <Avatar url={item.usuario.avatarUrl} nome={item.usuario.nome} tamanho={38} />
+              <View style={estilos.nome}>
+                <Texto variante="corpoForte" numberOfLines={1}>
+                  @{item.usuario.apelido}
+                </Texto>
+                <Texto variante="legenda" cor={cores.textoSecundario}>
+                  {item.videosNaSemana} vídeo{item.videosNaSemana === 1 ? '' : 's'} na semana
+                </Texto>
+              </View>
+              <View style={estilos.curtidas}>
+                <Icone nome="curtido" tamanho={14} cor={cores.vermelhoVivo} />
+                <Texto variante="corpoForte">{formatarContador(item.curtidasNaSemana)}</Texto>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
-      {data.slice(0, 5).map((item) => (
-        <Pressable
-          key={item.usuario.id}
-          onPress={() =>
-            router.push({ pathname: '/usuario/[id]', params: { id: item.usuario.id } })
-          }
-          style={estilos.linha}
-          accessibilityRole="button"
-          testID={`ranking-${item.posicao}`}>
-          <Texto variante="corpoForte" style={estilos.posicao}>
-            {MEDALHAS[item.posicao - 1] ?? `${item.posicao}º`}
-          </Texto>
-          <Avatar url={item.usuario.avatarUrl} nome={item.usuario.nome} tamanho={36} />
-          <View style={estilos.nome}>
-            <Texto variante="corpoForte" numberOfLines={1}>
-              @{item.usuario.apelido}
-            </Texto>
-            <Texto variante="legenda" cor={cores.textoSecundario}>
-              {item.videosNaSemana} vídeo{item.videosNaSemana === 1 ? '' : 's'} na semana
-            </Texto>
-          </View>
-          <Texto variante="corpoForte" cor={cores.vermelho}>
-            ♥ {formatarContador(item.curtidasNaSemana)}
-          </Texto>
-        </Pressable>
-      ))}
     </View>
   );
 }
@@ -57,16 +72,29 @@ const estilos = StyleSheet.create({
     marginHorizontal: espacos.lg,
     backgroundColor: cores.fundoElevado,
     borderRadius: raios.lg,
+    borderWidth: 1,
+    borderColor: cores.borda,
     padding: espacos.md,
-    gap: espacos.xs,
+    gap: espacos.sm,
   },
-  cabecalho: { marginBottom: espacos.xs },
+  lista: { gap: espacos.xxs },
   linha: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: espacos.sm,
-    paddingVertical: espacos.xs,
+    gap: espacos.sm + 2,
+    paddingVertical: espacos.sm,
+    borderRadius: raios.md,
   },
-  posicao: { width: 28, textAlign: 'center' },
+  pressionado: { backgroundColor: cores.fundoCartao },
+  posicao: {
+    width: 26,
+    height: 26,
+    borderRadius: raios.sm,
+    backgroundColor: cores.fundoCartao,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  posicaoTexto: { fontWeight: '800' },
   nome: { flex: 1 },
+  curtidas: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs },
 });

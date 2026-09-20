@@ -1,17 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Botao, Input, Texto } from '@/components/ui';
+import { Botao, Cabecalho, Input, Listras, Texto } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos } from '@/theme';
 import { emailValido, normalizarApelido, senhaValida } from '@/utils/validacao';
@@ -51,31 +43,24 @@ export default function TelaCadastro() {
 
   return (
     <KeyboardAvoidingView
-      style={estilos.tela}
+      style={[estilos.tela, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Cabecalho titulo="Criar conta" aoVoltar={() => router.back()} />
       <ScrollView
-        contentContainerStyle={[
-          estilos.conteudo,
-          { paddingTop: insets.top + espacos.md, paddingBottom: insets.bottom + espacos.xl },
-        ]}
+        contentContainerStyle={[estilos.conteudo, { paddingBottom: insets.bottom + espacos.xl }]}
         keyboardShouldPersistTaps="handled">
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          style={estilos.voltar}
-          accessibilityLabel="Voltar">
-          <Ionicons name="arrow-back" size={26} color={cores.texto} />
-        </Pressable>
         <View style={estilos.cabecalho}>
-          <Texto variante="titulo">Criar conta</Texto>
+          <Texto variante="titulo">Entre para a nação</Texto>
+          <Listras altura={4} faixas={8} style={estilos.sublinhado} />
           <Texto variante="corpo" cor={cores.textoSecundario}>
-            Entre para a nação. É rápido e grátis.
+            É rápido e grátis. Só precisa de um e-mail.
           </Texto>
         </View>
 
         <View style={estilos.formulario}>
           <Input
             rotulo="Nome"
+            icone="perfil"
             placeholder="Como quer ser chamado"
             value={nome}
             onChangeText={setNome}
@@ -97,6 +82,7 @@ export default function TelaCadastro() {
           />
           <Input
             rotulo="Senha"
+            icone="cadeado"
             placeholder="mínimo 6 caracteres"
             secureTextEntry
             value={senha}
@@ -106,6 +92,7 @@ export default function TelaCadastro() {
           />
           <Input
             rotulo="Confirmar senha"
+            icone="cadeado"
             placeholder="repita a senha"
             secureTextEntry
             value={confirmacao}
@@ -135,8 +122,8 @@ export default function TelaCadastro() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
-  conteudo: { flexGrow: 1, paddingHorizontal: espacos.xl, gap: espacos.xl },
-  voltar: { alignSelf: 'flex-start', padding: espacos.xs },
-  cabecalho: { gap: espacos.xs },
+  conteudo: { flexGrow: 1, paddingHorizontal: espacos.xl, paddingTop: espacos.md, gap: espacos.xl },
+  cabecalho: { gap: espacos.sm },
+  sublinhado: { width: 48 },
   formulario: { gap: espacos.md },
 });

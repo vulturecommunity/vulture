@@ -24,7 +24,7 @@ export function LegendaComHashtags({
         trecho.tipo === 'hashtag' ? (
           <Text
             key={`${trecho.valor}-${i}`}
-            style={{ fontWeight: '700' }}
+            style={{ fontWeight: '700', color: cores.vermelhoVivo }}
             accessibilityRole="link"
             onPress={() =>
               router.push({ pathname: '/hashtag/[tag]', params: { tag: trecho.valor } })
