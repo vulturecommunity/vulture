@@ -1,5 +1,4 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import * as VideoThumbnails from 'expo-video-thumbnails';
 
 const PASTA_RAIZ = 'vulture';
 
@@ -40,6 +39,9 @@ export function removerArquivoLocal(uri: string | null | undefined): void {
 /** Gera uma miniatura (JPEG) de um vídeo local ou remoto. */
 export async function gerarThumbnail(uriVideo: string, tempoMs = 500): Promise<string | null> {
   try {
+    // require tardio: o módulo é só nativo e não existe na web
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const VideoThumbnails = require('expo-video-thumbnails') as typeof import('expo-video-thumbnails');
     const { uri } = await VideoThumbnails.getThumbnailAsync(uriVideo, {
       time: tempoMs,
       quality: 0.7,

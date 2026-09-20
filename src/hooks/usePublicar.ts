@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import * as MediaLibrary from 'expo-media-library';
 
 import { dataService } from '@/services/data';
 import { gerarThumbnail } from '@/services/midia/arquivos';
@@ -25,6 +24,9 @@ export function usePublicar() {
       try {
         if (salvarNaGaleria && midia.origem === 'camera') {
           try {
+            // require tardio: o módulo é só nativo e não existe na web
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const MediaLibrary = require('expo-media-library') as typeof import('expo-media-library');
             const permissao = await MediaLibrary.requestPermissionsAsync(true);
             if (permissao.granted) await MediaLibrary.saveToLibraryAsync(midia.uri);
           } catch {
