@@ -256,11 +256,13 @@ export class SupabaseDataService implements DataService {
     // o perfil é criado por trigger logo após o cadastro; tenta algumas vezes
     let linha: LinhaPerfil | null = null;
     for (let tentativa = 0; tentativa < 5 && !linha; tentativa++) {
-      const { data } = await this.db
+      const { data, error } = await this.db
         .from('profiles')
         .select(COLUNAS_PERFIL)
         .eq('id', usuarioId)
         .maybeSingle();
+      // erro de permissão/rede não é "perfil ainda não existe": mostra a causa real
+      if (error) erroDoSupabase(error, 'Falha ao carregar o perfil');
       linha = (data as LinhaPerfil | null) ?? null;
       if (!linha) await new Promise((r) => setTimeout(r, 300));
     }
