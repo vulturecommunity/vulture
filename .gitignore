@@ -48,3 +48,4 @@ example
 
 # testes
 coverage/
+supabase/.temp/
