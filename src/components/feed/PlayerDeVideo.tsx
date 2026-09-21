@@ -1,8 +1,9 @@
-import { useEvent } from 'expo';
+import { useEvent, useEventListener } from 'expo';
 import { Image } from 'expo-image';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { VideoView, useVideoPlayer, type VideoPlayer } from 'expo-video';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 
 import { Icone } from '@/components/ui';
 import { cores } from '@/theme';
@@ -20,7 +21,20 @@ export interface PlayerDeVideoProps {
 }
 
 /**
- * Player de um item do feed. Só é montado para o item ativo e seus vizinhos,
+ * Executa uma operação no player nativo ignorando falhas.
+ * Na reciclagem da lista o player pode já ter sido liberado quando um efeito roda;
+ * em produção um erro não tratado aqui derrubaria o app inteiro.
+ */
+function seguro(acao: () => void): void {
+  try {
+    acao();
+  } catch {
+    // player liberado ou em estado inválido: nada a fazer
+  }
+}
+
+/**
+ * Player de um item do feed. Só é montado para o item ativo e o próximo,
  * para limitar o número de players nativos simultâneos.
  * Inclui a barra de progresso arrastável e o ícone de "pausado".
  */
@@ -28,47 +42,55 @@ export function PlayerDeVideo({ video, tocando, pausado, mudo }: PlayerDeVideoPr
   const player = useVideoPlayer({ uri: video.url }, (p) => {
     p.loop = true;
     p.muted = mudo;
-    p.timeUpdateEventInterval = 0.25;
+    // sem eventos de tempo até o item ficar ativo (economiza CPU nos pré-carregados)
+    p.timeUpdateEventInterval = 0;
   });
   const [arrastando, setArrastando] = useState(false);
+  // posição atual em segundos: shared value para a barra animar sem re-renderizar o item
+  const posicao = useSharedValue(0);
 
   const { status } = useEvent(player, 'statusChange', { status: player.status });
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
-  const { currentTime } = useEvent(player, 'timeUpdate', {
-    currentTime: 0,
-    currentLiveTimestamp: null,
-    currentOffsetFromLive: null,
-    bufferedPosition: 0,
+  useEventListener(player, 'timeUpdate', ({ currentTime }) => {
+    if (!arrastando) posicao.set(currentTime);
   });
 
   // O player é um objeto nativo compartilhado: mutá-lo aqui é o uso esperado do expo-video.
-  // Ao virar o item ativo, recomeça do início.
+  // Ao virar o item ativo, recomeça do início e liga os eventos de tempo.
   useEffect(() => {
-    if (tocando) {
-      // eslint-disable-next-line react-hooks/immutability
-      player.currentTime = 0;
-    }
-  }, [tocando, player]);
+    seguro(() => {
+      player.timeUpdateEventInterval = tocando ? 0.25 : 0;
+      if (tocando) {
+        player.currentTime = 0;
+        posicao.set(0);
+      }
+    });
+  }, [tocando, player, posicao]);
 
   // Toca só quando visível, não pausado pelo usuário e sem arrasto na barra.
   useEffect(() => {
-    if (tocando && !pausado && !arrastando) player.play();
-    else player.pause();
+    seguro(() => {
+      if (tocando && !pausado && !arrastando) player.play();
+      else player.pause();
+    });
   }, [tocando, pausado, arrastando, player]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/immutability
-    player.muted = mudo;
+    seguro(() => {
+      player.muted = mudo;
+    });
   }, [mudo, player]);
 
-  const duracao = player.duration > 0 ? player.duration : video.duracao;
+  const duracao = duracaoDe(player, video);
 
   const buscar = useCallback(
     (fracao: number) => {
-      // eslint-disable-next-line react-hooks/immutability
-      player.currentTime = fracao * duracao;
+      seguro(() => {
+        player.currentTime = fracao * duracao;
+      });
+      posicao.set(fracao * duracao);
     },
-    [player, duracao],
+    [player, duracao, posicao],
   );
   const comecarArrasto = useCallback(() => setArrastando(true), []);
   const terminarArrasto = useCallback(() => setArrastando(false), []);
@@ -84,7 +106,6 @@ export function PlayerDeVideo({ video, tocando, pausado, mudo }: PlayerDeVideoPr
           style={StyleSheet.absoluteFill}
           contentFit={retrato ? 'cover' : 'contain'}
           cachePolicy="memory-disk"
-          blurRadius={2}
         />
       ) : null}
       <VideoView
@@ -109,7 +130,7 @@ export function PlayerDeVideo({ video, tocando, pausado, mudo }: PlayerDeVideoPr
       ) : null}
       {tocando ? (
         <BarraDeProgresso
-          posicao={currentTime}
+          posicao={posicao}
           duracao={duracao}
           aoBuscar={buscar}
           aoComecarArrasto={comecarArrasto}
@@ -118,6 +139,15 @@ export function PlayerDeVideo({ video, tocando, pausado, mudo }: PlayerDeVideoPr
       ) : null}
     </View>
   );
+}
+
+/** Duração conhecida pelo player nativo ou, enquanto não carrega, a informada pelo vídeo. */
+function duracaoDe(player: VideoPlayer, video: Video): number {
+  try {
+    return player.duration > 0 ? player.duration : video.duracao;
+  } catch {
+    return video.duracao;
+  }
 }
 
 const ABSOLUTO = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 };

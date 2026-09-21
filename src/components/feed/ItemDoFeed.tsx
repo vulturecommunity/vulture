@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -24,7 +25,7 @@ export interface ItemDoFeedProps {
   altura: number;
   /** este item é o visível */
   ativo: boolean;
-  /** vizinho imediato: mantém o player montado e pré-carregado */
+  /** é o próximo item: mantém o player montado e pré-carregado */
   proximo: boolean;
   meuId: string | null;
   /** espaço extra no rodapé (ex.: barra de abas transparente) */
@@ -123,7 +124,17 @@ function ItemDoFeedBase({
           ) : ativo || proximo ? (
             <PlayerDeVideo video={video} tocando={tocando} pausado={pausado} mudo={mudo} />
           ) : (
-            <View style={estilos.placeholder} />
+            // fora da janela de players: só a miniatura, sem custo de player nativo
+            <View style={estilos.placeholder}>
+              {video.thumbnailUrl ? (
+                <Image
+                  source={{ uri: video.thumbnailUrl }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit={(video.altura ?? 0) > (video.largura ?? 0) ? 'cover' : 'contain'}
+                  cachePolicy="memory-disk"
+                />
+              ) : null}
+            </View>
           )}
           <CoracaoAnimado disparo={coracao.disparo} x={coracao.x} y={coracao.y} />
         </View>

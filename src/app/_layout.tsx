@@ -8,11 +8,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { PortaoDeAutenticacao } from '@/components/navegacao/PortaoDeAutenticacao';
 import { SheetsGlobais } from '@/components/navegacao/SheetsGlobais';
+import { TelaDeErro } from '@/components/navegacao/TelaDeErro';
 import { queryClient } from '@/services/queryClient';
 import { useAuthStore } from '@/stores/authStore';
 import { cores } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/** Erros de renderização em qualquer rota caem aqui em vez de fechar o app. */
+export { TelaDeErro as ErrorBoundary };
 
 const temaEscuro = {
   ...DarkTheme,

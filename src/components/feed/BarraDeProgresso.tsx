@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -6,6 +6,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 import { Texto } from '@/components/ui';
@@ -13,8 +14,8 @@ import { cores, espacos, raios } from '@/theme';
 import { formatarDuracao } from '@/utils/formatadores';
 
 export interface BarraDeProgressoProps {
-  /** posição atual em segundos (vinda do player) */
-  posicao: number;
+  /** posição atual em segundos (shared value alimentado pelo player, sem re-render) */
+  posicao: SharedValue<number>;
   duracao: number;
   /** chamado enquanto o dedo arrasta (fração 0..1) e ao soltar */
   aoBuscar: (fracao: number) => void;
@@ -30,6 +31,7 @@ const ALTURA_TOQUE = 28;
 /**
  * Linha de progresso no rodapé do vídeo. Arrastar para os lados avança/volta o vídeo
  * (como no TikTok/Kwai); durante o arrasto a barra engrossa e mostra o tempo.
+ * Toda a animação roda na thread de UI: o componente só re-renderiza durante o arrasto.
  */
 export function BarraDeProgresso({
   posicao,
@@ -69,42 +71,49 @@ export function BarraDeProgresso({
 
   // Os callbacks do gesto rodam na thread de UI, fora da renderização: ler/escrever os
   // shared values aqui é o padrão do Reanimated + Gesture Handler (falso positivo do lint).
+  // O gesto é memoizado para não reconfigurar o handler nativo a cada render.
   /* eslint-disable react-hooks/refs */
-  const arrasto = Gesture.Pan()
-    // só ativa em movimento horizontal; vertical continua rolando o feed
-    .activeOffsetX([-8, 8])
-    .failOffsetY([-12, 12])
-    .onStart((e) => {
-      arrastando.set(true);
-      fracaoArrasto.set(Math.min(1, Math.max(0, e.x / largura)));
-      runOnJS(comecar)();
-    })
-    .onUpdate((e) => {
-      const f = Math.min(1, Math.max(0, e.x / largura));
-      fracaoArrasto.set(f);
-      runOnJS(buscarComLimite)(f, false);
-    })
-    .onEnd(() => {
-      runOnJS(buscarComLimite)(fracaoArrasto.get(), true);
-    })
-    .onFinalize(() => {
-      arrastando.set(false);
-      runOnJS(terminar)();
-    });
+  const arrasto = useMemo(
+    () =>
+      Gesture.Pan()
+        // só ativa em movimento horizontal; vertical continua rolando o feed
+        .activeOffsetX([-8, 8])
+        .failOffsetY([-12, 12])
+        .onStart((e) => {
+          arrastando.set(true);
+          fracaoArrasto.set(Math.min(1, Math.max(0, e.x / largura)));
+          runOnJS(comecar)();
+        })
+        .onUpdate((e) => {
+          const f = Math.min(1, Math.max(0, e.x / largura));
+          fracaoArrasto.set(f);
+          runOnJS(buscarComLimite)(f, false);
+        })
+        .onEnd(() => {
+          runOnJS(buscarComLimite)(fracaoArrasto.get(), true);
+        })
+        .onFinalize(() => {
+          arrastando.set(false);
+          runOnJS(terminar)();
+        }),
+    [arrastando, fracaoArrasto, largura, comecar, buscarComLimite, terminar],
+  );
   /* eslint-enable react-hooks/refs */
-
-  const fracaoAtual = duracao > 0 ? Math.min(1, Math.max(0, posicao / duracao)) : 0;
 
   const estiloTrilha = useAnimatedStyle(() => ({
     height: withTiming(arrastando.get() ? ALTURA_ARRASTO : ALTURA_REPOUSO, { duration: 120 }),
   }));
-  const estiloPreenchido = useAnimatedStyle(() => ({
-    width: `${(arrastando.get() ? fracaoArrasto.get() : fracaoAtual) * 100}%`,
-  }));
-  const estiloBolinha = useAnimatedStyle(() => ({
-    opacity: withTiming(arrastando.get() ? 1 : 0, { duration: 120 }),
-    left: `${(arrastando.get() ? fracaoArrasto.get() : fracaoAtual) * 100}%`,
-  }));
+  const estiloPreenchido = useAnimatedStyle(() => {
+    const fracaoAtual = duracao > 0 ? Math.min(1, Math.max(0, posicao.get() / duracao)) : 0;
+    return { width: `${(arrastando.get() ? fracaoArrasto.get() : fracaoAtual) * 100}%` };
+  });
+  const estiloBolinha = useAnimatedStyle(() => {
+    const fracaoAtual = duracao > 0 ? Math.min(1, Math.max(0, posicao.get() / duracao)) : 0;
+    return {
+      opacity: withTiming(arrastando.get() ? 1 : 0, { duration: 120 }),
+      left: `${(arrastando.get() ? fracaoArrasto.get() : fracaoAtual) * 100}%`,
+    };
+  });
 
   return (
     <View style={estilos.area} testID="barra-progresso">

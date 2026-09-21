@@ -79,7 +79,8 @@ export function FeedVertical({
         video={item}
         altura={altura}
         ativo={index === indiceAtivo}
-        proximo={Math.abs(index - indiceAtivo) === 1}
+        // só o próximo é pré-carregado: 2 players nativos no máximo (memória no Android)
+        proximo={index - indiceAtivo === 1}
         meuId={meuId}
         recuoInferior={recuoInferior}
       />

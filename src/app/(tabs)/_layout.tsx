@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 
 import { BotaoGravar } from '@/components/navegacao/BotaoGravar';
+import { TelaDeErro } from '@/components/navegacao/TelaDeErro';
 import { Icone, type NomeDeIcone } from '@/components/ui';
 import { cores } from '@/theme';
 
@@ -11,6 +12,9 @@ function icone(nome: NomeDeIcone) {
   }
   return IconeDaAba;
 }
+
+/** Um erro numa aba mostra a tela de erro dentro das abas, sem derrubar o app. */
+export { TelaDeErro as ErrorBoundary };
 
 export default function LayoutAbas() {
   return (

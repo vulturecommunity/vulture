@@ -17,6 +17,7 @@ import { useCriacaoStore } from '@/stores/criacaoStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios } from '@/theme';
+import { escolherTamanhoDeFoto } from '@/utils/camera';
 import { formatarDuracao } from '@/utils/formatadores';
 
 type Modo = 'video' | 'foto';
@@ -39,14 +40,24 @@ export default function TelaCamera() {
   const [gravando, setGravando] = useState(false);
   const [segundos, setSegundos] = useState(0);
   const [ocupado, setOcupado] = useState(false);
+  const [emFoco, setEmFoco] = useState(true);
+  const [tamanhoFoto, setTamanhoFoto] = useState<string | undefined>(undefined);
   const inicioRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // refs síncronas: o estado React pode não ter re-renderizado entre um pressIn e um pressOut
+  // rápidos; chamar recordAsync duas vezes derruba o app no Android ("recording in progress")
+  const gravandoRef = useRef(false);
+  const ocupadoRef = useRef(false);
 
-  // pausa o feed enquanto a câmera está aberta
+  // pausa o feed enquanto a câmera está aberta e desliga a câmera ao ir para o preview
   useFocusEffect(
     useCallback(() => {
       definirFoco(false);
-      return () => definirFoco(true);
+      setEmFoco(true);
+      return () => {
+        definirFoco(true);
+        setEmFoco(false);
+      };
     }, [definirFoco]),
   );
 
@@ -70,15 +81,24 @@ export default function TelaCamera() {
     timerRef.current = null;
   }, []);
 
+  const pararNativo = useCallback(() => {
+    try {
+      cameraRef.current?.stopRecording();
+    } catch {
+      // gravação já encerrada
+    }
+  }, []);
+
   const iniciarGravacao = useCallback(async () => {
-    if (!cameraRef.current || !pronta || gravando || ocupado) return;
+    if (!cameraRef.current || !pronta || gravandoRef.current || ocupadoRef.current) return;
+    gravandoRef.current = true;
     setGravando(true);
     setSegundos(0);
     inicioRef.current = Date.now();
     timerRef.current = setInterval(() => {
       const passado = (Date.now() - inicioRef.current) / 1000;
       setSegundos(passado);
-      if (passado >= DURACAO_MAXIMA_VIDEO_SEGUNDOS) cameraRef.current?.stopRecording();
+      if (passado >= DURACAO_MAXIMA_VIDEO_SEGUNDOS) pararNativo();
     }, 100);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
@@ -90,6 +110,7 @@ export default function TelaCamera() {
         (Date.now() - inicioRef.current) / 1000,
       );
       pararContador();
+      gravandoRef.current = false;
       setGravando(false);
       if (resultado?.uri) {
         if (duracao < 1) {
@@ -108,18 +129,23 @@ export default function TelaCamera() {
       }
     } catch (erro) {
       pararContador();
+      gravandoRef.current = false;
       setGravando(false);
       mostrarAviso(erro instanceof Error ? erro.message : 'Não foi possível gravar.', 'erro');
     }
-  }, [pronta, gravando, ocupado, definirMidia, router, mostrarAviso, pararContador]);
+  }, [pronta, definirMidia, router, mostrarAviso, pararContador, pararNativo]);
 
   const pararGravacao = useCallback(() => {
-    if (!gravando) return;
-    cameraRef.current?.stopRecording();
-  }, [gravando]);
+    if (!gravandoRef.current) return;
+    // dá ao gravador nativo um instante para começar antes de encerrar (toque muito rápido)
+    const decorrido = Date.now() - inicioRef.current;
+    if (decorrido < 400) setTimeout(pararNativo, 400 - decorrido);
+    else pararNativo();
+  }, [pararNativo]);
 
   const tirarFoto = useCallback(async () => {
-    if (!cameraRef.current || !pronta || ocupado) return;
+    if (!cameraRef.current || !pronta || ocupadoRef.current || gravandoRef.current) return;
+    ocupadoRef.current = true;
     setOcupado(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
@@ -141,11 +167,14 @@ export default function TelaCamera() {
     } catch (erro) {
       mostrarAviso(erro instanceof Error ? erro.message : 'Não foi possível tirar a foto.', 'erro');
     } finally {
+      ocupadoRef.current = false;
       setOcupado(false);
     }
-  }, [pronta, ocupado, definirMidia, router, mostrarAviso]);
+  }, [pronta, definirMidia, router, mostrarAviso]);
 
   const importarDaGaleria = useCallback(async () => {
+    if (ocupadoRef.current || gravandoRef.current) return;
+    ocupadoRef.current = true;
     setOcupado(true);
     try {
       const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -178,10 +207,22 @@ export default function TelaCamera() {
         origem: 'galeria',
       });
       router.push('/criar/preview');
+    } catch (erro) {
+      mostrarAviso(erro instanceof Error ? erro.message : 'Não foi possível importar.', 'erro');
     } finally {
+      ocupadoRef.current = false;
       setOcupado(false);
     }
   }, [definirMidia, router, mostrarAviso]);
+
+  // Ao ficar pronta, limita a resolução da foto (evita bitmaps de 12 MP+ na memória).
+  const aoCameraPronta = useCallback(() => {
+    setPronta(true);
+    cameraRef.current
+      ?.getAvailablePictureSizesAsync()
+      .then((tamanhos) => setTamanhoFoto(escolherTamanhoDeFoto(tamanhos)))
+      .catch(() => {});
+  }, []);
 
   const semPermissao = !permissaoCamera?.granted || (modo === 'video' && !permissaoMic?.granted);
 
@@ -229,8 +270,10 @@ export default function TelaCamera() {
         enableTorch={flash && modo === 'video'}
         flash={flash && modo === 'foto' ? 'on' : 'off'}
         videoQuality="720p"
+        pictureSize={tamanhoFoto}
         mute={false}
-        onCameraReady={() => setPronta(true)}
+        active={emFoco}
+        onCameraReady={aoCameraPronta}
         testID="camera"
       />
 
