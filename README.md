@@ -78,6 +78,24 @@ npx expo run:android      # build local gratuito (precisa de Android Studio + JD
 
 Passo a passo das chaves em [`SETUP_LIVEKIT.md`](SETUP_LIVEKIT.md).
 
+### Distribuir para testadores (APK Android via EAS Build)
+
+O `eas.json` já tem o perfil **`preview`**, que gera um `.apk` instalável ligado ao Supabase (as
+variáveis `EXPO_PUBLIC_*` ficam embutidas; a chave anon é pública por design, o RLS protege o banco).
+
+```bash
+npx eas-cli login                                              # conta Expo (grátis)
+npx eas-cli build -p android --profile preview --non-interactive
+```
+
+Ao terminar, o painel em https://expo.dev mostra um link/QR code do APK: mande para quem for
+testar; a pessoa baixa, permite "instalar de fontes desconhecidas" e abre — sem Expo Go e sem o
+seu PC ligado. Como o APK inclui os módulos nativos do LiveKit, basta preencher as chaves do
+`SETUP_LIVEKIT.md` no perfil `preview` do `eas.json` para as lives saírem do modo simulado.
+
+iOS exige o Apple Developer Program (US$ 99/ano) e distribuição por TestFlight; por isso o piloto
+é só Android.
+
 ## Scripts
 
 | Comando                                                     | O que faz                   |
