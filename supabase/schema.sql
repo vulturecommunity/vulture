@@ -20,8 +20,11 @@ create table if not exists public.profiles (
   seguindo_count     integer not null default 0,
   curtidas_recebidas integer not null default 0,
   videos_count       integer not null default 0,
-  criado_em          timestamptz not null default now()
+  criado_em          timestamptz not null default now(),
+  -- e-mail copiado de auth.users para rastreio no painel; nunca exposto ao app (ver PRIVILÉGIOS)
+  email              text
 );
+alter table public.profiles add column if not exists email text;
 
 create table if not exists public.videos (
   id             uuid primary key default gen_random_uuid(),
@@ -176,9 +179,9 @@ begin
     exit when tentativa > 20;
   end loop;
 
-  insert into public.profiles (id, apelido, nome)
-  values (new.id, apelido_final, coalesce(new.raw_user_meta_data ->> 'nome', apelido_final))
-  on conflict (id) do nothing;
+  insert into public.profiles (id, apelido, nome, email)
+  values (new.id, apelido_final, coalesce(new.raw_user_meta_data ->> 'nome', apelido_final), new.email)
+  on conflict (id) do update set email = excluded.email;
   return new;
 end;
 $$;
@@ -187,6 +190,29 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Mantém profiles.email igual ao do Auth (troca de e-mail, visitante que vira conta)
+create or replace function public.handle_user_email_updated()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.profiles set email = new.email where id = new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_email_updated on auth.users;
+create trigger on_auth_user_email_updated
+  after update of email on auth.users
+  for each row execute function public.handle_user_email_updated();
+
+-- Preenche o e-mail de perfis já existentes
+update public.profiles p
+set email = u.email
+from auth.users u
+where u.id = p.id and p.email is distinct from u.email;
 
 -- Contadores de curtidas (+ curtidas recebidas do autor) e notificação
 create or replace function public.tg_likes()
@@ -416,6 +442,15 @@ create policy "profiles atualizar proprio" on public.profiles for update using (
 drop policy if exists "profiles inserir proprio" on public.profiles;
 create policy "profiles inserir proprio" on public.profiles for insert with check (auth.uid() = id);
 
+-- Privilégios por coluna: o app (anon/authenticated) nunca lê nem escreve profiles.email.
+-- RLS filtra linhas, não colunas — por isso o grant de tabela é trocado por grants por coluna.
+revoke select, insert, update on public.profiles from anon, authenticated;
+grant select (id, apelido, nome, avatar_url, bio, interesses, seguidores_count, seguindo_count,
+              curtidas_recebidas, videos_count, criado_em)
+  on public.profiles to anon, authenticated;
+grant insert (id, apelido, nome, avatar_url, bio, interesses) on public.profiles to authenticated;
+grant update (apelido, nome, avatar_url, bio, interesses) on public.profiles to authenticated;
+
 -- videos: feed público, escrita só do autor
 drop policy if exists "videos leitura publica" on public.videos;
 create policy "videos leitura publica" on public.videos for select using (true);
@@ -546,80 +581,3 @@ create policy "storage excluir na propria pasta" on storage.objects
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
--- -------------------------------------------------------------------------------------
--- SEED DE EXEMPLO (idempotente)
--- Cria 3 torcedores de demonstração em auth.users + profiles e 6 vídeos públicos de teste.
--- Senha dos 3: "vulture123"
--- -------------------------------------------------------------------------------------
-
-do $$
-declare
-  ids uuid[] := array[
-    '11111111-1111-4111-8111-111111111111'::uuid,
-    '22222222-2222-4222-8222-222222222222'::uuid,
-    '33333333-3333-4333-8333-333333333333'::uuid
-  ];
-  emails text[] := array['nacao@vulture.demo', 'gavea@vulture.demo', 'maraca@vulture.demo'];
-  apelidos text[] := array['nacao_rubro', 'gavea.insider', 'maraca_vibes'];
-  nomes text[] := array['Nação Rubro-Negra', 'Gávea Insider', 'Maraca Vibes'];
-  i integer;
-begin
-  for i in 1..3 loop
-    if not exists (select 1 from auth.users where id = ids[i]) then
-      insert into auth.users (
-        id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
-        raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-        confirmation_token, recovery_token, email_change, email_change_token_new, email_change_token_current
-      ) values (
-        ids[i], '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', emails[i],
-        crypt('vulture123', gen_salt('bf')), now(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
-        jsonb_build_object('apelido', apelidos[i], 'nome', nomes[i]),
-        now(), now(),
-        '', '', '', '', ''
-      );
-      insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
-      values (gen_random_uuid(), ids[i], ids[i]::text, 'email',
-              jsonb_build_object('sub', ids[i]::text, 'email', emails[i], 'email_verified', true),
-              now(), now(), now())
-      on conflict do nothing;
-    end if;
-    -- garante o perfil mesmo que o trigger não tenha rodado
-    insert into public.profiles (id, apelido, nome, bio, interesses)
-    values (ids[i], apelidos[i], nomes[i], 'Perfil de demonstração do Vulture.', array['Torcida', 'Jogos'])
-    on conflict (id) do nothing;
-  end loop;
-
-  insert into public.videos (id, autor_id, tipo, url, thumbnail_url, legenda, hashtags, categoria, audio, duracao, largura, altura)
-  values
-    ('a1a1a1a1-0000-4000-8000-000000000001', ids[1], 'video',
-     'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
-     'https://picsum.photos/seed/vulture-seed-1/360/640',
-     'A festa antes do jogo no #Maracanã foi surreal 🔴⚫ #Torcida', array['Maracanã', 'Torcida'], 'Torcida', 'Som original - Nação Rubro-Negra', 10, 640, 360),
-    ('a1a1a1a1-0000-4000-8000-000000000002', ids[2], 'video',
-     'https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4',
-     'https://picsum.photos/seed/vulture-seed-2/360/640',
-     'Bastidores do vestiário antes do clássico #Bastidores', array['Bastidores'], 'Bastidores', 'Som original - Gávea Insider', 10, 1280, 720),
-    ('a1a1a1a1-0000-4000-8000-000000000003', ids[3], 'video',
-     'https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4',
-     'https://picsum.photos/seed/vulture-seed-3/360/640',
-     'Que #Golaço foi esse?! 🔥 #Jogos', array['Golaço', 'Jogos'], 'Jogos', 'Hino da torcida (remix)', 10, 640, 360),
-    ('a1a1a1a1-0000-4000-8000-000000000004', ids[1], 'video',
-     'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-     'https://picsum.photos/seed/vulture-seed-4/360/640',
-     'Caravana chegando no #Maracanã 🚌 #Torcida', array['Maracanã', 'Torcida'], 'Torcida', 'Batucada da arquibancada', 4, 1920, 1080),
-    ('a1a1a1a1-0000-4000-8000-000000000005', ids[2], 'video',
-     'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4',
-     'https://picsum.photos/seed/vulture-seed-5/360/640',
-     'Os garotos da #Base treinando forte 💪', array['Base'], 'Bastidores', 'Som original - Gávea Insider', 10, 1280, 720),
-    ('a1a1a1a1-0000-4000-8000-000000000006', ids[3], 'video',
-     'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4',
-     'https://picsum.photos/seed/vulture-seed-6/360/640',
-     'Resenha pós-jogo: acertos e erros #Resenha #Análises', array['Resenha', 'Análises'], 'Análises', 'Som original - Maraca Vibes', 6, 1920, 1080)
-  on conflict (id) do nothing;
-
-  insert into public.live_streams (id, anfitriao_id, titulo, thumbnail_url, sala, espectadores, ativa)
-  values ('b2b2b2b2-0000-4000-8000-000000000001', ids[3], 'Esquenta pro jogo direto do Maracanã 🔴⚫',
-          'https://picsum.photos/seed/vulture-live-1/360/640', 'vulture-demo-live-1', 128, true)
-  on conflict (id) do nothing;
-end $$;

@@ -48,7 +48,8 @@ src/
     partidas/          MatchService (JSON local; interface pronta para API real)
     midia/             arquivos locais e thumbnails
   theme/ constants/ types/ utils/
-supabase/schema.sql    script idempotente: tabelas, índices, triggers, RLS, buckets, seed
+supabase/schema.sql    script idempotente: tabelas, índices, triggers, RLS, buckets (sem dados fictícios)
+supabase/seed-demo.sql dados de demonstração opcionais (3 perfis, 6 vídeos, 1 live)
 supabase/functions/    Edge Function que gera tokens do LiveKit
 ```
 

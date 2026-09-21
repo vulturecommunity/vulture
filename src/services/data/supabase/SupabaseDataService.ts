@@ -121,6 +121,9 @@ interface LinhaNotificacao {
   de?: LinhaPerfilResumo | null;
 }
 
+// profiles tem privilégio por coluna no Postgres (email fica fora): nunca usar '*' nessa tabela.
+const COLUNAS_PERFIL =
+  'id, apelido, nome, avatar_url, bio, interesses, seguidores_count, seguindo_count, curtidas_recebidas, videos_count, criado_em';
 const SELECAO_AUTOR = 'autor:profiles!videos_autor_id_fkey(id, apelido, nome, avatar_url)';
 const SELECAO_VIDEO = `*, ${SELECAO_AUTOR}`;
 const LIMITE_PADRAO = 10;
@@ -240,7 +243,11 @@ export class SupabaseDataService implements DataService {
   }
 
   private async perfil(id: string): Promise<LinhaPerfil> {
-    const { data, error } = await this.db.from('profiles').select('*').eq('id', id).single();
+    const { data, error } = await this.db
+      .from('profiles')
+      .select(COLUNAS_PERFIL)
+      .eq('id', id)
+      .single();
     if (error || !data) erroDoSupabase(error, 'Perfil não encontrado');
     return data as LinhaPerfil;
   }
@@ -249,7 +256,11 @@ export class SupabaseDataService implements DataService {
     // o perfil é criado por trigger logo após o cadastro; tenta algumas vezes
     let linha: LinhaPerfil | null = null;
     for (let tentativa = 0; tentativa < 5 && !linha; tentativa++) {
-      const { data } = await this.db.from('profiles').select('*').eq('id', usuarioId).maybeSingle();
+      const { data } = await this.db
+        .from('profiles')
+        .select(COLUNAS_PERFIL)
+        .eq('id', usuarioId)
+        .maybeSingle();
       linha = (data as LinhaPerfil | null) ?? null;
       if (!linha) await new Promise((r) => setTimeout(r, 300));
     }
@@ -735,7 +746,7 @@ export class SupabaseDataService implements DataService {
       .from('profiles')
       .update(patch)
       .eq('id', meuId)
-      .select('*')
+      .select(COLUNAS_PERFIL)
       .single();
     if (error || !data) erroDoSupabase(error, 'Falha ao atualizar o perfil');
     return paraUsuario(data as LinhaPerfil);
@@ -784,7 +795,7 @@ export class SupabaseDataService implements DataService {
   async listSeguidores(usuarioId: Id): Promise<Usuario[]> {
     const { data } = await this.db
       .from('follows')
-      .select('perfil:profiles!follows_seguidor_id_fkey(*)')
+      .select(`perfil:profiles!follows_seguidor_id_fkey(${COLUNAS_PERFIL})`)
       .eq('seguido_id', usuarioId)
       .limit(200);
     return ((data ?? []) as unknown as { perfil: LinhaPerfil | null }[])
@@ -796,7 +807,7 @@ export class SupabaseDataService implements DataService {
   async listSeguindo(usuarioId: Id): Promise<Usuario[]> {
     const { data } = await this.db
       .from('follows')
-      .select('perfil:profiles!follows_seguido_id_fkey(*)')
+      .select(`perfil:profiles!follows_seguido_id_fkey(${COLUNAS_PERFIL})`)
       .eq('seguidor_id', usuarioId)
       .limit(200);
     return ((data ?? []) as unknown as { perfil: LinhaPerfil | null }[])
@@ -812,7 +823,7 @@ export class SupabaseDataService implements DataService {
     if (!t) return [];
     const { data, error } = await this.db
       .from('profiles')
-      .select('*')
+      .select(COLUNAS_PERFIL)
       .or(`apelido.ilike.%${t}%,nome.ilike.%${t}%`)
       .limit(20);
     if (error) erroDoSupabase(error, 'Falha na busca');
@@ -1117,7 +1128,7 @@ export class SupabaseDataService implements DataService {
     const meuId = await this.meuIdOuErro();
     const { data } = await this.db
       .from('blocks')
-      .select('perfil:profiles!blocks_bloqueado_id_fkey(*)')
+      .select(`perfil:profiles!blocks_bloqueado_id_fkey(${COLUNAS_PERFIL})`)
       .eq('usuario_id', meuId);
     return ((data ?? []) as unknown as { perfil: LinhaPerfil | null }[])
       .map((l) => l.perfil)

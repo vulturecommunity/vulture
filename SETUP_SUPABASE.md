@@ -20,7 +20,7 @@ colar 2 chaves no app. Não precisa saber programar.
    - **Pricing plan:** `Free`.
 5. Clique em **Create new project** e espere 1–2 minutos até o projeto ficar verde ("Project is ready" / status _Active_).
 
-## 2. Rodar o script do banco (tabelas, segurança, buckets e dados de exemplo)
+## 2. Rodar o script do banco (tabelas, segurança e buckets)
 
 1. No menu da esquerda, clique no ícone **SQL Editor** (um "terminal" com `>_`).
 2. Clique em **+ New query** (ou "New snippet").
@@ -34,7 +34,8 @@ O que o script fez por você:
 - **RLS ativado em todas as tabelas** (leitura pública do feed; escrita só do dono).
 - Buckets de Storage **`videos`**, **`thumbnails`** e **`avatars`** (públicos para leitura; cada usuário só escreve na própria pasta).
 - Realtime ligado para o chat das lives.
-- 3 perfis de exemplo (`nacao@vulture.demo`, `gavea@vulture.demo`, `maraca@vulture.demo` — senha `vulture123`), 6 vídeos e 1 live.
+- Coluna `profiles.email` preenchida automaticamente no cadastro (visível só no painel; o app não consegue ler nem alterar).
+- **Nenhum dado fictício.** Se quiser 3 torcedores e 6 vídeos de demonstração para uma apresentação, rode também `supabase/seed-demo.sql` (e apague depois com `delete from auth.users where email like '%@vulture.demo'`).
 
 Para conferir: menu **Table Editor** → você verá as tabelas; menu **Storage** → os 3 buckets.
 
@@ -88,7 +89,7 @@ Para ver os dados: **Table Editor**. Para ver os arquivos: **Storage**. Para ver
 | "Cadastro criado! Confirme o e-mail..." | Confirm email ligado                                | passo 3 (ou clique no link do e-mail)                                                                                         |
 | Upload falha com 403                    | script SQL não rodou inteiro (políticas do Storage) | rode o `schema.sql` de novo                                                                                                   |
 | Chat da live não atualiza sozinho       | Realtime não ligado na tabela                       | rode o `schema.sql` de novo e confira **Database → Publications → supabase_realtime** contém `live_messages` e `live_streams` |
-| Vídeo do seed não toca                  | o celular está sem internet                         | os clipes de exemplo vêm da internet                                                                                          |
+| Vídeo do `seed-demo.sql` não toca       | o celular está sem internet                         | os clipes de exemplo vêm da internet                                                                                          |
 
 ## Limites do plano Free (setembro/2026)
 
