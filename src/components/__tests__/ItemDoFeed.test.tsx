@@ -59,3 +59,34 @@ describe('ItemDoFeed', () => {
     });
   });
 });
+
+describe('ItemDoFeed — controles do player', () => {
+  beforeEach(() => {
+    usePlayerStore.setState({ mudo: false, feedEmFoco: true });
+  });
+
+  it('mostra a barra de progresso só no item ativo', async () => {
+    const video = videoDeTeste();
+    await renderizar(<ItemDoFeed video={video} altura={800} ativo proximo={false} meuId={null} />);
+    expect(screen.getByTestId('barra-progresso')).toBeTruthy();
+    await renderizar(<ItemDoFeed video={video} altura={800} ativo={false} proximo meuId={null} />);
+    expect(screen.queryByTestId('barra-progresso')).toBeNull();
+  });
+
+  it('o botão de som alterna o mudo global sem pausar', async () => {
+    const video = videoDeTeste();
+    await renderizar(<ItemDoFeed video={video} altura={800} ativo proximo={false} meuId={null} />);
+    expect(screen.getByLabelText('Silenciar')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('botao-mudo'));
+    expect(usePlayerStore.getState().mudo).toBe(true);
+    expect(screen.getByLabelText('Ativar som')).toBeTruthy();
+    expect(screen.queryByTestId('pausado-v-teste')).toBeNull();
+  });
+
+  it('foto não tem botão de som nem barra de progresso', async () => {
+    const foto = videoDeTeste({ id: 'f-2', tipo: 'foto', url: 'file:///foto.jpg' });
+    await renderizar(<ItemDoFeed video={foto} altura={800} ativo proximo={false} meuId={null} />);
+    expect(screen.queryByTestId('botao-mudo')).toBeNull();
+    expect(screen.queryByTestId('barra-progresso')).toBeNull();
+  });
+});

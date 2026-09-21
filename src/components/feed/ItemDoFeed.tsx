@@ -50,7 +50,14 @@ function ItemDoFeedBase({
   const compartilhar = useCompartilhar();
 
   const [coracao, setCoracao] = useState({ disparo: 0, x: 0, y: 0 });
-  const [mostrarMudo, setMostrarMudo] = useState(false);
+  const [pausado, setPausado] = useState(false);
+  const [ativoAnterior, setAtivoAnterior] = useState(ativo);
+
+  // ao sair da tela, esquece a pausa: o vídeo volta a tocar sozinho quando reaparecer
+  if (ativo !== ativoAnterior) {
+    setAtivoAnterior(ativo);
+    if (!ativo) setPausado(false);
+  }
 
   const tocando = ativo && feedEmFoco;
 
@@ -67,11 +74,10 @@ function ItemDoFeedBase({
     return () => clearTimeout(timer);
   }, [tocando, video.id]);
 
+  // toque simples = pausar / retomar (como no TikTok e no Kwai)
   const aoToqueSimples = useCallback(() => {
-    alternarMudo();
-    setMostrarMudo(true);
-    setTimeout(() => setMostrarMudo(false), 900);
-  }, [alternarMudo]);
+    setPausado((p) => !p);
+  }, []);
 
   const aoToqueDuplo = useCallback(
     (x: number, y: number) => {
@@ -115,24 +121,28 @@ function ItemDoFeedBase({
           {video.tipo === 'foto' ? (
             <PostDeFoto video={video} ativo={tocando} />
           ) : ativo || proximo ? (
-            <PlayerDeVideo video={video} tocando={tocando} mudo={mudo} />
+            <PlayerDeVideo video={video} tocando={tocando} pausado={pausado} mudo={mudo} />
           ) : (
             <View style={estilos.placeholder} />
           )}
           <CoracaoAnimado disparo={coracao.disparo} x={coracao.x} y={coracao.y} />
-          {mostrarMudo ? (
-            <View style={estilos.indicadorMudo} pointerEvents="none">
-              <View style={estilos.seloMudo}>
-                <Icone nome={mudo ? 'somDesligado' : 'somLigado'} tamanho={26} cor={cores.branco} />
-              </View>
-            </View>
-          ) : null}
         </View>
       </GestureDetector>
 
       <View
         style={[estilos.overlay, { paddingBottom: recuoInferior + espacos.md }]}
         pointerEvents="box-none">
+        {video.tipo === 'video' ? (
+          <Pressable
+            onPress={alternarMudo}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={mudo ? 'Ativar som' : 'Silenciar'}
+            testID="botao-mudo"
+            style={estilos.botaoMudo}>
+            <Icone nome={mudo ? 'somDesligado' : 'somLigado'} tamanho={18} cor={cores.branco} />
+          </Pressable>
+        ) : null}
         <View style={estilos.painel}>
           <View style={estilos.linhaAutor}>
             <Pressable
@@ -225,11 +235,12 @@ const estilos = StyleSheet.create({
   },
   linhaAudio: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs },
   audio: { flex: 1 },
-  indicadorMudo: { ...ABSOLUTO, alignItems: 'center', justifyContent: 'center' },
-  seloMudo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  botaoMudo: {
+    alignSelf: 'flex-end',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginBottom: espacos.sm,
     backgroundColor: cores.vidro,
     borderWidth: 1,
     borderColor: cores.bordaClara,
