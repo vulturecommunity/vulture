@@ -156,9 +156,10 @@ create index if not exists profiles_nome_busca_idx     on public.profiles (lower
 -- FUNÇÕES E TRIGGERS
 -- -------------------------------------------------------------------------------------
 
--- Cria o perfil automaticamente quando um usuário se cadastra (inclusive anônimo/visitante)
-create or replace function public.handle_new_user()
-returns trigger
+-- Cria o perfil de um usuário do Auth se ele ainda não existir (apelido único derivado dos
+-- metadados ou do e-mail). Usada pelo trigger de cadastro e pela RPC garantir_perfil().
+create or replace function public.criar_perfil_se_faltar(uid uuid, email_usuario text, meta jsonb)
+returns void
 language plpgsql
 security definer set search_path = public
 as $$
@@ -167,7 +168,13 @@ declare
   apelido_final text;
   tentativa integer := 0;
 begin
-  apelido_base := coalesce(new.raw_user_meta_data ->> 'apelido', split_part(coalesce(new.email, 'torcedor'), '@', 1));
+  if exists (select 1 from public.profiles where id = uid) then
+    update public.profiles set email = email_usuario
+    where id = uid and email is distinct from email_usuario;
+    return;
+  end if;
+
+  apelido_base := coalesce(meta ->> 'apelido', split_part(coalesce(email_usuario, 'torcedor'), '@', 1));
   apelido_base := lower(regexp_replace(apelido_base, '[^a-z0-9._]', '', 'g'));
   if char_length(apelido_base) < 3 then
     apelido_base := 'torcedor' || floor(random() * 9000 + 1000)::text;
@@ -180,8 +187,19 @@ begin
   end loop;
 
   insert into public.profiles (id, apelido, nome, email)
-  values (new.id, apelido_final, coalesce(new.raw_user_meta_data ->> 'nome', apelido_final), new.email)
-  on conflict (id) do update set email = excluded.email;
+  values (uid, apelido_final, coalesce(meta ->> 'nome', apelido_final), email_usuario)
+  on conflict (id) do nothing;
+end;
+$$;
+
+-- Trigger: cria o perfil automaticamente quando um usuário se cadastra (inclusive anônimo/visitante)
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  perform public.criar_perfil_se_faltar(new.id, new.email, new.raw_user_meta_data);
   return new;
 end;
 $$;
@@ -190,6 +208,31 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- RPC chamada pelo app quando o perfil do usuário logado não é encontrado: recria e segue.
+create or replace function public.garantir_perfil()
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  u record;
+begin
+  if auth.uid() is null then
+    raise exception 'não autenticado';
+  end if;
+  select id, email, raw_user_meta_data into u from auth.users where id = auth.uid();
+  perform public.criar_perfil_se_faltar(u.id, u.email, u.raw_user_meta_data);
+end;
+$$;
+revoke execute on function public.garantir_perfil() from public, anon;
+grant execute on function public.garantir_perfil() to authenticated;
+
+-- Repara usuários existentes sem perfil
+select public.criar_perfil_se_faltar(u.id, u.email, u.raw_user_meta_data)
+from auth.users u
+left join public.profiles p on p.id = u.id
+where p.id is null;
 
 -- Mantém profiles.email igual ao do Auth (troca de e-mail, visitante que vira conta)
 create or replace function public.handle_user_email_updated()

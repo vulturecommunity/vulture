@@ -253,9 +253,10 @@ export class SupabaseDataService implements DataService {
   }
 
   private async montarSessao(usuarioId: string, visitante: boolean): Promise<Sessao> {
-    // o perfil é criado por trigger logo após o cadastro; tenta algumas vezes
+    // o perfil é criado por trigger no cadastro; se faltar (perfil apagado, trigger
+    // antigo), a RPC garantir_perfil() recria antes de tentar de novo
     let linha: LinhaPerfil | null = null;
-    for (let tentativa = 0; tentativa < 5 && !linha; tentativa++) {
+    for (let tentativa = 0; tentativa < 3 && !linha; tentativa++) {
       const { data, error } = await this.db
         .from('profiles')
         .select(COLUNAS_PERFIL)
@@ -264,7 +265,10 @@ export class SupabaseDataService implements DataService {
       // erro de permissão/rede não é "perfil ainda não existe": mostra a causa real
       if (error) erroDoSupabase(error, 'Falha ao carregar o perfil');
       linha = (data as LinhaPerfil | null) ?? null;
-      if (!linha) await new Promise((r) => setTimeout(r, 300));
+      if (!linha) {
+        const { error: erroRpc } = await this.db.rpc('garantir_perfil');
+        if (erroRpc) erroDoSupabase(erroRpc, 'Falha ao criar o perfil');
+      }
     }
     if (!linha)
       throw new ErroDeAplicacao('Perfil ainda não criado. Tente novamente.', 'perfil_ausente');
