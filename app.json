@@ -86,7 +86,15 @@
         }
       ],
       "@livekit/react-native-expo-plugin",
-      "@config-plugins/react-native-webrtc"
+      "@config-plugins/react-native-webrtc",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#C8102E",
+          "defaultChannel": "lives"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

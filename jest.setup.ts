@@ -137,3 +137,30 @@ jest.mock('expo-router', () => {
     Tabs: Object.assign(() => null, { Screen: () => null }),
   };
 });
+
+// Notificações: nada nativo no ambiente de teste
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true, canAskAgain: true })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true, canAskAgain: true })),
+  getExpoPushTokenAsync: jest.fn(() => Promise.resolve({ data: 'ExponentPushToken[teste]' })),
+  scheduleNotificationAsync: jest.fn(() => Promise.resolve('agendada')),
+  getLastNotificationResponseAsync: jest.fn(() => Promise.resolve(null)),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  AndroidImportance: { MAX: 5 },
+  AndroidNotificationPriority: { MAX: 'max' },
+  AndroidNotificationVisibility: { PUBLIC: 1 },
+}));
+
+jest.mock('expo-device', () => ({ isDevice: true }));
+
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  ExecutionEnvironment: { Bare: 'bare', Standalone: 'standalone', StoreClient: 'storeClient' },
+  default: {
+    executionEnvironment: 'standalone',
+    easConfig: { projectId: 'projeto-teste' },
+    expoConfig: { extra: { eas: { projectId: 'projeto-teste' } } },
+  },
+}));

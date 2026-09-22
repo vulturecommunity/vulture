@@ -19,19 +19,31 @@ Deno.serve(async (req) => {
     const apiSecret = Deno.env.get('LIVEKIT_API_SECRET');
     const url = Deno.env.get('LIVEKIT_URL');
     if (!apiKey || !apiSecret || !url) {
-      return responder({ error: 'LIVEKIT_API_KEY, LIVEKIT_API_SECRET e LIVEKIT_URL não configurados' }, 500);
+      return responder(
+        { error: 'LIVEKIT_API_KEY, LIVEKIT_API_SECRET e LIVEKIT_URL não configurados' },
+        500,
+      );
     }
 
     // valida o usuário do Supabase que está pedindo o token
     const autorizacao = req.headers.get('Authorization') ?? '';
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: autorizacao } },
-    });
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      {
+        global: { headers: { Authorization: autorizacao } },
+      },
+    );
     const { data: dadosUsuario } = await supabase.auth.getUser();
     const usuario = dadosUsuario.user;
     if (!usuario) return responder({ error: 'Não autenticado' }, 401);
 
-    const corpo = (await req.json()) as { room?: string; identity?: string; name?: string; canPublish?: boolean };
+    const corpo = (await req.json()) as {
+      room?: string;
+      identity?: string;
+      name?: string;
+      canPublish?: boolean;
+    };
     if (!corpo.room) return responder({ error: 'room é obrigatório' }, 400);
 
     // só o anfitrião da live (dono da sala) pode publicar

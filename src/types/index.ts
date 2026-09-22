@@ -88,7 +88,7 @@ export interface MensagemLive {
   criadoEm: string;
 }
 
-export type TipoDeNotificacao = 'curtida' | 'comentario' | 'seguiu' | 'sistema';
+export type TipoDeNotificacao = 'curtida' | 'comentario' | 'seguiu' | 'live' | 'sistema';
 
 export interface Notificacao {
   id: Id;
@@ -96,9 +96,18 @@ export interface Notificacao {
   deId: Id | null;
   de: Pick<Usuario, 'id' | 'apelido' | 'avatarUrl'> | null;
   videoId: Id | null;
+  /** live relacionada (tipo "live"): tocar abre a transmissão */
+  liveId: Id | null;
   texto: string;
   lida: boolean;
   criadoEm: string;
+}
+
+export type PlataformaPush = 'android' | 'ios' | 'web';
+
+export interface TokenPush {
+  token: string;
+  plataforma: PlataformaPush;
 }
 
 export type AlvoDeDenuncia = 'video' | 'usuario' | 'comentario' | 'live';

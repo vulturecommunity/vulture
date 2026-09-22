@@ -324,6 +324,19 @@ const arquivos = [
       escala: 0.8,
     },
   ],
+  // ícone de notificação do Android: só silhueta branca sobre transparente (o sistema tinge)
+  [
+    'notification-icon.png',
+    96,
+    {
+      fundo: TRANSPARENTE,
+      circulo: false,
+      raioCirculo: 0,
+      corCirculo: BRANCO,
+      corSilhueta: BRANCO,
+      escala: 1,
+    },
+  ],
 ];
 
 for (const [nome, tam, cfg] of arquivos) {

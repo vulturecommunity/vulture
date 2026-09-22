@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { Interesse } from '@/constants/interesses';
 import { dataService } from '@/services/data';
 import type { DadosDeCadastro } from '@/services/data/types';
+import { esquecerTokenPush } from '@/services/push/registro';
 import { queryClient } from '@/services/queryClient';
 import type { Sessao, Usuario } from '@/types';
 
@@ -70,6 +71,7 @@ export const useAuthStore = create<EstadoAuth>((set) => {
     sair: async () => {
       set({ ocupado: true });
       try {
+        await esquecerTokenPush();
         await dataService().sair();
       } finally {
         queryClient.clear();

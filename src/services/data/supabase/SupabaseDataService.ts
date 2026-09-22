@@ -14,6 +14,7 @@ import type {
   Perfil,
   RankingTorcedor,
   Sessao,
+  TokenPush,
   Usuario,
   Video,
 } from '@/types';
@@ -112,9 +113,10 @@ interface LinhaMensagemLive {
 
 interface LinhaNotificacao {
   id: string;
-  tipo: 'curtida' | 'comentario' | 'seguiu' | 'sistema';
+  tipo: 'curtida' | 'comentario' | 'seguiu' | 'live' | 'sistema';
   de_id: string | null;
   video_id: string | null;
+  live_id: string | null;
   texto: string;
   lida: boolean;
   criado_em: string;
@@ -936,7 +938,15 @@ export class SupabaseDataService implements DataService {
       .select(this.selecaoLive)
       .single();
     if (error || !data) erroDoSupabase(error, 'Falha ao iniciar a live');
-    return paraLive(data as unknown as LinhaLive);
+    const live = paraLive(data as unknown as LinhaLive);
+    // avisa os seguidores (notificação em tela + push) sem atrasar o início da live
+    this.db.functions
+      .invoke('notificar-live', { body: { liveId: live.id } })
+      .then(({ error: erroFn }) => {
+        if (erroFn) console.warn('notificar-live falhou:', erroFn.message);
+      })
+      .catch((e: unknown) => console.warn('notificar-live indisponível:', e));
+    return live;
   }
 
   async encerrarLive(id: Id): Promise<void> {
@@ -1060,10 +1070,25 @@ export class SupabaseDataService implements DataService {
       deId: n.de_id,
       de: n.de ? { id: n.de.id, apelido: n.de.apelido, avatarUrl: n.de.avatar_url } : null,
       videoId: n.video_id,
+      liveId: n.live_id ?? null,
       texto: n.texto,
       lida: n.lida,
       criadoEm: n.criado_em,
     }));
+  }
+
+  async registrarTokenPush(token: TokenPush): Promise<void> {
+    await this.meuIdOuErro();
+    // RPC (security definer): permite o token trocar de dono quando outra conta loga no aparelho
+    const { error } = await this.db.rpc('registrar_token_push', {
+      p_token: token.token,
+      p_plataforma: token.plataforma,
+    });
+    if (error) erroDoSupabase(error, 'Falha ao registrar notificações');
+  }
+
+  async removerTokenPush(token: string): Promise<void> {
+    await this.db.from('push_tokens').delete().eq('token', token);
   }
 
   async marcarNotificacoesComoLidas(): Promise<void> {

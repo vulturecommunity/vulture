@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Reacao } from '@/constants/interesses';
 import { dataService } from '@/services/data';
+import { exibirNotificacaoDeLiveLocal } from '@/services/push';
 import { chaves } from '@/services/queryClient';
 import type { Live, MensagemLive } from '@/types';
 
@@ -30,6 +31,10 @@ export function useCriarLive() {
     onSuccess: (live) => {
       queryClient.setQueryData<Live>(chaves.live(live.id), live);
       queryClient.invalidateQueries({ queryKey: chaves.lives });
+      queryClient.invalidateQueries({ queryKey: chaves.notificacoes });
+      // Modo demo: sem servidor, a notificação "está ao vivo" aparece neste mesmo aparelho
+      // para demonstrar o aviso e o toque que abre a live. No Supabase quem envia é a Edge Function.
+      if (dataService().nome === 'mock') exibirNotificacaoDeLiveLocal(live).catch(() => {});
     },
   });
 }

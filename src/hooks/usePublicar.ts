@@ -25,6 +25,7 @@ export function usePublicar() {
         if (salvarNaGaleria && midia.origem === 'camera') {
           try {
             // require tardio: o módulo é só nativo e não existe na web
+            // prettier-ignore
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const MediaLibrary = require('expo-media-library') as typeof import('expo-media-library');
             const permissao = await MediaLibrary.requestPermissionsAsync(true);

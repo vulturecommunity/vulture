@@ -40,6 +40,7 @@ export function removerArquivoLocal(uri: string | null | undefined): void {
 export async function gerarThumbnail(uriVideo: string, tempoMs = 500): Promise<string | null> {
   try {
     // require tardio: o módulo é só nativo e não existe na web
+    // prettier-ignore
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const VideoThumbnails = require('expo-video-thumbnails') as typeof import('expo-video-thumbnails');
     const { uri } = await VideoThumbnails.getThumbnailAsync(uriVideo, {

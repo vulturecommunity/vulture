@@ -410,3 +410,57 @@ describe('MockDataService', () => {
     });
   });
 });
+
+describe('MockDataService › notificações de live e tokens de push', () => {
+  let servico: MockDataService;
+
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    servico = criarServico();
+  });
+
+  it('avisa os seguidores quando o anfitrião entra ao vivo', async () => {
+    await servico.cadastrar({ email: 'anfitriao@t.com', senha: '123456', apelido: 'anfitriao' });
+    await servico.concluirOnboarding({ apelido: 'anfitriao', interesses: ['Jogos'] });
+    const anfitriaoId = (await servico.getProfile('eu')).id;
+    await servico.sair();
+
+    await servico.entrarComoVisitante();
+    await servico.follow(anfitriaoId);
+    await servico.registrarTokenPush({
+      token: 'ExponentPushToken[seguidor]',
+      plataforma: 'android',
+    });
+    await servico.sair();
+
+    await servico.entrar('anfitriao@t.com', '123456');
+    const live = await servico.createLive('Resenha ao vivo');
+    expect(await servico.tokensDosSeguidores(anfitriaoId)).toEqual([
+      { token: 'ExponentPushToken[seguidor]', plataforma: 'android' },
+    ]);
+    await servico.sair();
+
+    await servico.entrarComoVisitante();
+    const notificacoes = await servico.listNotificacoes();
+    const aviso = notificacoes.find((n) => n.tipo === 'live');
+    expect(aviso).toMatchObject({ liveId: live.id, deId: anfitriaoId, lida: false });
+    expect(aviso?.texto).toBe('está ao vivo: Resenha ao vivo');
+  });
+
+  it('o token troca de dono e some ao ser removido', async () => {
+    await servico.entrarComoVisitante();
+    await servico.registrarTokenPush({ token: 'tok', plataforma: 'android' });
+    await servico.sair();
+    await servico.cadastrar({ email: 'b@t.com', senha: '123456', apelido: 'beltrano' });
+    await servico.registrarTokenPush({ token: 'tok', plataforma: 'android' });
+    const meuId = (await servico.getProfile('eu')).id;
+    // quem seguia... ninguém; mas o token deve pertencer só ao usuário atual
+    await servico.follow('u-nacao');
+    expect(await servico.tokensDosSeguidores('u-nacao')).toEqual([
+      { token: 'tok', plataforma: 'android' },
+    ]);
+    expect(meuId).toBeTruthy();
+    await servico.removerTokenPush('tok');
+    expect(await servico.tokensDosSeguidores('u-nacao')).toEqual([]);
+  });
+});

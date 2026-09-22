@@ -123,12 +123,27 @@ create table if not exists public.blocks (
 create table if not exists public.notifications (
   id        uuid primary key default gen_random_uuid(),
   para_id   uuid not null references public.profiles (id) on delete cascade,
-  tipo      text not null check (tipo in ('curtida', 'comentario', 'seguiu', 'sistema')),
+  tipo      text not null check (tipo in ('curtida', 'comentario', 'seguiu', 'live', 'sistema')),
   de_id     uuid references public.profiles (id) on delete cascade,
   video_id  uuid references public.videos (id) on delete cascade,
+  live_id   uuid references public.live_streams (id) on delete cascade,
   texto     text not null,
   lida      boolean not null default false,
   criado_em timestamptz not null default now()
+);
+
+-- Bancos criados antes das notificações de live: adiciona a coluna e amplia o check
+alter table public.notifications add column if not exists live_id uuid references public.live_streams (id) on delete cascade;
+alter table public.notifications drop constraint if exists notifications_tipo_check;
+alter table public.notifications add constraint notifications_tipo_check
+  check (tipo in ('curtida', 'comentario', 'seguiu', 'live', 'sistema'));
+
+-- Tokens de push (Expo Push Service): um token = um aparelho; troca de dono se outro usuário logar nele
+create table if not exists public.push_tokens (
+  token         text primary key,
+  usuario_id    uuid not null references public.profiles (id) on delete cascade,
+  plataforma    text not null default 'android' check (plataforma in ('android', 'ios', 'web')),
+  atualizado_em timestamptz not null default now()
 );
 
 -- -------------------------------------------------------------------------------------
@@ -149,6 +164,7 @@ create index if not exists follows_seguido_idx         on public.follows (seguid
 create index if not exists live_streams_ativa_idx      on public.live_streams (ativa, espectadores desc);
 create index if not exists live_messages_live_idx      on public.live_messages (live_id, criado_em desc);
 create index if not exists notifications_para_idx      on public.notifications (para_id, criado_em desc);
+create index if not exists push_tokens_usuario_idx     on public.push_tokens (usuario_id);
 create index if not exists profiles_apelido_busca_idx  on public.profiles (lower(apelido));
 create index if not exists profiles_nome_busca_idx     on public.profiles (lower(nome));
 
@@ -415,6 +431,22 @@ returns void language sql security definer set search_path = public as $$
    where id = p_live_id and ativa;
 $$;
 
+-- Registra o token deste aparelho para o usuário logado. Se o token já era de outra conta
+-- (troca de usuário no mesmo celular), passa a ser do usuário atual.
+create or replace function public.registrar_token_push(p_token text, p_plataforma text default 'android')
+returns void language plpgsql security definer set search_path = public as $
+begin
+  if auth.uid() is null then
+    raise exception 'não autenticado';
+  end if;
+  delete from public.push_tokens where token = p_token and usuario_id <> auth.uid();
+  insert into public.push_tokens (token, usuario_id, plataforma, atualizado_em)
+  values (p_token, auth.uid(), p_plataforma, now())
+  on conflict (token) do update
+    set usuario_id = excluded.usuario_id, plataforma = excluded.plataforma, atualizado_em = now();
+end;
+$;
+
 create or replace function public.buscar_hashtags(p_termo text)
 returns table (tag text, total bigint)
 language sql stable security definer set search_path = public as $$
@@ -476,6 +508,7 @@ alter table public.live_messages enable row level security;
 alter table public.reports       enable row level security;
 alter table public.blocks        enable row level security;
 alter table public.notifications enable row level security;
+alter table public.push_tokens   enable row level security;
 
 -- profiles: leitura pública, escrita só do dono
 drop policy if exists "profiles leitura publica" on public.profiles;
@@ -560,6 +593,16 @@ drop policy if exists "blocks inserir" on public.blocks;
 create policy "blocks inserir" on public.blocks for insert with check (auth.uid() = usuario_id);
 drop policy if exists "blocks excluir" on public.blocks;
 create policy "blocks excluir" on public.blocks for delete using (auth.uid() = usuario_id);
+
+-- push_tokens: cada usuário só vê/edita os tokens dos próprios aparelhos
+drop policy if exists "push_tokens leitura propria" on public.push_tokens;
+create policy "push_tokens leitura propria" on public.push_tokens for select using (auth.uid() = usuario_id);
+drop policy if exists "push_tokens inserir" on public.push_tokens;
+create policy "push_tokens inserir" on public.push_tokens for insert with check (auth.uid() = usuario_id);
+drop policy if exists "push_tokens atualizar" on public.push_tokens;
+create policy "push_tokens atualizar" on public.push_tokens for update using (auth.uid() = usuario_id) with check (auth.uid() = usuario_id);
+drop policy if exists "push_tokens excluir" on public.push_tokens;
+create policy "push_tokens excluir" on public.push_tokens for delete using (auth.uid() = usuario_id);
 
 -- notifications: só o destinatário lê/marca como lida (inserção é feita por triggers)
 drop policy if exists "notifications leitura propria" on public.notifications;

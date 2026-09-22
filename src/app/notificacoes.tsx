@@ -21,6 +21,7 @@ const ICONES: Record<Notificacao['tipo'], NomeDeIcone> = {
   curtida: 'curtido',
   comentario: 'comentar',
   seguiu: 'seguiu',
+  live: 'aoVivo',
   sistema: 'megafone',
 };
 
@@ -28,10 +29,11 @@ const CORES: Record<Notificacao['tipo'], string> = {
   curtida: cores.vermelhoVivo,
   comentario: cores.textoSecundario,
   seguiu: cores.sucesso,
+  live: cores.vermelhoVivo,
   sistema: cores.dourado,
 };
 
-/** Lista de eventos: curtiu, comentou, seguiu, avisos do app. */
+/** Lista de eventos: curtiu, comentou, seguiu, entrou ao vivo, avisos do app. */
 export default function TelaNotificacoes() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -46,7 +48,8 @@ export default function TelaNotificacoes() {
   }, [notificacoes.data, marcarLidas]);
 
   function abrir(n: Notificacao) {
-    if (n.videoId) router.push({ pathname: '/video/[id]', params: { id: n.videoId } });
+    if (n.liveId) router.push({ pathname: '/live/[id]', params: { id: n.liveId } });
+    else if (n.videoId) router.push({ pathname: '/video/[id]', params: { id: n.videoId } });
     else if (n.deId) router.push({ pathname: '/usuario/[id]', params: { id: n.deId } });
   }
 
@@ -66,7 +69,7 @@ export default function TelaNotificacoes() {
             <EstadoVazio
               icone="sinoMudo"
               titulo="Nada por aqui ainda"
-              descricao="Curtidas, comentários e novos seguidores aparecem aqui."
+              descricao="Curtidas, comentários, novos seguidores e lives de quem você segue aparecem aqui."
             />
           }
           renderItem={({ item }) => (
@@ -92,6 +95,7 @@ export default function TelaNotificacoes() {
                   {item.texto}
                 </Texto>
                 <Texto variante="legenda" cor={cores.textoTerciario}>
+                  {item.tipo === 'live' ? 'AO VIVO · ' : ''}
                   {tempoRelativo(item.criadoEm)}
                 </Texto>
               </View>

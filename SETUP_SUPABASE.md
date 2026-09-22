@@ -80,6 +80,32 @@ npx expo start -c
 
 Para ver os dados: **Table Editor**. Para ver os arquivos: **Storage**. Para ver denúncias: tabela `reports`.
 
+## 5b. Notificações de live (push) — "fulano está ao vivo"
+
+Quando alguém que o usuário segue inicia uma live, os seguidores recebem uma notificação no
+celular; tocar nela abre a transmissão. O envio é feito pela Edge Function `notificar-live`
+(o app a chama logo depois de criar a live) usando o **Expo Push Service** (gratuito).
+
+1. Rode o `supabase/schema.sql` de novo (ele cria a tabela `push_tokens` e o tipo de
+   notificação `live`; é idempotente).
+2. Publique a função (mesmos passos do `SETUP_LIVEKIT.md`, seção 2, para `login` e `link`):
+   ```bash
+   npx supabase functions deploy notificar-live
+   ```
+   Ela usa apenas as variáveis que o Supabase já injeta (`SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`) — não precisa cadastrar segredos.
+3. **Requisitos no aparelho:** push só funciona no **APK/development build** (o Expo Go no
+   Android não recebe push desde o SDK 53). O app pede permissão de notificação no primeiro
+   login e registra o token do aparelho em `push_tokens`.
+4. Teste com dois celulares: A segue B → B toca **Iniciar live** → A recebe
+   "🔴 @b está ao vivo · título · Toque para assistir" → tocar abre a live.
+5. (Opcional) Para volumes maiores, crie um _Access Token_ em https://expo.dev/settings/access-tokens
+   e cadastre `npx supabase secrets set EXPO_ACCESS_TOKEN=...` — a função passa a autenticar no
+   Expo Push Service (limites maiores).
+
+No **modo demo** (driver `mock`) não há servidor: ao iniciar uma live, a notificação aparece no
+próprio aparelho, só para demonstrar o aviso e o toque que abre a live.
+
 ## 6. Problemas comuns
 
 | Sintoma                                 | Causa provável                                      | Solução                                                                                                                       |

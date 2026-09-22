@@ -14,6 +14,7 @@ import type {
   RankingTorcedor,
   Sessao,
   TipoDeMidia,
+  TokenPush,
   Usuario,
   Video,
 } from '@/types';
@@ -140,6 +141,10 @@ export interface DataService {
   // ---- Notificações ----
   listNotificacoes(): Promise<Notificacao[]>;
   marcarNotificacoesComoLidas(): Promise<void>;
+  /** Registra o token de push deste aparelho para o usuário logado (idempotente). */
+  registrarTokenPush(token: TokenPush): Promise<void>;
+  /** Remove o token deste aparelho (ao sair da conta). */
+  removerTokenPush(token: string): Promise<void>;
 
   // ---- Segurança ----
   report(denuncia: NovaDenuncia): Promise<Denuncia>;

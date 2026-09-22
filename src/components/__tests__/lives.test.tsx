@@ -80,14 +80,12 @@ describe('lives', () => {
     const servico = criarServicoDeTeste();
     const sessao = await servico.entrarComoVisitante();
     useAuthStore.setState({ sessao, carregado: true });
-    useUiStore
-      .getState()
-      .abrirDenuncia({
-        tipo: 'video',
-        id: 'v-seed-001',
-        autorId: 'u-nacao',
-        autorApelido: 'nacao_rubro',
-      });
+    useUiStore.getState().abrirDenuncia({
+      tipo: 'video',
+      id: 'v-seed-001',
+      autorId: 'u-nacao',
+      autorApelido: 'nacao_rubro',
+    });
     await renderizar(<SheetDeDenuncia />);
     await fireEvent.press(screen.getByTestId('opcao-denunciar'));
     expect(screen.getByText('Motivo da denúncia')).toBeTruthy();
@@ -100,14 +98,12 @@ describe('lives', () => {
     const servico = criarServicoDeTeste();
     const sessao = await servico.entrarComoVisitante();
     useAuthStore.setState({ sessao, carregado: true });
-    useUiStore
-      .getState()
-      .abrirDenuncia({
-        tipo: 'video',
-        id: 'v-seed-001',
-        autorId: 'u-nacao',
-        autorApelido: 'nacao_rubro',
-      });
+    useUiStore.getState().abrirDenuncia({
+      tipo: 'video',
+      id: 'v-seed-001',
+      autorId: 'u-nacao',
+      autorApelido: 'nacao_rubro',
+    });
     await renderizar(<SheetDeDenuncia />);
     await fireEvent.press(screen.getByTestId('opcao-bloquear'));
     await waitFor(() => expect(useUiStore.getState().alvoParaDenuncia).toBeNull());

@@ -16,6 +16,7 @@ import type {
   Perfil,
   RankingTorcedor,
   Sessao,
+  TokenPush,
   Usuario,
   Video,
 } from '@/types';
@@ -437,6 +438,7 @@ export class MockDataService implements DataService {
       deId: eu.id,
       de: { id: eu.id, apelido: eu.apelido, avatarUrl: eu.avatarUrl },
       videoId,
+      liveId: null,
       texto: 'curtiu seu vídeo',
     });
     this.persistir();
@@ -520,6 +522,7 @@ export class MockDataService implements DataService {
       deId: eu.id,
       de: { id: eu.id, apelido: eu.apelido, avatarUrl: eu.avatarUrl },
       videoId,
+      liveId: null,
       texto: `comentou: "${limpo.slice(0, 60)}"`,
     });
     this.persistir();
@@ -557,6 +560,7 @@ export class MockDataService implements DataService {
       deId: eu.id,
       de: { id: eu.id, apelido: eu.apelido, avatarUrl: eu.avatarUrl },
       videoId: null,
+      liveId: null,
       texto: 'começou a seguir você',
     });
     this.persistir();
@@ -790,6 +794,18 @@ export class MockDataService implements DataService {
       encerradaEm: null,
     };
     b.lives.unshift(live);
+    // avisa quem segue o anfitrião (aparece na lista de notificações; o push é enviado pelo app)
+    for (const s of b.seguidores) {
+      if (s.seguidoId !== eu.id) continue;
+      this.notificar(b, s.seguidorId, {
+        tipo: 'live',
+        deId: eu.id,
+        de: { id: eu.id, apelido: eu.apelido, avatarUrl: eu.avatarUrl },
+        videoId: null,
+        liveId: live.id,
+        texto: `está ao vivo: ${limpo}`,
+      });
+    }
     this.persistir();
     return live;
   }
@@ -892,6 +908,32 @@ export class MockDataService implements DataService {
     return this.ordenarPorData(
       b.notificacoes.filter((n) => n.paraId === meuId || n.paraId === '*'),
     ).map(({ paraId: _paraId, ...n }) => n);
+  }
+
+  async registrarTokenPush(token: TokenPush): Promise<void> {
+    const b = await this.armazenamento.carregar();
+    const eu = this.usuarioLogado(b);
+    // um token pertence a um único aparelho: troca de dono se outro usuário logar nele
+    b.tokensPush = (b.tokensPush ?? []).filter((t) => t.token !== token.token);
+    b.tokensPush.push({ usuarioId: eu.id, token: token.token, plataforma: token.plataforma });
+    this.persistir();
+  }
+
+  async removerTokenPush(token: string): Promise<void> {
+    const b = await this.armazenamento.carregar();
+    b.tokensPush = (b.tokensPush ?? []).filter((t) => t.token !== token);
+    this.persistir();
+  }
+
+  /** Tokens de push dos seguidores de um usuário (usado pelo envio local no modo demo). */
+  async tokensDosSeguidores(usuarioId: Id): Promise<TokenPush[]> {
+    const b = await this.armazenamento.carregar();
+    const seguidores = new Set(
+      b.seguidores.filter((s) => s.seguidoId === usuarioId).map((s) => s.seguidorId),
+    );
+    return (b.tokensPush ?? [])
+      .filter((t) => seguidores.has(t.usuarioId))
+      .map((t) => ({ token: t.token, plataforma: t.plataforma as TokenPush['plataforma'] }));
   }
 
   async marcarNotificacoesComoLidas(): Promise<void> {

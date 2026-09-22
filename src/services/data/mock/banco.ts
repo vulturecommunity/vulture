@@ -49,6 +49,7 @@ export interface BancoMock {
   notificacoes: (Notificacao & { paraId: string })[];
   denuncias: Denuncia[];
   bloqueios: { usuarioId: string; bloqueadoId: string }[];
+  tokensPush: { usuarioId: string; token: string; plataforma: string }[];
   sessao: SessaoPersistida | null;
 }
 
@@ -84,6 +85,7 @@ export function criarBancoInicial(): BancoMock {
     notificacoes: gerarNotificacoesSeed().map((n) => ({ ...n, paraId: '*' })),
     denuncias: [],
     bloqueios: [],
+    tokensPush: [],
     sessao: null,
   };
 }
