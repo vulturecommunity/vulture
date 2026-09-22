@@ -27,6 +27,9 @@ const ALTURA_REPOUSO = 2;
 const ALTURA_ARRASTO = 6;
 /** faixa sensível ao toque, maior que a linha visível */
 const ALTURA_TOQUE = 28;
+/** a bolinha se estende metade dela abaixo da trilha; a faixa fica recuada por esse tanto
+ * para o item do feed (que corta o que passa da borda) nunca esconder a parte de baixo */
+const RAIO_BOLINHA = 6;
 
 /**
  * Linha de progresso no rodapé do vídeo. Arrastar para os lados avança/volta o vídeo
@@ -116,8 +119,9 @@ export function BarraDeProgresso({
   });
 
   return (
-    <View style={estilos.area} testID="barra-progresso">
+    <View style={estilos.area} pointerEvents="box-none" testID="barra-progresso">
       {tempoArrasto !== null ? (
+        // no centro da tela, como no TikTok: nunca fica atrás do painel de ações
         <View style={estilos.tempo} pointerEvents="none">
           <Texto variante="corpoForte">{formatarDuracao(tempoArrasto)}</Texto>
           <Texto variante="corpo" cor={cores.textoSecundario}>
@@ -139,10 +143,17 @@ export function BarraDeProgresso({
 }
 
 const estilos = StyleSheet.create({
-  area: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  area: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: RAIO_BOLINHA,
+    justifyContent: 'flex-end',
+  },
   tempo: {
     position: 'absolute',
-    bottom: ALTURA_TOQUE + espacos.sm,
+    top: '42%',
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'baseline',
