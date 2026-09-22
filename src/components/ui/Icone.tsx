@@ -80,6 +80,19 @@ const ICONES = {
   cadeado: feather('lock'),
   premio: feather('award'),
   tendencia: feather('trending-up'),
+  // mensagens, rasantes e perfil
+  mensagens: material('forum-outline'),
+  novaConversa: material('message-plus-outline'),
+  adicionarPessoa: feather('user-plus'),
+  pessoaOk: feather('user-check'),
+  rasante: material('bird'),
+  maisCirculo: feather('plus-circle'),
+  adicionar: feather('plus'),
+  enviado: feather('check'),
+  lido: material('check-all'),
+  chevronBaixo: feather('chevron-down'),
+  link: feather('link'),
+  pausa: feather('pause'),
 } as const;
 
 export type NomeDeIcone = keyof typeof ICONES;

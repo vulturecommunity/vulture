@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { dataService } from '@/services/data';
 import { chaves } from '@/services/queryClient';
 import { useAuthStore } from '@/stores/authStore';
+import type { TipoDeNotificacao } from '@/types';
 
 export function useNotificacoes() {
   const logado = useAuthStore((s) => !!s.sessao);
@@ -22,7 +23,7 @@ export function useNotificacoesNaoLidas(): number {
 export function useMarcarNotificacoesComoLidas() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => dataService().marcarNotificacoesComoLidas(),
+    mutationFn: (tipos?: TipoDeNotificacao[]) => dataService().marcarNotificacoesComoLidas(tipos),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: chaves.notificacoes }),
   });
 }

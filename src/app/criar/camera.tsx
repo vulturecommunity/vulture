@@ -6,13 +6,14 @@ import {
 } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Botao, Icone, Texto } from '@/components/ui';
 import { DURACAO_MAXIMA_VIDEO_SEGUNDOS } from '@/constants/interesses';
+import { DURACAO_MAXIMA_RASANTE_SEGUNDOS } from '@/constants/rasantes';
 import { useCriacaoStore } from '@/stores/criacaoStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -22,10 +23,17 @@ import { formatarDuracao } from '@/utils/formatadores';
 
 type Modo = 'video' | 'foto';
 
-/** Tela de captura: gravar vídeo (pressionar e segurar), tirar foto ou importar da galeria. */
+/**
+ * Tela de captura: gravar vídeo (pressionar e segurar), tirar foto ou importar da galeria.
+ * Com ?destino=rasante grava só vídeo de até 15 s e segue para a publicação do rasante.
+ */
 export default function TelaCamera() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { destino } = useLocalSearchParams<{ destino?: string }>();
+  const rasante = destino === 'rasante';
+  const limite = rasante ? DURACAO_MAXIMA_RASANTE_SEGUNDOS : DURACAO_MAXIMA_VIDEO_SEGUNDOS;
+  const telaSeguinte = rasante ? '/rasante/novo' : '/criar/preview';
   const cameraRef = useRef<CameraView>(null);
   const [permissaoCamera, pedirCamera] = useCameraPermissions();
   const [permissaoMic, pedirMic] = useMicrophonePermissions();
@@ -98,17 +106,12 @@ export default function TelaCamera() {
     timerRef.current = setInterval(() => {
       const passado = (Date.now() - inicioRef.current) / 1000;
       setSegundos(passado);
-      if (passado >= DURACAO_MAXIMA_VIDEO_SEGUNDOS) pararNativo();
+      if (passado >= limite) pararNativo();
     }, 100);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      const resultado = await cameraRef.current.recordAsync({
-        maxDuration: DURACAO_MAXIMA_VIDEO_SEGUNDOS,
-      });
-      const duracao = Math.min(
-        DURACAO_MAXIMA_VIDEO_SEGUNDOS,
-        (Date.now() - inicioRef.current) / 1000,
-      );
+      const resultado = await cameraRef.current.recordAsync({ maxDuration: limite });
+      const duracao = Math.min(limite, (Date.now() - inicioRef.current) / 1000);
       pararContador();
       gravandoRef.current = false;
       setGravando(false);
@@ -125,7 +128,7 @@ export default function TelaCamera() {
           altura: null,
           origem: 'camera',
         });
-        router.push('/criar/preview');
+        router.push(telaSeguinte);
       }
     } catch (erro) {
       pararContador();
@@ -133,7 +136,16 @@ export default function TelaCamera() {
       setGravando(false);
       mostrarAviso(erro instanceof Error ? erro.message : 'Não foi possível gravar.', 'erro');
     }
-  }, [pronta, definirMidia, router, mostrarAviso, pararContador, pararNativo]);
+  }, [
+    pronta,
+    definirMidia,
+    router,
+    mostrarAviso,
+    pararContador,
+    pararNativo,
+    limite,
+    telaSeguinte,
+  ]);
 
   const pararGravacao = useCallback(() => {
     if (!gravandoRef.current) return;
@@ -183,19 +195,21 @@ export default function TelaCamera() {
         return;
       }
       const resultado = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['videos', 'images'],
+        mediaTypes: rasante ? ['videos'] : ['videos', 'images'],
         allowsEditing: false,
         quality: 0.9,
-        videoMaxDuration: DURACAO_MAXIMA_VIDEO_SEGUNDOS,
+        videoMaxDuration: limite,
       });
       if (resultado.canceled || resultado.assets.length === 0) return;
       const a = resultado.assets[0];
       const ehVideo = a.type === 'video';
-      const duracao = ehVideo
-        ? Math.min(DURACAO_MAXIMA_VIDEO_SEGUNDOS, (a.duration ?? 0) / 1000)
-        : 5;
-      if (ehVideo && (a.duration ?? 0) / 1000 > DURACAO_MAXIMA_VIDEO_SEGUNDOS + 1) {
-        mostrarAviso('Vídeos de até 60 segundos. Escolha um trecho menor.', 'erro');
+      if (rasante && !ehVideo) {
+        mostrarAviso('Rasante é só vídeo. Escolha um vídeo de até 15 segundos.', 'erro');
+        return;
+      }
+      const duracao = ehVideo ? Math.min(limite, (a.duration ?? 0) / 1000) : 5;
+      if (ehVideo && (a.duration ?? 0) / 1000 > limite + 1) {
+        mostrarAviso(`Vídeos de até ${limite} segundos. Escolha um trecho menor.`, 'erro');
         return;
       }
       definirMidia({
@@ -206,14 +220,14 @@ export default function TelaCamera() {
         altura: a.height,
         origem: 'galeria',
       });
-      router.push('/criar/preview');
+      router.push(telaSeguinte);
     } catch (erro) {
       mostrarAviso(erro instanceof Error ? erro.message : 'Não foi possível importar.', 'erro');
     } finally {
       ocupadoRef.current = false;
       setOcupado(false);
     }
-  }, [definirMidia, router, mostrarAviso]);
+  }, [definirMidia, router, mostrarAviso, rasante, limite, telaSeguinte]);
 
   // Ao ficar pronta, limita a resolução da foto (evita bitmaps de 12 MP+ na memória).
   const aoCameraPronta = useCallback(() => {
@@ -257,7 +271,6 @@ export default function TelaCamera() {
     );
   }
 
-  const limite = DURACAO_MAXIMA_VIDEO_SEGUNDOS;
   const progresso = Math.min(1, segundos / limite);
 
   return (
@@ -296,6 +309,13 @@ export default function TelaCamera() {
             <View style={estilos.pontoVermelho} />
             <Texto variante="corpoForte">
               {formatarDuracao(segundos)} / {formatarDuracao(limite)}
+            </Texto>
+          </View>
+        ) : rasante ? (
+          <View style={estilos.contador} testID="etiqueta-rasante">
+            <Icone nome="rasante" tamanho={14} cor={cores.vermelhoVivo} />
+            <Texto variante="pequeno" cor={cores.branco} style={estilos.modoTextoAtivo}>
+              Rasante · até {limite} s
             </Texto>
           </View>
         ) : (

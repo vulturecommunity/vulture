@@ -4,8 +4,10 @@ import type {
   Comentario,
   Denuncia,
   Live,
+  Mensagem,
   MensagemLive,
   Notificacao,
+  PreferenciasDeMensagens,
   Usuario,
   Video,
 } from '@/types';
@@ -16,6 +18,7 @@ import {
   gerarLivesSeed,
   gerarMensagensDeLiveSeed,
   gerarNotificacoesSeed,
+  gerarRasantesSeed,
   gerarVideosSeed,
 } from './seed';
 
@@ -35,6 +38,24 @@ export interface SessaoPersistida {
   onboardingConcluido: boolean;
 }
 
+export interface ConversaPersistida {
+  id: string;
+  participantes: [string, string];
+  criadoEm: string;
+  atualizadoEm: string;
+}
+
+/** Rasante sem os campos derivados (autor e visto), que dependem de quem está logado. */
+export interface RasantePersistido {
+  id: string;
+  autorId: string;
+  url: string;
+  thumbnailUrl: string | null;
+  duracao: number;
+  criadoEm: string;
+  expiraEm: string;
+}
+
 export interface BancoMock {
   versao: number;
   usuarios: Usuario[];
@@ -50,7 +71,23 @@ export interface BancoMock {
   denuncias: Denuncia[];
   bloqueios: { usuarioId: string; bloqueadoId: string }[];
   tokensPush: { usuarioId: string; token: string; plataforma: string }[];
+  conversas: ConversaPersistida[];
+  mensagens: Mensagem[];
+  preferenciasMensagens: Record<string, PreferenciasDeMensagens>;
+  rasantes: RasantePersistido[];
+  rasantesVistos: { usuarioId: string; rasanteId: string }[];
   sessao: SessaoPersistida | null;
+}
+
+/** Bancos gravados por versões anteriores do app ganham as coleções novas sem perder nada. */
+export function normalizarBanco(b: BancoMock): BancoMock {
+  b.tokensPush ??= [];
+  b.conversas ??= [];
+  b.mensagens ??= [];
+  b.preferenciasMensagens ??= {};
+  b.rasantes ??= [];
+  b.rasantesVistos ??= [];
+  return b;
 }
 
 export function criarBancoInicial(): BancoMock {
@@ -86,6 +123,11 @@ export function criarBancoInicial(): BancoMock {
     denuncias: [],
     bloqueios: [],
     tokensPush: [],
+    conversas: [],
+    mensagens: [],
+    preferenciasMensagens: {},
+    rasantes: gerarRasantesSeed(),
+    rasantesVistos: [],
     sessao: null,
   };
 }
@@ -110,8 +152,8 @@ export class ArmazenamentoMock {
           if (bruto) {
             const salvo = JSON.parse(bruto) as BancoMock;
             if (salvo.versao === VERSAO_BANCO) {
-              this.banco = salvo;
-              return salvo;
+              this.banco = normalizarBanco(salvo);
+              return this.banco;
             }
           }
         } catch {

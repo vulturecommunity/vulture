@@ -1,21 +1,35 @@
 import { DURACAO_FOTO_SEGUNDOS, type Interesse, type Reacao } from '@/constants/interesses';
 import {
+  DURACAO_MAXIMA_RASANTE_SEGUNDOS,
+  TAMANHO_MAXIMO_MENSAGEM,
+  VALIDADE_RASANTE_HORAS,
+} from '@/constants/rasantes';
+import {
   gerarThumbnail,
   removerArquivoLocal,
   salvarArquivoLocalmente,
 } from '@/services/midia/arquivos';
 import type {
   Comentario,
+  Conversa,
   Denuncia,
+  GrupoDeRasantes,
   HashtagTrending,
   Id,
   Live,
+  Mensagem,
   MensagemLive,
   Notificacao,
+  NovoSeguidor,
   Pagina,
   Perfil,
+  PermissaoDeConversa,
+  PreferenciasDeMensagens,
   RankingTorcedor,
+  Rasante,
+  ResumoDeUsuario,
   Sessao,
+  TipoDeNotificacao,
   TokenPush,
   Usuario,
   Video,
@@ -33,11 +47,13 @@ import type {
   DataService,
   EventoDaLive,
   NovaDenuncia,
+  NovoRasante,
   NovoVideo,
   ParametrosDoFeed,
   ProgressoDeUpload,
 } from '../types';
-import { ArmazenamentoMock, type BancoMock } from './banco';
+import { ArmazenamentoMock, type BancoMock, type ConversaPersistida } from './banco';
+import { RESPOSTAS_DE_DEMO, USUARIOS_SEED, gerarRasantesSeed } from './seed';
 import { SimuladorDeLive } from './simuladorLive';
 
 export interface OpcoesMock {
@@ -46,8 +62,12 @@ export interface OpcoesMock {
   latenciaMs?: number;
   /** bots no chat da live */
   botsNaLive?: boolean;
+  /** perfis de demonstração respondem no chat privado (padrão: igual a botsNaLive) */
+  respostasAutomaticas?: boolean;
   gerarId?: () => string;
 }
+
+const PREFERENCIAS_PADRAO: PreferenciasDeMensagens = { deQuemSigo: true, deSeguidores: true };
 
 const ID_VISITANTE = 'u-visitante';
 const LIMITE_PADRAO = 10;
@@ -63,12 +83,15 @@ export class MockDataService implements DataService {
   private readonly latenciaMs: number;
   private readonly gerarId: () => string;
   private readonly simulador: SimuladorDeLive;
+  private readonly respostasAutomaticas: boolean;
+  private readonly ouvintesDeConversa = new Map<string, Set<(m: Mensagem) => void>>();
 
   constructor(opcoes: OpcoesMock = {}) {
     this.armazenamento = opcoes.armazenamento ?? new ArmazenamentoMock();
     this.latenciaMs = opcoes.latenciaMs ?? 120;
     this.gerarId = opcoes.gerarId ?? novoId;
     this.simulador = new SimuladorDeLive(this.gerarId, opcoes.botsNaLive ?? true);
+    this.respostasAutomaticas = opcoes.respostasAutomaticas ?? opcoes.botsNaLive ?? true;
   }
 
   // ---------------------------------------------------------------- utilitários internos
@@ -206,6 +229,7 @@ export class MockDataService implements DataService {
     };
     b.usuarios.push(usuario);
     b.contas.push({ email, senha: dados.senha, usuarioId: usuario.id });
+    this.semearRelacoesDeDemo(b, usuario);
     b.sessao = { usuarioId: usuario.id, visitante: false, onboardingConcluido: false };
     await this.armazenamento.salvarAgora(); // sessão: grava na hora
     return this.montarSessao(b);
@@ -238,6 +262,7 @@ export class MockDataService implements DataService {
           visitante.seguindo += 1;
         }
       }
+      this.semearRelacoesDeDemo(b, visitante);
     }
     b.sessao = { usuarioId: visitante.id, visitante: true, onboardingConcluido: true };
     await this.armazenamento.salvarAgora(); // sessão: grava na hora
@@ -936,10 +961,14 @@ export class MockDataService implements DataService {
       .map((t) => ({ token: t.token, plataforma: t.plataforma as TokenPush['plataforma'] }));
   }
 
-  async marcarNotificacoesComoLidas(): Promise<void> {
+  async marcarNotificacoesComoLidas(tipos?: TipoDeNotificacao[]): Promise<void> {
     const b = await this.banco();
     const meuId = b.sessao?.usuarioId;
-    for (const n of b.notificacoes) if (n.paraId === meuId || n.paraId === '*') n.lida = true;
+    for (const n of b.notificacoes) {
+      if (n.paraId !== meuId && n.paraId !== '*') continue;
+      if (tipos && !tipos.includes(n.tipo)) continue;
+      n.lida = true;
+    }
     this.persistir();
   }
 
@@ -992,6 +1021,471 @@ export class MockDataService implements DataService {
     const eu = this.usuarioLogado(b);
     const ids = b.bloqueios.filter((bl) => bl.usuarioId === eu.id).map((bl) => bl.bloqueadoId);
     return b.usuarios.filter((u) => ids.includes(u.id));
+  }
+
+  // ---------------------------------------------------------------- demonstração: relações iniciais
+
+  /**
+   * Toda conta nova no modo demo já chega com alguns torcedores seguindo (com datas variadas,
+   * para a tela "Novos seguidores" mostrar dias e datas) e uma mensagem de boas-vindas.
+   */
+  private semearRelacoesDeDemo(b: BancoMock, usuario: Usuario): void {
+    const HORA = 60 * 60 * 1000;
+    const plano: { id: string; horasAtras: number }[] = [
+      { id: 'u-nacao', horasAtras: 0.2 },
+      { id: 'u-maraca', horasAtras: 2 },
+      { id: 'u-memes', horasAtras: 3 * 24 },
+      { id: 'u-resenha', horasAtras: 20 * 24 },
+    ];
+    for (const p of plano) {
+      const seguidor = b.usuarios.find((u) => u.id === p.id);
+      if (!seguidor || seguidor.id === usuario.id) continue;
+      if (b.seguidores.some((s) => s.seguidorId === p.id && s.seguidoId === usuario.id)) continue;
+      const quando = new Date(Date.now() - p.horasAtras * HORA).toISOString();
+      b.seguidores.push({ seguidorId: p.id, seguidoId: usuario.id, criadoEm: quando });
+      seguidor.seguindo += 1;
+      usuario.seguidores += 1;
+      b.notificacoes.unshift({
+        id: this.gerarId(),
+        tipo: 'seguiu',
+        deId: seguidor.id,
+        de: { id: seguidor.id, apelido: seguidor.apelido, avatarUrl: seguidor.avatarUrl },
+        videoId: null,
+        liveId: null,
+        texto: 'começou a seguir você',
+        lida: false,
+        criadoEm: quando,
+        paraId: usuario.id,
+      });
+    }
+    const anfitria = b.usuarios.find((u) => u.id === 'u-nacao');
+    if (anfitria && anfitria.id !== usuario.id) {
+      const conversa = this.conversaEntre(b, anfitria.id, usuario.id, true)!;
+      const quando = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      b.mensagens.push({
+        id: this.gerarId(),
+        conversaId: conversa.id,
+        remetenteId: anfitria.id,
+        texto: `Fala, @${usuario.apelido}! Bem-vindo ao Vulture 🔴⚫ Qualquer dúvida é só chamar aqui.`,
+        lida: false,
+        criadoEm: quando,
+      });
+      conversa.atualizadoEm = quando;
+    }
+  }
+
+  // ---------------------------------------------------------------- mensagens diretas
+
+  private preferenciasDe(b: BancoMock, usuarioId: string): PreferenciasDeMensagens {
+    return { ...PREFERENCIAS_PADRAO, ...(b.preferenciasMensagens[usuarioId] ?? {}) };
+  }
+
+  private resumoDe(b: BancoMock, id: string): ResumoDeUsuario {
+    const u = b.usuarios.find((x) => x.id === id);
+    return u ? this.resumo(u) : { id, apelido: 'torcedor', nome: 'Torcedor', avatarUrl: null };
+  }
+
+  private conversaEntre(
+    b: BancoMock,
+    a: string,
+    c: string,
+    criar = false,
+  ): ConversaPersistida | null {
+    const existente = b.conversas.find(
+      (x) => x.participantes.includes(a) && x.participantes.includes(c),
+    );
+    if (existente || !criar) return existente ?? null;
+    const nova: ConversaPersistida = {
+      id: this.gerarId(),
+      participantes: [a, c],
+      criadoEm: agoraIso(),
+      atualizadoEm: agoraIso(),
+    };
+    b.conversas.push(nova);
+    return nova;
+  }
+
+  private conversaOuErro(b: BancoMock, conversaId: string, meuId: string): ConversaPersistida {
+    const c = b.conversas.find((x) => x.id === conversaId);
+    if (!c || !c.participantes.includes(meuId))
+      throw new ErroDeAplicacao('Conversa não encontrada.', 'nao_encontrado');
+    return c;
+  }
+
+  private montarConversa(b: BancoMock, c: ConversaPersistida, meuId: string): Conversa {
+    const outroId = c.participantes.find((p) => p !== meuId) ?? meuId;
+    const mensagens = b.mensagens.filter((m) => m.conversaId === c.id);
+    const ultima = mensagens.reduce<Mensagem | null>(
+      (maior, m) => (!maior || m.criadoEm >= maior.criadoEm ? m : maior),
+      null,
+    );
+    return {
+      id: c.id,
+      outro: this.resumoDe(b, outroId),
+      ultimaMensagem: ultima
+        ? { texto: ultima.texto, remetenteId: ultima.remetenteId, criadoEm: ultima.criadoEm }
+        : null,
+      naoLidas: mensagens.filter((m) => m.remetenteId !== meuId && !m.lida).length,
+      atualizadoEm: c.atualizadoEm,
+    };
+  }
+
+  /** Regra de quem pode falar com quem: bloqueios + preferências de quem RECEBE. */
+  private permissaoDeConversa(b: BancoMock, meuId: string, outroId: string): PermissaoDeConversa {
+    if (outroId === meuId) {
+      return {
+        permitido: false,
+        motivo: 'eu_mesmo',
+        descricao: 'Você não pode conversar consigo mesmo.',
+      };
+    }
+    const outro = b.usuarios.find((u) => u.id === outroId);
+    if (!outro || this.idsBloqueados(b, meuId).has(outroId)) {
+      return {
+        permitido: false,
+        motivo: 'bloqueado',
+        descricao: 'Não é possível conversar com esse perfil.',
+      };
+    }
+    const prefs = this.preferenciasDe(b, outroId);
+    const outroMeSegue = b.seguidores.some(
+      (s) => s.seguidorId === outroId && s.seguidoId === meuId,
+    );
+    const euSigoOutro = b.seguidores.some((s) => s.seguidorId === meuId && s.seguidoId === outroId);
+    if ((outroMeSegue && prefs.deQuemSigo) || (euSigoOutro && prefs.deSeguidores)) {
+      return { permitido: true };
+    }
+    if (outroMeSegue || euSigoOutro) {
+      return {
+        permitido: false,
+        motivo: 'nao_aceita',
+        descricao: `@${outro.apelido} não está recebendo mensagens no momento.`,
+      };
+    }
+    return {
+      permitido: false,
+      motivo: 'sem_relacao',
+      descricao: `Siga @${outro.apelido} ou espere que te siga para puxar papo.`,
+    };
+  }
+
+  private emitirMensagem(mensagem: Mensagem): void {
+    for (const ouvinte of this.ouvintesDeConversa.get(mensagem.conversaId) ?? []) ouvinte(mensagem);
+  }
+
+  /** Perfis de demonstração (do seed) respondem sozinhos, para o chat parecer vivo. */
+  private agendarRespostaDeDemo(conversaId: string, deId: string): void {
+    if (!this.respostasAutomaticas) return;
+    if (!USUARIOS_SEED.some((u) => u.id === deId)) return;
+    const atraso = 1200 + Math.floor(Math.random() * 1800);
+    setTimeout(async () => {
+      try {
+        const b = await this.armazenamento.carregar();
+        const conversa = b.conversas.find((c) => c.id === conversaId);
+        if (!conversa) return;
+        const resposta: Mensagem = {
+          id: this.gerarId(),
+          conversaId,
+          remetenteId: deId,
+          texto: RESPOSTAS_DE_DEMO[Math.floor(Math.random() * RESPOSTAS_DE_DEMO.length)],
+          lida: false,
+          criadoEm: agoraIso(),
+        };
+        b.mensagens.push(resposta);
+        conversa.atualizadoEm = resposta.criadoEm;
+        this.persistir();
+        this.emitirMensagem(resposta);
+      } catch {
+        // demo: resposta perdida não é problema
+      }
+    }, atraso);
+  }
+
+  async listConversas(): Promise<Conversa[]> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const bloqueados = this.idsBloqueados(b, eu.id);
+    return b.conversas
+      .filter((c) => c.participantes.includes(eu.id))
+      .filter((c) => !c.participantes.some((p) => bloqueados.has(p)))
+      .map((c) => this.montarConversa(b, c, eu.id))
+      .sort((a, c) => c.atualizadoEm.localeCompare(a.atualizadoEm));
+  }
+
+  async getConversa(conversaId: Id): Promise<Conversa> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    return this.montarConversa(b, this.conversaOuErro(b, conversaId, eu.id), eu.id);
+  }
+
+  async podeConversar(usuarioId: Id): Promise<PermissaoDeConversa> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    return this.permissaoDeConversa(b, eu.id, usuarioId);
+  }
+
+  async abrirConversa(usuarioId: Id): Promise<Conversa> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const existente = this.conversaEntre(b, eu.id, usuarioId);
+    if (!existente) {
+      const permissao = this.permissaoDeConversa(b, eu.id, usuarioId);
+      if (!permissao.permitido) throw new ErroDeAplicacao(permissao.descricao, 'conversa_negada');
+    }
+    const conversa = existente ?? this.conversaEntre(b, eu.id, usuarioId, true)!;
+    this.persistir();
+    return this.montarConversa(b, conversa, eu.id);
+  }
+
+  async listMensagens(conversaId: Id): Promise<Mensagem[]> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    this.conversaOuErro(b, conversaId, eu.id);
+    return b.mensagens
+      .filter((m) => m.conversaId === conversaId)
+      .sort((a, c) => a.criadoEm.localeCompare(c.criadoEm))
+      .slice(-300);
+  }
+
+  async enviarMensagem(conversaId: Id, texto: string): Promise<Mensagem> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const conversa = this.conversaOuErro(b, conversaId, eu.id);
+    const limpo = texto.trim();
+    if (!limpo) throw new ErroDeAplicacao('Escreva uma mensagem.', 'mensagem_vazia');
+    if (limpo.length > TAMANHO_MAXIMO_MENSAGEM)
+      throw new ErroDeAplicacao('Mensagem longa demais.', 'mensagem_longa');
+    const outroId = conversa.participantes.find((p) => p !== eu.id) ?? eu.id;
+    const permissao = this.permissaoDeConversa(b, eu.id, outroId);
+    if (!permissao.permitido) throw new ErroDeAplicacao(permissao.descricao, 'conversa_negada');
+    const mensagem: Mensagem = {
+      id: this.gerarId(),
+      conversaId,
+      remetenteId: eu.id,
+      texto: limpo,
+      lida: false,
+      criadoEm: agoraIso(),
+    };
+    b.mensagens.push(mensagem);
+    conversa.atualizadoEm = mensagem.criadoEm;
+    this.persistir();
+    this.emitirMensagem(mensagem);
+    this.agendarRespostaDeDemo(conversaId, outroId);
+    return mensagem;
+  }
+
+  async marcarConversaComoLida(conversaId: Id): Promise<void> {
+    const b = await this.armazenamento.carregar();
+    const meuId = b.sessao?.usuarioId;
+    if (!meuId) return;
+    let mudou = false;
+    for (const m of b.mensagens) {
+      if (m.conversaId === conversaId && m.remetenteId !== meuId && !m.lida) {
+        m.lida = true;
+        mudou = true;
+      }
+    }
+    if (mudou) this.persistir();
+  }
+
+  assinarConversa(conversaId: Id, aoReceber: (mensagem: Mensagem) => void): CancelarAssinatura {
+    let ouvintes = this.ouvintesDeConversa.get(conversaId);
+    if (!ouvintes) {
+      ouvintes = new Set();
+      this.ouvintesDeConversa.set(conversaId, ouvintes);
+    }
+    ouvintes.add(aoReceber);
+    return () => {
+      ouvintes.delete(aoReceber);
+      if (ouvintes.size === 0) this.ouvintesDeConversa.delete(conversaId);
+    };
+  }
+
+  async listContatos(): Promise<Usuario[]> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const bloqueados = this.idsBloqueados(b, eu.id);
+    const ids = new Set<string>();
+    for (const s of b.seguidores) {
+      if (s.seguidorId === eu.id) ids.add(s.seguidoId);
+      if (s.seguidoId === eu.id) ids.add(s.seguidorId);
+    }
+    return b.usuarios
+      .filter((u) => ids.has(u.id) && !bloqueados.has(u.id))
+      .sort((a, c) => a.apelido.localeCompare(c.apelido));
+  }
+
+  async obterPreferenciasDeMensagens(): Promise<PreferenciasDeMensagens> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    return this.preferenciasDe(b, eu.id);
+  }
+
+  async atualizarPreferenciasDeMensagens(
+    dados: Partial<PreferenciasDeMensagens>,
+  ): Promise<PreferenciasDeMensagens> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const novas = { ...this.preferenciasDe(b, eu.id), ...dados };
+    b.preferenciasMensagens[eu.id] = novas;
+    this.persistir();
+    return novas;
+  }
+
+  // ---------------------------------------------------------------- seguidores e sugestões
+
+  async listNovosSeguidores(): Promise<NovoSeguidor[]> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const bloqueados = this.idsBloqueados(b, eu.id);
+    const sigo = new Set(
+      b.seguidores.filter((s) => s.seguidorId === eu.id).map((s) => s.seguidoId),
+    );
+    return this.ordenarPorData(
+      b.seguidores.filter((s) => s.seguidoId === eu.id && !bloqueados.has(s.seguidorId)),
+    ).map((s) => ({
+      usuario: this.resumoDe(b, s.seguidorId),
+      seguiuEm: s.criadoEm,
+      sigoDeVolta: sigo.has(s.seguidorId),
+    }));
+  }
+
+  async sugerirTorcedores(): Promise<Usuario[]> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const bloqueados = this.idsBloqueados(b, eu.id);
+    const sigo = new Set(
+      b.seguidores.filter((s) => s.seguidorId === eu.id).map((s) => s.seguidoId),
+    );
+    const meusInteresses = new Set<string>(eu.interesses);
+    const pontuacao = (u: Usuario) =>
+      u.interesses.filter((i) => meusInteresses.has(i)).length * 1000 + u.seguidores;
+    return b.usuarios
+      .filter(
+        (u) => u.id !== eu.id && u.id !== ID_VISITANTE && !sigo.has(u.id) && !bloqueados.has(u.id),
+      )
+      .sort((a, c) => pontuacao(c) - pontuacao(a))
+      .slice(0, 20);
+  }
+
+  // ---------------------------------------------------------------- rasantes
+
+  /** Os rasantes do seed somem em 24 h; quando todos expiram, renasce um lote novo (só na demo). */
+  private renovarRasantesDeDemo(b: BancoMock): void {
+    const agora = Date.now();
+    const doSeed = b.rasantes.filter((r) => r.id.startsWith('r-seed-'));
+    if (doSeed.some((r) => new Date(r.expiraEm).getTime() > agora)) return;
+    b.rasantes = b.rasantes.filter((r) => !r.id.startsWith('r-seed-'));
+    b.rasantesVistos = b.rasantesVistos.filter((v) => !v.rasanteId.startsWith('r-seed-'));
+    b.rasantes.push(...gerarRasantesSeed(agora));
+    this.persistir();
+  }
+
+  private montarRasante(b: BancoMock, r: BancoMock['rasantes'][number], meuId: string): Rasante {
+    return {
+      ...r,
+      autor: this.resumoDe(b, r.autorId),
+      visto: b.rasantesVistos.some((v) => v.usuarioId === meuId && v.rasanteId === r.id),
+    };
+  }
+
+  private rasantesAtivos(b: BancoMock): BancoMock['rasantes'] {
+    const agora = Date.now();
+    return b.rasantes.filter((r) => new Date(r.expiraEm).getTime() > agora);
+  }
+
+  async listRasantes(): Promise<GrupoDeRasantes[]> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    this.renovarRasantesDeDemo(b);
+    const bloqueados = this.idsBloqueados(b, eu.id);
+    const sigo = new Set(
+      b.seguidores.filter((s) => s.seguidorId === eu.id).map((s) => s.seguidoId),
+    );
+    const grupos = new Map<string, GrupoDeRasantes>();
+    for (const r of this.rasantesAtivos(b).sort((a, c) => a.criadoEm.localeCompare(c.criadoEm))) {
+      const meu = r.autorId === eu.id;
+      if (!meu && (!sigo.has(r.autorId) || bloqueados.has(r.autorId))) continue;
+      let grupo = grupos.get(r.autorId);
+      if (!grupo) {
+        grupo = { autor: this.resumoDe(b, r.autorId), rasantes: [], todosVistos: true, souEu: meu };
+        grupos.set(r.autorId, grupo);
+      }
+      const rasante = this.montarRasante(b, r, eu.id);
+      grupo.rasantes.push(rasante);
+      if (!rasante.visto) grupo.todosVistos = false;
+    }
+    const ultimo = (g: GrupoDeRasantes) => g.rasantes[g.rasantes.length - 1].criadoEm;
+    return [...grupos.values()].sort((a, c) => {
+      if (a.souEu !== c.souEu) return a.souEu ? -1 : 1;
+      if (a.todosVistos !== c.todosVistos) return a.todosVistos ? 1 : -1;
+      return ultimo(c).localeCompare(ultimo(a));
+    });
+  }
+
+  async listRasantesDoUsuario(usuarioId: Id): Promise<Rasante[]> {
+    const b = await this.banco();
+    const meuId = b.sessao?.usuarioId ?? '';
+    return this.rasantesAtivos(b)
+      .filter((r) => r.autorId === usuarioId)
+      .sort((a, c) => a.criadoEm.localeCompare(c.criadoEm))
+      .map((r) => this.montarRasante(b, r, meuId));
+  }
+
+  async publicarRasante(novo: NovoRasante, aoProgredir?: ProgressoDeUpload): Promise<Rasante> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    if (novo.duracao > DURACAO_MAXIMA_RASANTE_SEGUNDOS + 0.5) {
+      throw new ErroDeAplicacao(
+        `Rasantes têm até ${DURACAO_MAXIMA_RASANTE_SEGUNDOS} segundos.`,
+        'rasante_longo',
+      );
+    }
+    const id = this.gerarId();
+    aoProgredir?.(0.1, 'Preparando');
+    const url = await salvarArquivoLocalmente(novo.uriLocal, 'rasantes', id, 'mp4');
+    aoProgredir?.(0.6, 'Gerando miniatura');
+    const origemThumb = novo.thumbnailUriLocal ?? (await gerarThumbnail(url));
+    const thumbnailUrl = origemThumb
+      ? await salvarArquivoLocalmente(origemThumb, 'thumbnails', `rasante-${id}`, 'jpg')
+      : null;
+    const criadoEm = agoraIso();
+    const registro = {
+      id,
+      autorId: eu.id,
+      url,
+      thumbnailUrl,
+      duracao: Math.max(1, Math.round(novo.duracao)),
+      criadoEm,
+      expiraEm: new Date(Date.now() + VALIDADE_RASANTE_HORAS * 60 * 60 * 1000).toISOString(),
+    };
+    b.rasantes.push(registro);
+    aoProgredir?.(1, 'Publicado');
+    this.persistir();
+    return this.montarRasante(b, registro, eu.id);
+  }
+
+  async marcarRasanteComoVisto(id: Id): Promise<void> {
+    const b = await this.armazenamento.carregar();
+    const meuId = b.sessao?.usuarioId;
+    if (!meuId) return;
+    if (b.rasantesVistos.some((v) => v.usuarioId === meuId && v.rasanteId === id)) return;
+    b.rasantesVistos.push({ usuarioId: meuId, rasanteId: id });
+    this.persistir();
+  }
+
+  async excluirRasante(id: Id): Promise<void> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const rasante = b.rasantes.find((r) => r.id === id);
+    if (!rasante) return;
+    if (rasante.autorId !== eu.id)
+      throw new ErroDeAplicacao('Você só pode apagar seus rasantes.', 'sem_permissao');
+    b.rasantes = b.rasantes.filter((r) => r.id !== id);
+    b.rasantesVistos = b.rasantesVistos.filter((v) => v.rasanteId !== id);
+    removerArquivoLocal(rasante.url);
+    removerArquivoLocal(rasante.thumbnailUrl);
+    this.persistir();
   }
 
   // ---------------------------------------------------------------- utilitários de teste/demonstração

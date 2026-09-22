@@ -7,6 +7,8 @@ import type { Live, PlataformaPush, TokenPush } from '@/types';
 
 /** Canal Android das lives: importância máxima para aparecer como banner com som e vibração. */
 export const CANAL_LIVES = 'lives';
+/** Canal Android das mensagens diretas. */
+export const CANAL_MENSAGENS = 'mensagens';
 
 /** Conteúdo que o app espera dentro de `data` de uma notificação de live. */
 export interface DadosDeNotificacaoDeLive {
@@ -31,6 +33,27 @@ export function construirNotificacaoDeLive(live: Pick<Live, 'id' | 'titulo' | 'a
     body: live.titulo ? `${live.titulo} · Toque para assistir` : 'Toque para assistir agora',
     data: { tipo: 'live', liveId: live.id, url: `vulture://live/${live.id}` },
   };
+}
+
+/** Conteúdo de uma notificação de mensagem direta (enviada pela Edge Function notificar-mensagem). */
+export interface DadosDeNotificacaoDeMensagem {
+  tipo: 'mensagem';
+  conversaId: string;
+  url: string;
+}
+
+export type DestinoDaNotificacao =
+  { tipo: 'live'; liveId: string } | { tipo: 'mensagem'; conversaId: string };
+
+/** Para onde o toque numa notificação deve levar (ou null quando não é do app). */
+export function destinoDaNotificacao(dados: unknown): DestinoDaNotificacao | null {
+  if (!dados || typeof dados !== 'object') return null;
+  const d = dados as { tipo?: unknown; liveId?: unknown; conversaId?: unknown };
+  if (d.tipo === 'live' && typeof d.liveId === 'string' && d.liveId)
+    return { tipo: 'live', liveId: d.liveId };
+  if (d.tipo === 'mensagem' && typeof d.conversaId === 'string' && d.conversaId)
+    return { tipo: 'mensagem', conversaId: d.conversaId };
+  return null;
 }
 
 /** Extrai o id da live dos dados de uma notificação (ou null se não for de live). */
@@ -64,7 +87,7 @@ export function configurarExibicaoDeNotificacoes(): void {
   });
 }
 
-/** Cria o canal "lives" no Android (sem efeito nas outras plataformas). */
+/** Cria os canais "lives" e "mensagens" no Android (sem efeito nas outras plataformas). */
 export async function garantirCanalDeLives(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(CANAL_LIVES, {
@@ -74,6 +97,15 @@ export async function garantirCanalDeLives(): Promise<void> {
     vibrationPattern: [0, 250, 150, 250],
     lightColor: '#C8102E',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    sound: 'default',
+  });
+  await Notifications.setNotificationChannelAsync(CANAL_MENSAGENS, {
+    name: 'Mensagens',
+    description: 'Mensagens diretas de outros torcedores',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 200],
+    lightColor: '#C8102E',
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     sound: 'default',
   });
 }

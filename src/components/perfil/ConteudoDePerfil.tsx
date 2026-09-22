@@ -6,6 +6,8 @@ import { GradeDeVideos } from '@/components/perfil/GradeDeVideos';
 import { Carregando, EstadoVazio, Icone, Texto, type NomeDeIcone } from '@/components/ui';
 import { useSeguir } from '@/hooks/useInteracoes';
 import { useListaDeVideos, type OrigemDaLista } from '@/hooks/useListasDeVideos';
+import { useAbrirConversa } from '@/hooks/useMensagens';
+import { useRasantesDoUsuario } from '@/hooks/useRasantes';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos } from '@/theme';
 import type { Perfil } from '@/types';
@@ -30,7 +32,25 @@ const ABAS: { id: Aba; rotulo: string; icone: NomeDeIcone; soEu?: boolean }[] = 
 export function ConteudoDePerfil({ perfil, atualizando, aoAtualizar }: ConteudoDePerfilProps) {
   const router = useRouter();
   const abrirDenuncia = useUiStore((s) => s.abrirDenuncia);
+  const mostrarAviso = useUiStore((s) => s.mostrarAviso);
   const { alternar: alternarSeguir, ocupado } = useSeguir();
+  const abrirConversa = useAbrirConversa();
+  const rasantes = useRasantesDoUsuario(perfil.id);
+  const rasante = rasantes.data?.length
+    ? { ativo: true, visto: rasantes.data.every((r) => r.visto) }
+    : null;
+
+  async function mensagem() {
+    try {
+      const conversa = await abrirConversa.mutateAsync(perfil.id);
+      router.push({ pathname: '/mensagens/[id]', params: { id: conversa.id } });
+    } catch (erro) {
+      mostrarAviso(
+        erro instanceof Error ? erro.message : 'Não foi possível abrir a conversa.',
+        'erro',
+      );
+    }
+  }
   const [aba, setAba] = useState<Aba>('usuario');
   const origem: OrigemDaLista = aba;
   const lista = useListaDeVideos(origem, perfil.id);
@@ -58,6 +78,16 @@ export function ConteudoDePerfil({ perfil, atualizando, aoAtualizar }: ConteudoD
         ocupado={ocupado}
         aoEditar={() => router.push('/editar-perfil')}
         aoSeguir={() => alternarSeguir(perfil.id, perfil.estouSeguindo).catch(() => {})}
+        aoMensagem={perfil.bloqueado ? undefined : mensagem}
+        rasante={rasante}
+        aoAbrirRasantes={() =>
+          router.push({ pathname: '/rasante/[usuarioId]', params: { usuarioId: perfil.id } })
+        }
+        aoNovoRasante={
+          perfil.souEu
+            ? () => router.push({ pathname: '/criar/camera', params: { destino: 'rasante' } })
+            : undefined
+        }
         aoMais={() =>
           abrirDenuncia({
             tipo: 'usuario',

@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 
 import { dataService } from '@/services/data';
-import { liveIdDaNotificacao, obterTokenPush } from '@/services/push';
+import { destinoDaNotificacao, obterTokenPush } from '@/services/push';
 import { lembrarTokenRegistrado } from '@/services/push/registro';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -35,10 +35,10 @@ export function useRegistrarPush(): void {
 }
 
 /**
- * Abre a live quando o usuário toca numa notificação — com o app aberto, em segundo plano
- * ou fechado (neste caso, a resposta fica guardada e é lida na inicialização).
+ * Abre a live (ou a conversa) quando o usuário toca numa notificação — com o app aberto,
+ * em segundo plano ou fechado (neste caso, a resposta fica guardada e é lida na inicialização).
  */
-export function useAbrirLivePelaNotificacao(): void {
+export function useAbrirPelaNotificacao(): void {
   const router = useRouter();
   const pronto = useAuthStore((s) => s.carregado && !!s.sessao);
   const ultimaTratada = useRef<string | null>(null);
@@ -50,10 +50,14 @@ export function useAbrirLivePelaNotificacao(): void {
       if (!resposta) return;
       const id = resposta.notification.request.identifier;
       if (ultimaTratada.current === id) return;
-      const liveId = liveIdDaNotificacao(resposta.notification.request.content.data);
-      if (!liveId) return;
+      const destino = destinoDaNotificacao(resposta.notification.request.content.data);
+      if (!destino) return;
       ultimaTratada.current = id;
-      router.push({ pathname: '/live/[id]', params: { id: liveId } });
+      if (destino.tipo === 'live') {
+        router.push({ pathname: '/live/[id]', params: { id: destino.liveId } });
+      } else {
+        router.push({ pathname: '/mensagens/[id]', params: { id: destino.conversaId } });
+      }
     };
 
     // app estava fechado: a notificação que o abriu

@@ -1,8 +1,12 @@
 import {
   formatarContador,
+  formatarData,
   formatarDataHora,
   formatarDuracao,
+  formatarHora,
+  formatarQuandoSeguiu,
   iniciais,
+  rotuloDoDia,
   tempoRelativo,
 } from '../formatadores';
 
@@ -57,5 +61,33 @@ describe('iniciais', () => {
     expect(iniciais('Maria Silva')).toBe('MS');
     expect(iniciais('@urubu')).toBe('UR');
     expect(iniciais('  ')).toBe('?');
+  });
+});
+
+describe('formatarQuandoSeguiu', () => {
+  const agora = new Date('2026-09-22T15:00:00');
+  const diasAtras = (d: number) => new Date(agora.getTime() - d * 86_400_000).toISOString();
+
+  it('mostra Hoje, Ontem e "Há N dias" até 15 dias', () => {
+    expect(formatarQuandoSeguiu(agora.toISOString(), agora)).toBe('Hoje');
+    expect(formatarQuandoSeguiu(diasAtras(1), agora)).toBe('Ontem');
+    expect(formatarQuandoSeguiu(diasAtras(3), agora)).toBe('Há 3 dias');
+    expect(formatarQuandoSeguiu(diasAtras(15), agora)).toBe('Há 15 dias');
+  });
+
+  it('passados 15 dias mostra a data completa com ano', () => {
+    expect(formatarQuandoSeguiu(diasAtras(16), agora)).toBe('06/09/2026');
+    expect(formatarQuandoSeguiu(diasAtras(400), agora)).toBe('18/08/2025');
+  });
+
+  it('formatarData e rotuloDoDia', () => {
+    expect(formatarData('2026-09-22T15:00:00')).toBe('22/09/2026');
+    expect(rotuloDoDia(agora.toISOString(), agora)).toBe('Hoje');
+    expect(rotuloDoDia(diasAtras(1), agora)).toBe('Ontem');
+    expect(rotuloDoDia(diasAtras(3), agora)).toBe('19/09/2026');
+  });
+
+  it('formatarHora mostra hh:mm', () => {
+    expect(formatarHora('2026-09-22T08:05:00')).toBe('08:05');
   });
 });

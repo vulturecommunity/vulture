@@ -11,7 +11,14 @@ export interface CabecalhoDePerfilProps {
   aoEditar?: () => void;
   aoSeguir?: () => void;
   aoMais?: () => void;
+  /** abrir conversa privada (perfil de outra pessoa) */
+  aoMensagem?: () => void;
   ocupado?: boolean;
+  /** rasantes ativos da pessoa: anel no avatar e toque abre o visualizador */
+  rasante?: { ativo: boolean; visto: boolean } | null;
+  aoAbrirRasantes?: () => void;
+  /** "+" no meu avatar: gravar um rasante */
+  aoNovoRasante?: () => void;
 }
 
 function Contador({ valor, rotulo, testID }: { valor: number; rotulo: string; testID?: string }) {
@@ -33,14 +40,49 @@ export function CabecalhoDePerfil({
   aoEditar,
   aoSeguir,
   aoMais,
+  aoMensagem,
   ocupado,
+  rasante,
+  aoAbrirRasantes,
+  aoNovoRasante,
 }: CabecalhoDePerfilProps) {
+  const temRasante = !!rasante?.ativo;
+  const corDoAnel = !temRasante
+    ? cores.transparente
+    : rasante?.visto
+      ? cores.textoTerciario
+      : cores.vermelhoVivo;
+  const rotuloAvatar = temRasante
+    ? perfil.souEu
+      ? 'Ver meus rasantes'
+      : `Ver rasantes de @${perfil.apelido}`
+    : perfil.souEu
+      ? 'Gravar rasante'
+      : undefined;
   return (
     <View style={estilos.container} testID="cabecalho-perfil">
       <Listras altura={56} faixas={22} style={estilos.faixa} />
       <View style={estilos.corpo}>
         <View style={estilos.linhaTopo}>
-          <Avatar url={perfil.avatarUrl} nome={perfil.nome} tamanho={88} borda />
+          <Pressable
+            onPress={temRasante ? aoAbrirRasantes : perfil.souEu ? aoNovoRasante : undefined}
+            disabled={!temRasante && !perfil.souEu}
+            accessibilityRole={temRasante || perfil.souEu ? 'button' : undefined}
+            accessibilityLabel={rotuloAvatar}
+            style={[estilos.avatar, { borderColor: corDoAnel }]}
+            testID="avatar-perfil">
+            <Avatar url={perfil.avatarUrl} nome={perfil.nome} tamanho={88} borda={!temRasante} />
+            {perfil.souEu && aoNovoRasante ? (
+              <Pressable
+                onPress={aoNovoRasante}
+                hitSlop={8}
+                accessibilityLabel="Gravar rasante"
+                style={estilos.maisRasante}
+                testID="botao-novo-rasante-perfil">
+                <Icone nome="adicionar" tamanho={16} cor={cores.branco} />
+              </Pressable>
+            ) : null}
+          </Pressable>
           <View style={estilos.acoes}>
             {perfil.souEu ? (
               <Botao
@@ -62,6 +104,17 @@ export function CabecalhoDePerfil({
                   style={estilos.botaoSeguir}
                   testID="botao-seguir"
                 />
+                {aoMensagem ? (
+                  <Pressable
+                    onPress={aoMensagem}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Enviar mensagem"
+                    style={estilos.botaoMais}
+                    testID="botao-mensagem-perfil">
+                    <Icone nome="mensagens" tamanho={18} cor={cores.texto} />
+                  </Pressable>
+                ) : null}
                 <Pressable
                   onPress={aoMais}
                   hitSlop={8}
@@ -118,7 +171,29 @@ const estilos = StyleSheet.create({
   corpo: { paddingHorizontal: espacos.lg, gap: espacos.md, marginTop: -40 },
   linhaTopo: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   acoes: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm, paddingBottom: espacos.xs },
-  botaoSeguir: { minWidth: 110 },
+  botaoSeguir: { minWidth: 96 },
+  avatar: {
+    width: 98,
+    height: 98,
+    borderRadius: 49,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: cores.fundo,
+  },
+  maisRasante: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: cores.vermelho,
+    borderWidth: 2,
+    borderColor: cores.fundo,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   botaoMais: {
     width: 36,
     height: 36,

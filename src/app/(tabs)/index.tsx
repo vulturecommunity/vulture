@@ -7,7 +7,7 @@ import { FeedVertical } from '@/components/feed/FeedVertical';
 import { CardsDePartida } from '@/components/partidas/CardsDePartida';
 import { Erro, Icone, Listras, Texto } from '@/components/ui';
 import { useFeed } from '@/hooks/useFeed';
-import { useNotificacoesNaoLidas } from '@/hooks/useNotificacoes';
+import { useTotalNaoLido } from '@/hooks/useMensagens';
 import type { AbaDoFeed } from '@/services/data/types';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -25,7 +25,7 @@ export default function TelaFeed() {
   const definirFoco = usePlayerStore((s) => s.definirFoco);
   const [aba, setAba] = useState<AbaDoFeed>('paraVoce');
   const feed = useFeed({ aba });
-  const naoLidas = useNotificacoesNaoLidas();
+  const naoLidas = useTotalNaoLido();
 
   useFocusEffect(
     useCallback(() => {
@@ -103,12 +103,12 @@ export default function TelaFeed() {
             })}
           </View>
           <Pressable
-            onPress={() => router.push('/notificacoes')}
-            style={estilos.sino}
+            onPress={() => router.push('/mensagens')}
+            style={estilos.mensagens}
             hitSlop={8}
-            accessibilityLabel="Notificações"
-            testID="botao-notificacoes">
-            <Icone nome="sino" tamanho={20} cor={cores.branco} />
+            accessibilityLabel="Mensagens"
+            testID="botao-mensagens">
+            <Icone nome="mensagens" tamanho={21} cor={cores.branco} />
             {naoLidas > 0 ? (
               <View style={estilos.badge}>
                 <Texto variante="legenda" style={estilos.badgeTexto}>
@@ -156,7 +156,7 @@ const estilos = StyleSheet.create({
   },
   opcaoAtiva: { backgroundColor: cores.vermelho },
   opcaoTextoAtivo: { fontWeight: '700' },
-  sino: {
+  mensagens: {
     marginLeft: 'auto',
     width: 38,
     height: 38,

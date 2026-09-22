@@ -52,14 +52,32 @@ export default function TelaPerfil() {
         <Texto variante="rotulo" cor={cores.textoSecundario}>
           {sessao?.visitante ? 'Visitante · demo' : 'Meu perfil'}
         </Texto>
-        <Pressable
-          onPress={() => setMenuAberto(true)}
-          hitSlop={12}
-          accessibilityLabel="Configurações"
-          testID="botao-menu-perfil"
-          style={estilos.botaoMenu}>
-          <Icone nome="configuracoes" tamanho={18} cor={cores.texto} />
-        </Pressable>
+        <View style={estilos.acoesTopo}>
+          <Pressable
+            onPress={() => router.push('/perfil/encontrar')}
+            hitSlop={12}
+            accessibilityLabel="Adicionar torcedores"
+            testID="botao-adicionar-torcedores"
+            style={estilos.botaoMenu}>
+            <Icone nome="adicionarPessoa" tamanho={18} cor={cores.texto} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/mensagens')}
+            hitSlop={12}
+            accessibilityLabel="Mensagens"
+            testID="botao-mensagens-perfil"
+            style={estilos.botaoMenu}>
+            <Icone nome="mensagens" tamanho={18} cor={cores.texto} />
+          </Pressable>
+          <Pressable
+            onPress={() => setMenuAberto(true)}
+            hitSlop={12}
+            accessibilityLabel="Configurações"
+            testID="botao-menu-perfil"
+            style={estilos.botaoMenu}>
+            <Icone nome="configuracoes" tamanho={18} cor={cores.texto} />
+          </Pressable>
+        </View>
       </View>
 
       {perfil.isLoading ? (
@@ -87,6 +105,15 @@ export default function TelaPerfil() {
               setMenuAberto(false);
               router.push('/editar-perfil');
             }}
+          />
+          <ItemMenu
+            icone="mensagens"
+            rotulo="Mensagens: quem pode me chamar"
+            aoPressionar={() => {
+              setMenuAberto(false);
+              router.push('/configuracoes/mensagens');
+            }}
+            testID="menu-config-mensagens"
           />
           <ItemMenu
             icone="sino"
@@ -175,6 +202,7 @@ const estilos = StyleSheet.create({
     paddingHorizontal: espacos.lg,
     paddingVertical: espacos.sm,
   },
+  acoesTopo: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
   botaoMenu: {
     width: 36,
     height: 36,

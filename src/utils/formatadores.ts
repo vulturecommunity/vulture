@@ -58,3 +58,37 @@ export function iniciais(nome: string): string {
   if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
   return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
 }
+
+/**
+ * Quando alguém começou a seguir: "Hoje", "Ontem", "Há N dias" até 15 dias;
+ * depois disso a data completa com ano (22/09/2026).
+ */
+export function formatarQuandoSeguiu(dataIso: string, agora: Date = new Date()): string {
+  const data = new Date(dataIso);
+  const inicioDoDia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dias = Math.max(0, Math.round((inicioDoDia(agora) - inicioDoDia(data)) / 86_400_000));
+  if (dias === 0) return 'Hoje';
+  if (dias === 1) return 'Ontem';
+  if (dias <= 15) return `Há ${dias} dias`;
+  return formatarData(dataIso);
+}
+
+/** Data completa: 22/09/2026 */
+export function formatarData(dataIso: string): string {
+  const d = new Date(dataIso);
+  const dia = d.getDate().toString().padStart(2, '0');
+  const mes = (d.getMonth() + 1).toString().padStart(2, '0');
+  return `${dia}/${mes}/${d.getFullYear()}`;
+}
+
+/** Hora curta para o chat: 20:30 */
+export function formatarHora(dataIso: string): string {
+  const d = new Date(dataIso);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+/** Separador de dia no chat: "Hoje", "Ontem" ou 22/09/2026. */
+export function rotuloDoDia(dataIso: string, agora: Date = new Date()): string {
+  const texto = formatarQuandoSeguiu(dataIso, agora);
+  return texto.startsWith('Há ') ? formatarData(dataIso) : texto;
+}

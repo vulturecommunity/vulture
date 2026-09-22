@@ -127,6 +127,12 @@ export function useSeguir() {
       queryClient.invalidateQueries({ queryKey: chaves.perfil('eu') });
       queryClient.invalidateQueries({ queryKey: ['feed', 'seguindo'] });
       queryClient.invalidateQueries({ queryKey: ['perfil'] });
+      // seguir muda quem aparece nos rasantes, nos contatos, nas sugestões e quem pode conversar
+      queryClient.invalidateQueries({ queryKey: chaves.rasantes });
+      queryClient.invalidateQueries({ queryKey: chaves.contatos });
+      queryClient.invalidateQueries({ queryKey: chaves.sugestoes });
+      queryClient.invalidateQueries({ queryKey: chaves.novosSeguidores });
+      queryClient.invalidateQueries({ queryKey: chaves.permissaoDeConversa(usuarioId) });
     },
   });
 

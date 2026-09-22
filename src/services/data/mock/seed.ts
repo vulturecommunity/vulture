@@ -475,3 +475,48 @@ export function gerarNotificacoesSeed(): Notificacao[] {
     },
   ];
 }
+
+/** Rasantes de demonstração: clipes curtos de alguns perfis, publicados nas últimas horas. */
+export function gerarRasantesSeed(agora: number = Date.now()): {
+  id: string;
+  autorId: string;
+  url: string;
+  thumbnailUrl: string | null;
+  duracao: number;
+  criadoEm: string;
+  expiraEm: string;
+}[] {
+  const HORA = 60 * 60 * 1000;
+  const plano: { autorId: string; clipe: number; horasAtras: number }[] = [
+    { autorId: 'u-nacao', clipe: 3, horasAtras: 1 },
+    { autorId: 'u-nacao', clipe: 7, horasAtras: 0.5 },
+    { autorId: 'u-golaco', clipe: 0, horasAtras: 3 },
+    { autorId: 'u-maraca', clipe: 1, horasAtras: 5 },
+    { autorId: 'u-memes', clipe: 2, horasAtras: 8 },
+    { autorId: 'u-resenha', clipe: 5, horasAtras: 11 },
+  ];
+  return plano.map((p, i) => {
+    const clipe = VIDEOS_DE_EXEMPLO[p.clipe % VIDEOS_DE_EXEMPLO.length];
+    const criadoEm = agora - p.horasAtras * HORA;
+    const id = `r-seed-${i + 1}`;
+    return {
+      id,
+      autorId: p.autorId,
+      url: clipe.url,
+      thumbnailUrl: thumbnailDeExemplo(id),
+      duracao: Math.min(15, clipe.duracao),
+      criadoEm: new Date(criadoEm).toISOString(),
+      expiraEm: new Date(criadoEm + 24 * HORA).toISOString(),
+    };
+  });
+}
+
+/** Respostas automáticas dos perfis de demonstração no chat privado. */
+export const RESPOSTAS_DE_DEMO = [
+  'Fala, torcedor! Tudo certo por aí? 🔴⚫',
+  'Boa! Já viu o último vídeo que postei?',
+  'Sábado tem jogo, vai pro Maraca?',
+  'Isso aí, a nação não para! 🦅',
+  'Manda a resenha que eu respondo já já.',
+  'Combinado! Depois te chamo aqui.',
+];

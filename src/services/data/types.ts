@@ -2,18 +2,26 @@ import type { Interesse, Reacao } from '@/constants/interesses';
 import type {
   AlvoDeDenuncia,
   Comentario,
+  Conversa,
   Denuncia,
+  GrupoDeRasantes,
   HashtagTrending,
   Id,
   Live,
+  Mensagem,
   MensagemLive,
   MotivoDenuncia,
   Notificacao,
+  NovoSeguidor,
   Pagina,
   Perfil,
+  PermissaoDeConversa,
+  PreferenciasDeMensagens,
   RankingTorcedor,
+  Rasante,
   Sessao,
   TipoDeMidia,
+  TipoDeNotificacao,
   TokenPush,
   Usuario,
   Video,
@@ -45,6 +53,15 @@ export interface NovoVideo {
 }
 
 export type ProgressoDeUpload = (fracao: number, etapa: string) => void;
+
+export interface NovoRasante {
+  /** URI local (file://) do vídeo curto */
+  uriLocal: string;
+  duracao: number;
+  largura?: number | null;
+  altura?: number | null;
+  thumbnailUriLocal?: string | null;
+}
 
 export interface DadosDeCadastro {
   email: string;
@@ -140,11 +157,44 @@ export interface DataService {
 
   // ---- Notificações ----
   listNotificacoes(): Promise<Notificacao[]>;
-  marcarNotificacoesComoLidas(): Promise<void>;
+  /** Marca como lidas todas as notificações ou só as dos tipos informados. */
+  marcarNotificacoesComoLidas(tipos?: TipoDeNotificacao[]): Promise<void>;
   /** Registra o token de push deste aparelho para o usuário logado (idempotente). */
   registrarTokenPush(token: TokenPush): Promise<void>;
   /** Remove o token deste aparelho (ao sair da conta). */
   removerTokenPush(token: string): Promise<void>;
+
+  // ---- Mensagens diretas ----
+  listConversas(): Promise<Conversa[]>;
+  getConversa(conversaId: Id): Promise<Conversa>;
+  /** Se posso puxar papo com alguém (bloqueios e preferências de quem recebe). */
+  podeConversar(usuarioId: Id): Promise<PermissaoDeConversa>;
+  /** Abre (ou reaproveita) a conversa com alguém. */
+  abrirConversa(usuarioId: Id): Promise<Conversa>;
+  listMensagens(conversaId: Id): Promise<Mensagem[]>;
+  enviarMensagem(conversaId: Id, texto: string): Promise<Mensagem>;
+  marcarConversaComoLida(conversaId: Id): Promise<void>;
+  assinarConversa(conversaId: Id, aoReceber: (mensagem: Mensagem) => void): CancelarAssinatura;
+  /** Pessoas com quem posso conversar (quem sigo + quem me segue), sem bloqueados. */
+  listContatos(): Promise<Usuario[]>;
+  obterPreferenciasDeMensagens(): Promise<PreferenciasDeMensagens>;
+  atualizarPreferenciasDeMensagens(
+    dados: Partial<PreferenciasDeMensagens>,
+  ): Promise<PreferenciasDeMensagens>;
+
+  // ---- Seguidores e sugestões ----
+  /** Quem começou a me seguir, do mais recente para o mais antigo. */
+  listNovosSeguidores(): Promise<NovoSeguidor[]>;
+  /** Torcedores para seguir (que ainda não sigo). */
+  sugerirTorcedores(): Promise<Usuario[]>;
+
+  // ---- Rasantes (vídeos curtos de 24 h) ----
+  /** Meus rasantes primeiro, depois os de quem eu sigo. */
+  listRasantes(): Promise<GrupoDeRasantes[]>;
+  listRasantesDoUsuario(usuarioId: Id): Promise<Rasante[]>;
+  publicarRasante(novo: NovoRasante, aoProgredir?: ProgressoDeUpload): Promise<Rasante>;
+  marcarRasanteComoVisto(id: Id): Promise<void>;
+  excluirRasante(id: Id): Promise<void>;
 
   // ---- Segurança ----
   report(denuncia: NovaDenuncia): Promise<Denuncia>;

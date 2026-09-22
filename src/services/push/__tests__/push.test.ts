@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 
 import {
   construirNotificacaoDeLive,
+  destinoDaNotificacao,
   exibirNotificacaoDeLiveLocal,
   liveIdDaNotificacao,
   obterTokenPush,
@@ -26,6 +27,19 @@ describe('notificações de live', () => {
     expect(liveIdDaNotificacao({ tipo: 'curtida', videoId: 'v' })).toBeNull();
     expect(liveIdDaNotificacao(null)).toBeNull();
     expect(liveIdDaNotificacao('texto')).toBeNull();
+  });
+
+  it('descobre o destino do toque: live ou conversa', () => {
+    expect(destinoDaNotificacao({ tipo: 'live', liveId: 'l-1', url: 'x' })).toEqual({
+      tipo: 'live',
+      liveId: 'l-1',
+    });
+    expect(destinoDaNotificacao({ tipo: 'mensagem', conversaId: 'c-9', url: 'x' })).toEqual({
+      tipo: 'mensagem',
+      conversaId: 'c-9',
+    });
+    expect(destinoDaNotificacao({ tipo: 'mensagem' })).toBeNull();
+    expect(destinoDaNotificacao(undefined)).toBeNull();
   });
 
   it('obtém o token de push com permissão concedida', async () => {

@@ -667,3 +667,260 @@ create policy "storage excluir na propria pasta" on storage.objects
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
+
+-- =====================================================================================
+-- MENSAGENS DIRETAS, PREFERÊNCIAS E RASANTES (vídeos de 24 h)
+-- =====================================================================================
+
+-- -------------------------------------------------------------------------------------
+-- PREFERÊNCIAS DE MENSAGENS (quem pode puxar papo comigo)
+-- -------------------------------------------------------------------------------------
+
+alter table public.profiles add column if not exists msg_de_quem_sigo   boolean not null default true;
+alter table public.profiles add column if not exists msg_de_seguidores  boolean not null default true;
+
+-- profiles usa privilégios por coluna (ver schema.sql): libera as colunas novas
+grant select (msg_de_quem_sigo, msg_de_seguidores) on public.profiles to anon, authenticated;
+grant update (msg_de_quem_sigo, msg_de_seguidores) on public.profiles to authenticated;
+
+-- -------------------------------------------------------------------------------------
+-- CONVERSAS E MENSAGENS
+-- -------------------------------------------------------------------------------------
+
+create table if not exists public.conversations (
+  id                  uuid primary key default gen_random_uuid(),
+  usuario_a           uuid not null references public.profiles (id) on delete cascade,
+  usuario_b           uuid not null references public.profiles (id) on delete cascade,
+  ultima_mensagem     text,
+  ultima_remetente_id uuid references public.profiles (id) on delete set null,
+  atualizado_em       timestamptz not null default now(),
+  criado_em           timestamptz not null default now(),
+  -- par ordenado: garante uma única conversa por dupla
+  check (usuario_a < usuario_b),
+  unique (usuario_a, usuario_b)
+);
+
+create table if not exists public.messages (
+  id           uuid primary key default gen_random_uuid(),
+  conversa_id  uuid not null references public.conversations (id) on delete cascade,
+  remetente_id uuid not null references public.profiles (id) on delete cascade,
+  texto        text not null check (char_length(texto) between 1 and 1000),
+  lida         boolean not null default false,
+  criado_em    timestamptz not null default now()
+);
+
+create index if not exists conversations_a_idx      on public.conversations (usuario_a, atualizado_em desc);
+create index if not exists conversations_b_idx      on public.conversations (usuario_b, atualizado_em desc);
+create index if not exists messages_conversa_idx    on public.messages (conversa_id, criado_em);
+create index if not exists messages_nao_lidas_idx   on public.messages (conversa_id, lida) where lida = false;
+
+-- Regra única de quem pode falar com quem (bloqueios + preferências de quem RECEBE):
+--   * quem recebe me segue e aceita mensagens "de quem eu sigo"; ou
+--   * eu sigo quem recebe e essa pessoa aceita mensagens "dos meus seguidores".
+create or replace function public.pode_conversar(p_de uuid, p_para uuid)
+returns boolean
+language sql
+stable
+security definer set search_path = public
+as $$
+  select p_de is not null
+    and p_para is not null
+    and p_de <> p_para
+    and not exists (
+      select 1 from public.blocks b
+      where (b.usuario_id = p_de and b.bloqueado_id = p_para)
+         or (b.usuario_id = p_para and b.bloqueado_id = p_de)
+    )
+    and exists (
+      select 1 from public.profiles p
+      where p.id = p_para
+        and (
+          (p.msg_de_quem_sigo and exists (
+            select 1 from public.follows f where f.seguidor_id = p_para and f.seguido_id = p_de))
+          or
+          (p.msg_de_seguidores and exists (
+            select 1 from public.follows f where f.seguidor_id = p_de and f.seguido_id = p_para))
+        )
+    );
+$$;
+
+-- Abre (ou reaproveita) a conversa com alguém. Só cria se a regra acima permitir.
+create or replace function public.abrir_conversa(p_outro uuid)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  eu uuid := auth.uid();
+  a uuid;
+  b uuid;
+  id_conversa uuid;
+begin
+  if eu is null then raise exception 'Não autenticado' using errcode = '28000'; end if;
+  if p_outro = eu then raise exception 'Você não pode conversar consigo mesmo.'; end if;
+  a := least(eu, p_outro);
+  b := greatest(eu, p_outro);
+  select c.id into id_conversa from public.conversations c where c.usuario_a = a and c.usuario_b = b;
+  if id_conversa is not null then return id_conversa; end if;
+  if not public.pode_conversar(eu, p_outro) then
+    raise exception 'Essa pessoa não está recebendo suas mensagens.' using errcode = '42501';
+  end if;
+  insert into public.conversations (usuario_a, usuario_b) values (a, b) returning id into id_conversa;
+  return id_conversa;
+end;
+$$;
+
+-- Minhas conversas com a contagem de não lidas (uma consulta só).
+-- security definer para enxergar bloqueios nos dois sentidos (a RLS de blocks só mostra os meus).
+create or replace function public.listar_conversas()
+returns table (
+  id uuid,
+  outro_id uuid,
+  ultima_mensagem text,
+  ultima_remetente_id uuid,
+  atualizado_em timestamptz,
+  nao_lidas bigint
+)
+language sql
+stable
+security definer set search_path = public
+as $
+  select c.id,
+         case when c.usuario_a = auth.uid() then c.usuario_b else c.usuario_a end as outro_id,
+         c.ultima_mensagem,
+         c.ultima_remetente_id,
+         c.atualizado_em,
+         (select count(*) from public.messages m
+           where m.conversa_id = c.id and m.lida = false and m.remetente_id <> auth.uid()) as nao_lidas
+  from public.conversations c
+  where auth.uid() in (c.usuario_a, c.usuario_b)
+    and not exists (
+      select 1 from public.blocks bl
+      where (bl.usuario_id = auth.uid() and bl.bloqueado_id in (c.usuario_a, c.usuario_b))
+         or (bl.bloqueado_id = auth.uid() and bl.usuario_id in (c.usuario_a, c.usuario_b))
+    )
+  order by c.atualizado_em desc
+  limit 200;
+$$;
+
+-- Ao chegar mensagem: atualiza o resumo da conversa
+create or replace function public.tg_messages()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.conversations
+     set ultima_mensagem = left(new.texto, 200),
+         ultima_remetente_id = new.remetente_id,
+         atualizado_em = new.criado_em
+   where id = new.conversa_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists messages_resumo on public.messages;
+create trigger messages_resumo
+  after insert on public.messages
+  for each row execute function public.tg_messages();
+
+-- -------------------------------------------------------------------------------------
+-- RASANTES (vídeos curtos que somem em 24 h)
+-- -------------------------------------------------------------------------------------
+
+create table if not exists public.rasantes (
+  id            uuid primary key default gen_random_uuid(),
+  autor_id      uuid not null references public.profiles (id) on delete cascade,
+  url           text not null,
+  thumbnail_url text,
+  duracao       integer not null default 0 check (duracao between 0 and 20),
+  criado_em     timestamptz not null default now(),
+  expira_em     timestamptz not null default now() + interval '24 hours'
+);
+
+create table if not exists public.rasante_views (
+  rasante_id uuid not null references public.rasantes (id) on delete cascade,
+  usuario_id uuid not null references public.profiles (id) on delete cascade,
+  visto_em   timestamptz not null default now(),
+  primary key (rasante_id, usuario_id)
+);
+
+create index if not exists rasantes_ativos_idx on public.rasantes (autor_id, criado_em) where expira_em > now();
+create index if not exists rasantes_expira_idx on public.rasantes (expira_em);
+
+-- -------------------------------------------------------------------------------------
+-- RLS
+-- -------------------------------------------------------------------------------------
+
+alter table public.conversations enable row level security;
+alter table public.messages      enable row level security;
+alter table public.rasantes      enable row level security;
+alter table public.rasante_views enable row level security;
+
+-- conversas: só os participantes leem; criação sempre pela RPC abrir_conversa (security definer)
+drop policy if exists "conversas leitura participantes" on public.conversations;
+create policy "conversas leitura participantes" on public.conversations
+  for select using (auth.uid() in (usuario_a, usuario_b));
+
+-- mensagens: participantes leem; só envia quem participa E tem permissão de conversar
+drop policy if exists "mensagens leitura participantes" on public.messages;
+create policy "mensagens leitura participantes" on public.messages
+  for select using (
+    exists (select 1 from public.conversations c
+             where c.id = conversa_id and auth.uid() in (c.usuario_a, c.usuario_b))
+  );
+
+drop policy if exists "mensagens enviar" on public.messages;
+create policy "mensagens enviar" on public.messages
+  for insert with check (
+    auth.uid() = remetente_id
+    and exists (
+      select 1 from public.conversations c
+      where c.id = conversa_id
+        and auth.uid() in (c.usuario_a, c.usuario_b)
+        and public.pode_conversar(
+              auth.uid(),
+              case when c.usuario_a = auth.uid() then c.usuario_b else c.usuario_a end)
+    )
+  );
+
+-- marcar como lida: só o destinatário (mensagens que não são minhas)
+drop policy if exists "mensagens marcar lida" on public.messages;
+create policy "mensagens marcar lida" on public.messages
+  for update using (
+    remetente_id <> auth.uid()
+    and exists (select 1 from public.conversations c
+                 where c.id = conversa_id and auth.uid() in (c.usuario_a, c.usuario_b))
+  )
+  with check (remetente_id <> auth.uid());
+
+-- rasantes: enquanto não expiram, todo mundo vê; escreve/apaga só o autor
+drop policy if exists "rasantes leitura ativos" on public.rasantes;
+create policy "rasantes leitura ativos" on public.rasantes
+  for select using (expira_em > now() or auth.uid() = autor_id);
+drop policy if exists "rasantes inserir proprio" on public.rasantes;
+create policy "rasantes inserir proprio" on public.rasantes
+  for insert with check (auth.uid() = autor_id);
+drop policy if exists "rasantes excluir proprio" on public.rasantes;
+create policy "rasantes excluir proprio" on public.rasantes
+  for delete using (auth.uid() = autor_id);
+
+drop policy if exists "rasante_views proprias" on public.rasante_views;
+create policy "rasante_views proprias" on public.rasante_views
+  for select using (auth.uid() = usuario_id);
+drop policy if exists "rasante_views inserir" on public.rasante_views;
+create policy "rasante_views inserir" on public.rasante_views
+  for insert with check (auth.uid() = usuario_id);
+
+-- -------------------------------------------------------------------------------------
+-- REALTIME (mensagens chegam na hora no chat)
+-- -------------------------------------------------------------------------------------
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;

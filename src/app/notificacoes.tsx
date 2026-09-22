@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -33,19 +33,45 @@ const CORES: Record<Notificacao['tipo'], string> = {
   sistema: cores.dourado,
 };
 
-/** Lista de eventos: curtiu, comentou, seguiu, entrou ao vivo, avisos do app. */
+type Grupo = 'todas' | 'atividade' | 'sistema';
+
+const TIPOS_POR_GRUPO: Record<Grupo, Notificacao['tipo'][] | undefined> = {
+  todas: undefined,
+  atividade: ['curtida', 'comentario', 'live'],
+  sistema: ['sistema'],
+};
+
+const TITULOS: Record<Grupo, string> = {
+  todas: 'Notificações',
+  atividade: 'Atividade',
+  sistema: 'Avisos do Vulture',
+};
+
+/**
+ * Lista de eventos: curtiu, comentou, seguiu, entrou ao vivo, avisos do app.
+ * Com ?grupo=atividade ou ?grupo=sistema mostra só aquele grupo (atalhos da caixa de mensagens).
+ */
 export default function TelaNotificacoes() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ grupo?: string }>();
+  const grupo: Grupo =
+    params.grupo === 'atividade' || params.grupo === 'sistema' ? params.grupo : 'todas';
+  const tipos = TIPOS_POR_GRUPO[grupo];
   const notificacoes = useNotificacoes();
   const { mutate: marcarLidas } = useMarcarNotificacoesComoLidas();
 
+  const lista = useMemo(
+    () => (notificacoes.data ?? []).filter((n) => !tipos || tipos.includes(n.tipo)),
+    [notificacoes.data, tipos],
+  );
+
   useEffect(() => {
-    if (notificacoes.data?.some((n) => !n.lida)) {
-      const timer = setTimeout(() => marcarLidas(), 1200);
+    if (lista.some((n) => !n.lida)) {
+      const timer = setTimeout(() => marcarLidas(tipos), 1200);
       return () => clearTimeout(timer);
     }
-  }, [notificacoes.data, marcarLidas]);
+  }, [lista, tipos, marcarLidas]);
 
   function abrir(n: Notificacao) {
     if (n.liveId) router.push({ pathname: '/live/[id]', params: { id: n.liveId } });
@@ -55,21 +81,25 @@ export default function TelaNotificacoes() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <Cabecalho titulo="Notificações" aoVoltar={() => router.back()} />
+      <Cabecalho titulo={TITULOS[grupo]} aoVoltar={() => router.back()} />
       {notificacoes.isLoading ? (
         <Carregando />
       ) : (
         <FlatList
-          data={notificacoes.data ?? []}
+          data={lista}
           keyExtractor={(n) => n.id}
           contentContainerStyle={estilos.lista}
           onRefresh={() => notificacoes.refetch()}
           refreshing={notificacoes.isRefetching}
           ListEmptyComponent={
             <EstadoVazio
-              icone="sinoMudo"
+              icone={grupo === 'sistema' ? 'megafone' : 'sinoMudo'}
               titulo="Nada por aqui ainda"
-              descricao="Curtidas, comentários, novos seguidores e lives de quem você segue aparecem aqui."
+              descricao={
+                grupo === 'sistema'
+                  ? 'Novidades e recados do Vulture aparecem aqui.'
+                  : 'Curtidas, comentários e lives de quem você segue aparecem aqui.'
+              }
             />
           }
           renderItem={({ item }) => (

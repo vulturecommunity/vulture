@@ -1,19 +1,33 @@
 import { File } from 'expo-file-system';
 
 import { DURACAO_FOTO_SEGUNDOS, type Interesse, type Reacao } from '@/constants/interesses';
+import {
+  DURACAO_MAXIMA_RASANTE_SEGUNDOS,
+  TAMANHO_MAXIMO_MENSAGEM,
+  VALIDADE_RASANTE_HORAS,
+} from '@/constants/rasantes';
 import { gerarThumbnail, tipoMimeDe } from '@/services/midia/arquivos';
 import type {
   Comentario,
+  Conversa,
   Denuncia,
+  GrupoDeRasantes,
   HashtagTrending,
   Id,
   Live,
+  Mensagem,
   MensagemLive,
   Notificacao,
+  NovoSeguidor,
   Pagina,
   Perfil,
+  PermissaoDeConversa,
+  PreferenciasDeMensagens,
   RankingTorcedor,
+  Rasante,
+  ResumoDeUsuario,
   Sessao,
+  TipoDeNotificacao,
   TokenPush,
   Usuario,
   Video,
@@ -30,6 +44,7 @@ import type {
   DataService,
   EventoDaLive,
   NovaDenuncia,
+  NovoRasante,
   NovoVideo,
   ParametrosDoFeed,
   ProgressoDeUpload,
@@ -123,6 +138,34 @@ interface LinhaNotificacao {
   de?: LinhaPerfilResumo | null;
 }
 
+interface LinhaConversaResumo {
+  id: string;
+  outro_id: string;
+  ultima_mensagem: string | null;
+  ultima_remetente_id: string | null;
+  atualizado_em: string;
+  nao_lidas: number | string | null;
+}
+
+interface LinhaMensagem {
+  id: string;
+  conversa_id: string;
+  remetente_id: string;
+  texto: string;
+  lida: boolean;
+  criado_em: string;
+}
+
+interface LinhaRasante {
+  id: string;
+  autor_id: string;
+  url: string;
+  thumbnail_url: string | null;
+  duracao: number;
+  criado_em: string;
+  expira_em: string;
+}
+
 // profiles tem privilégio por coluna no Postgres (email fica fora): nunca usar '*' nessa tabela.
 const COLUNAS_PERFIL =
   'id, apelido, nome, avatar_url, bio, interesses, seguidores_count, seguindo_count, curtidas_recebidas, videos_count, criado_em';
@@ -204,6 +247,17 @@ function paraMensagem(m: LinhaMensagemLive): MensagemLive {
     tipo: m.tipo,
     texto: m.texto,
     reacao: (m.reacao as Reacao | null) ?? null,
+    criadoEm: m.criado_em,
+  };
+}
+
+function paraMensagemDireta(m: LinhaMensagem): Mensagem {
+  return {
+    id: m.id,
+    conversaId: m.conversa_id,
+    remetenteId: m.remetente_id,
+    texto: m.texto,
+    lida: m.lida,
     criadoEm: m.criado_em,
   };
 }
@@ -1091,13 +1145,425 @@ export class SupabaseDataService implements DataService {
     await this.db.from('push_tokens').delete().eq('token', token);
   }
 
-  async marcarNotificacoesComoLidas(): Promise<void> {
+  async marcarNotificacoesComoLidas(tipos?: TipoDeNotificacao[]): Promise<void> {
     const meuId = await this.meuIdOuErro();
-    await this.db
+    let consulta = this.db
       .from('notifications')
       .update({ lida: true })
       .eq('para_id', meuId)
       .eq('lida', false);
+    if (tipos && tipos.length > 0) consulta = consulta.in('tipo', tipos);
+    await consulta;
+  }
+
+  // ---------------------------------------------------------------- mensagens diretas
+
+  /** Perfis resumidos de vários ids numa consulta só (quem falta vira um placeholder). */
+  private async resumos(ids: string[]): Promise<Map<string, ResumoDeUsuario>> {
+    const mapa = new Map<string, ResumoDeUsuario>();
+    const unicos = [...new Set(ids)].filter(Boolean);
+    if (unicos.length === 0) return mapa;
+    const { data } = await this.db
+      .from('profiles')
+      .select('id, apelido, nome, avatar_url')
+      .in('id', unicos);
+    for (const p of (data ?? []) as LinhaPerfilResumo[]) mapa.set(p.id, resumo(p, p.id));
+    for (const id of unicos) if (!mapa.has(id)) mapa.set(id, resumo(null, id));
+    return mapa;
+  }
+
+  private async montarConversas(linhas: LinhaConversaResumo[]): Promise<Conversa[]> {
+    const perfis = await this.resumos(linhas.map((l) => l.outro_id));
+    return linhas.map((l) => ({
+      id: l.id,
+      outro: perfis.get(l.outro_id) ?? resumo(null, l.outro_id),
+      ultimaMensagem:
+        l.ultima_mensagem !== null && l.ultima_remetente_id
+          ? {
+              texto: l.ultima_mensagem,
+              remetenteId: l.ultima_remetente_id,
+              criadoEm: l.atualizado_em,
+            }
+          : null,
+      naoLidas: Number(l.nao_lidas ?? 0),
+      atualizadoEm: l.atualizado_em,
+    }));
+  }
+
+  async listConversas(): Promise<Conversa[]> {
+    await this.meuIdOuErro();
+    const { data, error } = await this.db.rpc('listar_conversas');
+    if (error) erroDoSupabase(error, 'Falha ao carregar conversas');
+    return this.montarConversas((data ?? []) as LinhaConversaResumo[]);
+  }
+
+  async getConversa(conversaId: Id): Promise<Conversa> {
+    const conversas = await this.listConversas();
+    const conversa = conversas.find((c) => c.id === conversaId);
+    if (!conversa) throw new ErroDeAplicacao('Conversa não encontrada.', 'nao_encontrado');
+    return conversa;
+  }
+
+  async podeConversar(usuarioId: Id): Promise<PermissaoDeConversa> {
+    const meuId = await this.meuIdOuErro();
+    if (usuarioId === meuId) {
+      return {
+        permitido: false,
+        motivo: 'eu_mesmo',
+        descricao: 'Você não pode conversar consigo mesmo.',
+      };
+    }
+    const [{ data: permitido }, bloqueados, perfil] = await Promise.all([
+      this.db.rpc('pode_conversar', { p_de: meuId, p_para: usuarioId }),
+      this.idsBloqueados(),
+      this.db.from('profiles').select('id, apelido').eq('id', usuarioId).maybeSingle(),
+    ]);
+    if (permitido === true) return { permitido: true };
+    const apelido = (perfil.data as { apelido: string } | null)?.apelido ?? 'esse perfil';
+    if (!perfil.data || bloqueados.includes(usuarioId)) {
+      return {
+        permitido: false,
+        motivo: 'bloqueado',
+        descricao: 'Não é possível conversar com esse perfil.',
+      };
+    }
+    const { count } = await this.db
+      .from('follows')
+      .select('seguidor_id', { count: 'exact', head: true })
+      .or(
+        `and(seguidor_id.eq.${meuId},seguido_id.eq.${usuarioId}),and(seguidor_id.eq.${usuarioId},seguido_id.eq.${meuId})`,
+      );
+    if ((count ?? 0) > 0) {
+      return {
+        permitido: false,
+        motivo: 'nao_aceita',
+        descricao: `@${apelido} não está recebendo mensagens no momento.`,
+      };
+    }
+    return {
+      permitido: false,
+      motivo: 'sem_relacao',
+      descricao: `Siga @${apelido} ou espere que te siga para puxar papo.`,
+    };
+  }
+
+  async abrirConversa(usuarioId: Id): Promise<Conversa> {
+    await this.meuIdOuErro();
+    const { data, error } = await this.db.rpc('abrir_conversa', { p_outro: usuarioId });
+    if (error) {
+      const permissao = await this.podeConversar(usuarioId).catch(() => null);
+      if (permissao && !permissao.permitido)
+        throw new ErroDeAplicacao(permissao.descricao, 'conversa_negada');
+      erroDoSupabase(error, 'Falha ao abrir a conversa');
+    }
+    return this.getConversa(data as string);
+  }
+
+  async listMensagens(conversaId: Id): Promise<Mensagem[]> {
+    const { data, error } = await this.db
+      .from('messages')
+      .select('*')
+      .eq('conversa_id', conversaId)
+      .order('criado_em', { ascending: true })
+      .limit(300);
+    if (error) erroDoSupabase(error, 'Falha ao carregar mensagens');
+    return ((data ?? []) as LinhaMensagem[]).map(paraMensagemDireta);
+  }
+
+  async enviarMensagem(conversaId: Id, texto: string): Promise<Mensagem> {
+    const meuId = await this.meuIdOuErro();
+    const limpo = texto.trim();
+    if (!limpo) throw new ErroDeAplicacao('Escreva uma mensagem.', 'mensagem_vazia');
+    if (limpo.length > TAMANHO_MAXIMO_MENSAGEM)
+      throw new ErroDeAplicacao('Mensagem longa demais.', 'mensagem_longa');
+    const { data, error } = await this.db
+      .from('messages')
+      .insert({ conversa_id: conversaId, remetente_id: meuId, texto: limpo })
+      .select('*')
+      .single();
+    if (error || !data) {
+      // a política de RLS barra quando quem recebe não aceita mensagens minhas
+      if (error && /row-level security/i.test(error.message)) {
+        throw new ErroDeAplicacao(
+          'Essa pessoa não está recebendo suas mensagens no momento.',
+          'conversa_negada',
+        );
+      }
+      erroDoSupabase(error, 'Falha ao enviar');
+    }
+    const mensagem = paraMensagemDireta(data as LinhaMensagem);
+    // push para o aparelho de quem recebe (não bloqueia o envio)
+    this.db.functions
+      .invoke('notificar-mensagem', { body: { mensagemId: mensagem.id } })
+      .catch(() => {});
+    return mensagem;
+  }
+
+  async marcarConversaComoLida(conversaId: Id): Promise<void> {
+    const meuId = await this.meuIdOuErro();
+    await this.db
+      .from('messages')
+      .update({ lida: true })
+      .eq('conversa_id', conversaId)
+      .eq('lida', false)
+      .neq('remetente_id', meuId);
+  }
+
+  assinarConversa(conversaId: Id, aoReceber: (mensagem: Mensagem) => void): CancelarAssinatura {
+    const canal = this.db
+      .channel(`conversa:${conversaId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversa_id=eq.${conversaId}`,
+        },
+        (payload) => aoReceber(paraMensagemDireta(payload.new as LinhaMensagem)),
+      )
+      .subscribe();
+    return () => {
+      this.db.removeChannel(canal).catch(() => {});
+    };
+  }
+
+  async listContatos(): Promise<Usuario[]> {
+    const meuId = await this.meuIdOuErro();
+    const [seguindo, seguidores, bloqueados] = await Promise.all([
+      this.listSeguindo(meuId),
+      this.listSeguidores(meuId),
+      this.idsBloqueados(),
+    ]);
+    const mapa = new Map<string, Usuario>();
+    for (const u of [...seguindo, ...seguidores]) if (!bloqueados.includes(u.id)) mapa.set(u.id, u);
+    return [...mapa.values()].sort((a, c) => a.apelido.localeCompare(c.apelido));
+  }
+
+  async obterPreferenciasDeMensagens(): Promise<PreferenciasDeMensagens> {
+    const meuId = await this.meuIdOuErro();
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('msg_de_quem_sigo, msg_de_seguidores')
+      .eq('id', meuId)
+      .single();
+    if (error || !data) erroDoSupabase(error, 'Falha ao carregar preferências');
+    const p = data as { msg_de_quem_sigo: boolean; msg_de_seguidores: boolean };
+    return { deQuemSigo: p.msg_de_quem_sigo, deSeguidores: p.msg_de_seguidores };
+  }
+
+  async atualizarPreferenciasDeMensagens(
+    dados: Partial<PreferenciasDeMensagens>,
+  ): Promise<PreferenciasDeMensagens> {
+    const meuId = await this.meuIdOuErro();
+    const patch: Record<string, boolean> = {};
+    if (dados.deQuemSigo !== undefined) patch.msg_de_quem_sigo = dados.deQuemSigo;
+    if (dados.deSeguidores !== undefined) patch.msg_de_seguidores = dados.deSeguidores;
+    if (Object.keys(patch).length > 0) {
+      const { error } = await this.db.from('profiles').update(patch).eq('id', meuId);
+      if (error) erroDoSupabase(error, 'Falha ao salvar preferências');
+    }
+    return this.obterPreferenciasDeMensagens();
+  }
+
+  // ---------------------------------------------------------------- seguidores e sugestões
+
+  async listNovosSeguidores(): Promise<NovoSeguidor[]> {
+    const meuId = await this.meuIdOuErro();
+    const [{ data, error }, sigoLinhas, bloqueados] = await Promise.all([
+      this.db
+        .from('follows')
+        .select(
+          `criado_em, perfil:profiles!follows_seguidor_id_fkey(id, apelido, nome, avatar_url)`,
+        )
+        .eq('seguido_id', meuId)
+        .order('criado_em', { ascending: false })
+        .limit(200),
+      this.db.from('follows').select('seguido_id').eq('seguidor_id', meuId),
+      this.idsBloqueados(),
+    ]);
+    if (error) erroDoSupabase(error, 'Falha ao carregar seguidores');
+    const sigo = new Set(
+      ((sigoLinhas.data ?? []) as { seguido_id: string }[]).map((s) => s.seguido_id),
+    );
+    return ((data ?? []) as unknown as { criado_em: string; perfil: LinhaPerfilResumo | null }[])
+      .filter((l) => l.perfil && !bloqueados.includes(l.perfil.id))
+      .map((l) => ({
+        usuario: resumo(l.perfil, l.perfil!.id),
+        seguiuEm: l.criado_em,
+        sigoDeVolta: sigo.has(l.perfil!.id),
+      }));
+  }
+
+  async sugerirTorcedores(): Promise<Usuario[]> {
+    const meuId = await this.meuIdOuErro();
+    const [sigoLinhas, bloqueados, { data, error }] = await Promise.all([
+      this.db.from('follows').select('seguido_id').eq('seguidor_id', meuId),
+      this.idsBloqueados(),
+      this.db
+        .from('profiles')
+        .select(COLUNAS_PERFIL)
+        .neq('id', meuId)
+        .order('seguidores_count', { ascending: false })
+        .limit(60),
+    ]);
+    if (error) erroDoSupabase(error, 'Falha ao carregar sugestões');
+    const sigo = new Set(
+      ((sigoLinhas.data ?? []) as { seguido_id: string }[]).map((s) => s.seguido_id),
+    );
+    return ((data ?? []) as LinhaPerfil[])
+      .filter((p) => !sigo.has(p.id) && !bloqueados.includes(p.id))
+      .map(paraUsuario)
+      .slice(0, 20);
+  }
+
+  // ---------------------------------------------------------------- rasantes
+
+  private async decorarRasantes(linhas: LinhaRasante[], meuId: string | null): Promise<Rasante[]> {
+    if (linhas.length === 0) return [];
+    const vistos = new Set<string>();
+    if (meuId) {
+      const { data } = await this.db
+        .from('rasante_views')
+        .select('rasante_id')
+        .eq('usuario_id', meuId)
+        .in(
+          'rasante_id',
+          linhas.map((l) => l.id),
+        );
+      for (const v of (data ?? []) as { rasante_id: string }[]) vistos.add(v.rasante_id);
+    }
+    const perfis = await this.resumos(linhas.map((l) => l.autor_id));
+    return linhas.map((l) => ({
+      id: l.id,
+      autorId: l.autor_id,
+      autor: perfis.get(l.autor_id) ?? resumo(null, l.autor_id),
+      url: l.url,
+      thumbnailUrl: l.thumbnail_url,
+      duracao: l.duracao ?? 0,
+      criadoEm: l.criado_em,
+      expiraEm: l.expira_em,
+      visto: vistos.has(l.id),
+    }));
+  }
+
+  async listRasantes(): Promise<GrupoDeRasantes[]> {
+    const meuId = await this.meuIdOuErro();
+    const [sigoLinhas, bloqueados] = await Promise.all([
+      this.db.from('follows').select('seguido_id').eq('seguidor_id', meuId),
+      this.idsBloqueados(),
+    ]);
+    const autores = [
+      meuId,
+      ...((sigoLinhas.data ?? []) as { seguido_id: string }[]).map((s) => s.seguido_id),
+    ].filter((id) => !bloqueados.includes(id));
+    const { data, error } = await this.db
+      .from('rasantes')
+      .select('*')
+      .in('autor_id', autores)
+      .gt('expira_em', new Date().toISOString())
+      .order('criado_em', { ascending: true })
+      .limit(300);
+    if (error) erroDoSupabase(error, 'Falha ao carregar rasantes');
+    const rasantes = await this.decorarRasantes((data ?? []) as LinhaRasante[], meuId);
+    const grupos = new Map<string, GrupoDeRasantes>();
+    for (const r of rasantes) {
+      let grupo = grupos.get(r.autorId);
+      if (!grupo) {
+        grupo = { autor: r.autor, rasantes: [], todosVistos: true, souEu: r.autorId === meuId };
+        grupos.set(r.autorId, grupo);
+      }
+      grupo.rasantes.push(r);
+      if (!r.visto) grupo.todosVistos = false;
+    }
+    const ultimo = (g: GrupoDeRasantes) => g.rasantes[g.rasantes.length - 1].criadoEm;
+    return [...grupos.values()].sort((a, c) => {
+      if (a.souEu !== c.souEu) return a.souEu ? -1 : 1;
+      if (a.todosVistos !== c.todosVistos) return a.todosVistos ? 1 : -1;
+      return ultimo(c).localeCompare(ultimo(a));
+    });
+  }
+
+  async listRasantesDoUsuario(usuarioId: Id): Promise<Rasante[]> {
+    const meuId = await this.meuId();
+    const { data, error } = await this.db
+      .from('rasantes')
+      .select('*')
+      .eq('autor_id', usuarioId)
+      .gt('expira_em', new Date().toISOString())
+      .order('criado_em', { ascending: true });
+    if (error) erroDoSupabase(error, 'Falha ao carregar rasantes');
+    return this.decorarRasantes((data ?? []) as LinhaRasante[], meuId);
+  }
+
+  async publicarRasante(novo: NovoRasante, aoProgredir?: ProgressoDeUpload): Promise<Rasante> {
+    const meuId = await this.meuIdOuErro();
+    if (novo.duracao > DURACAO_MAXIMA_RASANTE_SEGUNDOS + 0.5) {
+      throw new ErroDeAplicacao(
+        `Rasantes têm até ${DURACAO_MAXIMA_RASANTE_SEGUNDOS} segundos.`,
+        'rasante_longo',
+      );
+    }
+    const id = novoId();
+    const progresso = (f: number, etapa: string) => aoProgredir?.(Math.min(1, f), etapa);
+    progresso(0.02, 'Enviando rasante');
+    const url = await this.enviarArquivo(
+      'videos',
+      `${meuId}/rasantes/${id}.mp4`,
+      novo.uriLocal,
+      tipoMimeDe(novo.uriLocal, 'video'),
+      (f) => progresso(0.02 + f * 0.75, 'Enviando rasante'),
+    );
+    progresso(0.8, 'Gerando miniatura');
+    let thumbnail_url: string | null = null;
+    const thumbLocal = novo.thumbnailUriLocal ?? (await gerarThumbnail(novo.uriLocal));
+    if (thumbLocal) {
+      thumbnail_url = await this.enviarArquivo(
+        'thumbnails',
+        `${meuId}/rasantes/${id}.jpg`,
+        thumbLocal,
+        'image/jpeg',
+      );
+    }
+    progresso(0.92, 'Publicando');
+    const { data, error } = await this.db
+      .from('rasantes')
+      .insert({
+        id,
+        autor_id: meuId,
+        url,
+        thumbnail_url,
+        duracao: Math.max(1, Math.round(novo.duracao)),
+        expira_em: new Date(Date.now() + VALIDADE_RASANTE_HORAS * 60 * 60 * 1000).toISOString(),
+      })
+      .select('*')
+      .single();
+    if (error || !data) erroDoSupabase(error, 'Falha ao publicar o rasante');
+    progresso(1, 'Publicado');
+    const [rasante] = await this.decorarRasantes([data as LinhaRasante], meuId);
+    return rasante;
+  }
+
+  async marcarRasanteComoVisto(id: Id): Promise<void> {
+    const meuId = await this.meuId();
+    if (!meuId) return;
+    await this.db
+      .from('rasante_views')
+      .upsert(
+        { rasante_id: id, usuario_id: meuId },
+        { onConflict: 'rasante_id,usuario_id', ignoreDuplicates: true },
+      );
+  }
+
+  async excluirRasante(id: Id): Promise<void> {
+    const meuId = await this.meuIdOuErro();
+    const { error } = await this.db.from('rasantes').delete().eq('id', id).eq('autor_id', meuId);
+    if (error) erroDoSupabase(error, 'Falha ao apagar o rasante');
+    // best-effort: arquivos no storage
+    await Promise.all([
+      this.db.storage.from('videos').remove([`${meuId}/rasantes/${id}.mp4`]),
+      this.db.storage.from('thumbnails').remove([`${meuId}/rasantes/${id}.jpg`]),
+    ]).catch(() => {});
   }
 
   // ---------------------------------------------------------------- segurança

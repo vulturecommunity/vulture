@@ -154,3 +154,68 @@ export interface Pagina<T> {
   itens: T[];
   proximoCursor: string | null;
 }
+
+// ---------------------------------------------------------------- mensagens, seguidores e rasantes
+
+export type ResumoDeUsuario = Pick<Usuario, 'id' | 'apelido' | 'nome' | 'avatarUrl'>;
+
+/** Quem pode puxar papo comigo (Perfil → Configurações → Mensagens). */
+export interface PreferenciasDeMensagens {
+  /** aceitar mensagens de quem eu sigo */
+  deQuemSigo: boolean;
+  /** aceitar mensagens de quem me segue */
+  deSeguidores: boolean;
+}
+
+export interface Mensagem {
+  id: Id;
+  conversaId: Id;
+  remetenteId: Id;
+  texto: string;
+  lida: boolean;
+  criadoEm: string;
+}
+
+/** Conversa privada: sempre entre duas pessoas. */
+export interface Conversa {
+  id: Id;
+  /** o outro participante */
+  outro: ResumoDeUsuario;
+  ultimaMensagem: Pick<Mensagem, 'texto' | 'remetenteId' | 'criadoEm'> | null;
+  naoLidas: number;
+  atualizadoEm: string;
+}
+
+export type MotivoDeConversaNegada = 'eu_mesmo' | 'bloqueado' | 'nao_aceita' | 'sem_relacao';
+
+export type PermissaoDeConversa =
+  { permitido: true } | { permitido: false; motivo: MotivoDeConversaNegada; descricao: string };
+
+export interface NovoSeguidor {
+  usuario: ResumoDeUsuario;
+  seguiuEm: string;
+  /** se eu já sigo essa pessoa de volta */
+  sigoDeVolta: boolean;
+}
+
+/** Vídeo curto (até 15 s) que some em 24 h: aparece no topo do perfil e das mensagens. */
+export interface Rasante {
+  id: Id;
+  autorId: Id;
+  autor: ResumoDeUsuario;
+  url: string;
+  thumbnailUrl: string | null;
+  duracao: number;
+  criadoEm: string;
+  expiraEm: string;
+  /** já assisti (anel apagado) */
+  visto: boolean;
+}
+
+/** Rasantes ativos de uma pessoa, agrupados para a fileira do topo. */
+export interface GrupoDeRasantes {
+  autor: ResumoDeUsuario;
+  rasantes: Rasante[];
+  todosVistos: boolean;
+  souEu: boolean;
+}

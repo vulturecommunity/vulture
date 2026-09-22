@@ -9,7 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PortaoDeAutenticacao } from '@/components/navegacao/PortaoDeAutenticacao';
 import { SheetsGlobais } from '@/components/navegacao/SheetsGlobais';
 import { TelaDeErro } from '@/components/navegacao/TelaDeErro';
-import { useAbrirLivePelaNotificacao, useRegistrarPush } from '@/hooks/useNotificacoesPush';
+import { useAbrirPelaNotificacao, useRegistrarPush } from '@/hooks/useNotificacoesPush';
 import { configurarExibicaoDeNotificacoes } from '@/services/push';
 import { queryClient } from '@/services/queryClient';
 import { useAuthStore } from '@/stores/authStore';
@@ -38,7 +38,7 @@ export default function LayoutRaiz() {
   const restaurarSessao = useAuthStore((s) => s.restaurarSessao);
   const carregado = useAuthStore((s) => s.carregado);
   useRegistrarPush();
-  useAbrirLivePelaNotificacao();
+  useAbrirPelaNotificacao();
 
   useEffect(() => {
     restaurarSessao();
@@ -73,6 +73,11 @@ export default function LayoutRaiz() {
                   options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
                 />
                 <Stack.Screen name="live/[id]" options={{ animation: 'slide_from_bottom' }} />
+                <Stack.Screen
+                  name="rasante/[usuarioId]"
+                  options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+                />
+                <Stack.Screen name="rasante/novo" options={{ animation: 'fade' }} />
               </Stack>
               <SheetsGlobais />
             </PortaoDeAutenticacao>
