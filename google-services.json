@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "996312752878",
+    "project_id": "vulture-app-f4008",
+    "storage_bucket": "vulture-app-f4008.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:996312752878:android:4379a83ec19cb3a7e249ff",
+        "android_client_info": {
+          "package_name": "app.vulture.torcida"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3fNgWQm1_2-IgAPxQgfriDTqqlEiq4ZE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
