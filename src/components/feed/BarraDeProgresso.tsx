@@ -2,8 +2,10 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  interpolateColor,
   runOnJS,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withTiming,
   type SharedValue,
@@ -23,18 +25,34 @@ export interface BarraDeProgressoProps {
   aoTerminarArrasto?: () => void;
 }
 
-const ALTURA_REPOUSO = 2;
-const ALTURA_ARRASTO = 6;
-/** faixa sensível ao toque, maior que a linha visível */
-const ALTURA_TOQUE = 28;
-/** a bolinha se estende metade dela abaixo da trilha; a faixa fica recuada por esse tanto
- * para o item do feed (que corta o que passa da borda) nunca esconder a parte de baixo */
-const RAIO_BOLINHA = 6;
+const ALTURA_REPOUSO = 3;
+const ALTURA_ARRASTO = 8;
+/** faixa sensível ao toque, bem maior que a linha visível */
+const ALTURA_TOQUE = 30;
+const DIAMETRO_REPOUSO = 11;
+const DIAMETRO_ARRASTO = 20;
+/** recuo das bordas: a barra vira um controle "solto", longe dos cantos arredondados */
+const MARGEM_LATERAL = espacos.md;
+const MARGEM_INFERIOR = espacos.md;
 
 /**
- * Linha de progresso no rodapé do vídeo. Arrastar para os lados avança/volta o vídeo
- * (como no TikTok/Kwai); durante o arrasto a barra engrossa e mostra o tempo.
- * Toda a animação roda na thread de UI: o componente só re-renderiza durante o arrasto.
+ * Geometria compartilhada: o post reserva esse espaço no rodapé e o post de foto
+ * desenha a barra dele no mesmo lugar, para o progresso viver sempre na mesma altura.
+ */
+export const GEOMETRIA_BARRA = {
+  margemLateral: MARGEM_LATERAL,
+  margemInferior: MARGEM_INFERIOR,
+  alturaToque: ALTURA_TOQUE,
+  alturaLinha: ALTURA_REPOUSO,
+  /** espaço que o conteúdo do post precisa deixar livre acima da barra */
+  espacoReservado: MARGEM_INFERIOR + ALTURA_TOQUE + espacos.xs,
+} as const;
+
+/**
+ * Linha de progresso do vídeo. Fica sempre visível — trilha em pílula recuada das
+ * bordas e um marcador branco com anel — e arrastar para os lados avança/volta.
+ * Ao arrastar, a barra engrossa, o preenchimento vira vermelho e o anel acende:
+ * o torcedor vê na hora que está no comando. Tudo na thread de UI.
  */
 export function BarraDeProgresso({
   posicao,
@@ -103,25 +121,41 @@ export function BarraDeProgresso({
   );
   /* eslint-enable react-hooks/refs */
 
-  const estiloTrilha = useAnimatedStyle(() => ({
-    height: withTiming(arrastando.get() ? ALTURA_ARRASTO : ALTURA_REPOUSO, { duration: 120 }),
-  }));
-  const estiloPreenchido = useAnimatedStyle(() => {
-    const fracaoAtual = duracao > 0 ? Math.min(1, Math.max(0, posicao.get() / duracao)) : 0;
-    return { width: `${(arrastando.get() ? fracaoArrasto.get() : fracaoAtual) * 100}%` };
+  /** 0 em repouso, 1 durante o arrasto: comanda espessura, cor e tamanho do marcador. */
+  const destaque = useDerivedValue(() => withTiming(arrastando.get() ? 1 : 0, { duration: 140 }));
+  const fracao = useDerivedValue(() => {
+    if (arrastando.get()) return fracaoArrasto.get();
+    return duracao > 0 ? Math.min(1, Math.max(0, posicao.get() / duracao)) : 0;
   });
-  const estiloBolinha = useAnimatedStyle(() => {
-    const fracaoAtual = duracao > 0 ? Math.min(1, Math.max(0, posicao.get() / duracao)) : 0;
+
+  const estiloTrilha = useAnimatedStyle(() => {
+    const altura = ALTURA_REPOUSO + destaque.get() * (ALTURA_ARRASTO - ALTURA_REPOUSO);
+    return { height: altura, borderRadius: altura / 2 };
+  });
+  const estiloPreenchido = useAnimatedStyle(() => ({
+    width: `${fracao.get() * 100}%`,
+    backgroundColor: interpolateColor(destaque.get(), [0, 1], [cores.branco, cores.vermelhoVivo]),
+  }));
+  const estiloMarcador = useAnimatedStyle(() => {
+    const d = DIAMETRO_REPOUSO + destaque.get() * (DIAMETRO_ARRASTO - DIAMETRO_REPOUSO);
     return {
-      opacity: withTiming(arrastando.get() ? 1 : 0, { duration: 120 }),
-      left: `${(arrastando.get() ? fracaoArrasto.get() : fracaoAtual) * 100}%`,
+      width: d,
+      height: d,
+      borderRadius: d / 2,
+      left: `${fracao.get() * 100}%`,
+      borderColor: interpolateColor(
+        destaque.get(),
+        [0, 1],
+        ['rgba(0,0,0,0.45)', cores.vermelhoVivo],
+      ),
+      transform: [{ translateX: -d / 2 }, { translateY: -d / 2 }],
     };
   });
 
   return (
     <View style={estilos.area} pointerEvents="box-none" testID="barra-progresso">
       {tempoArrasto !== null ? (
-        // no centro da tela, como no TikTok: nunca fica atrás do painel de ações
+        // no centro do vídeo: nunca fica atrás das ações nem da legenda
         <View style={estilos.tempo} pointerEvents="none">
           <Texto variante="corpoForte">{formatarDuracao(tempoArrasto)}</Texto>
           <Texto variante="corpo" cor={cores.textoSecundario}>
@@ -135,7 +169,11 @@ export function BarraDeProgresso({
           <Animated.View style={[estilos.trilha, estiloTrilha]}>
             <Animated.View style={[estilos.preenchido, estiloPreenchido]} />
           </Animated.View>
-          <Animated.View style={[estilos.bolinha, estiloBolinha]} pointerEvents="none" />
+          <Animated.View
+            style={[estilos.marcador, estiloMarcador]}
+            pointerEvents="none"
+            testID="marcador-progresso"
+          />
         </View>
       </GestureDetector>
     </View>
@@ -146,9 +184,9 @@ const estilos = StyleSheet.create({
   area: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
-    bottom: RAIO_BOLINHA,
+    left: MARGEM_LATERAL,
+    right: MARGEM_LATERAL,
+    bottom: MARGEM_INFERIOR,
     justifyContent: 'flex-end',
   },
   tempo: {
@@ -162,16 +200,23 @@ const estilos = StyleSheet.create({
     borderRadius: raios.sm,
     backgroundColor: cores.vidro,
   },
-  faixaToque: { height: ALTURA_TOQUE, justifyContent: 'flex-end' },
-  trilha: { width: '100%', backgroundColor: 'rgba(255,255,255,0.28)', overflow: 'hidden' },
-  preenchido: { height: '100%', backgroundColor: cores.vermelhoVivo },
-  bolinha: {
+  faixaToque: { height: ALTURA_TOQUE, justifyContent: 'center' },
+  trilha: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.32)',
+    overflow: 'hidden',
+  },
+  preenchido: { height: '100%', borderRadius: ALTURA_ARRASTO / 2 },
+  marcador: {
     position: 'absolute',
-    bottom: -3,
-    width: 12,
-    height: 12,
-    marginLeft: -6,
-    borderRadius: 6,
+    top: '50%',
     backgroundColor: cores.branco,
+    borderWidth: 2,
+    // o marcador precisa aparecer tanto em vídeo claro quanto escuro
+    shadowColor: cores.pretoPuro,
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
   },
 });

@@ -14,6 +14,8 @@ import { DURACAO_FOTO_SEGUNDOS } from '@/constants/interesses';
 import { cores } from '@/theme';
 import type { Video } from '@/types';
 
+import { GEOMETRIA_BARRA } from './BarraDeProgresso';
+
 export interface PostDeFotoProps {
   video: Video;
   ativo: boolean;
@@ -60,13 +62,18 @@ const ABSOLUTO = { position: 'absolute' as const, top: 0, left: 0, right: 0, bot
 
 const estilos = StyleSheet.create({
   container: { ...ABSOLUTO, backgroundColor: cores.pretoPuro },
+  // mesma altura e recuo da barra do vídeo: o progresso mora sempre no mesmo lugar
   trilha: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    left: GEOMETRIA_BARRA.margemLateral,
+    right: GEOMETRIA_BARRA.margemLateral,
+    bottom:
+      GEOMETRIA_BARRA.margemInferior +
+      (GEOMETRIA_BARRA.alturaToque - GEOMETRIA_BARRA.alturaLinha) / 2,
+    height: GEOMETRIA_BARRA.alturaLinha,
+    borderRadius: GEOMETRIA_BARRA.alturaLinha / 2,
+    backgroundColor: 'rgba(255,255,255,0.32)',
+    overflow: 'hidden',
   },
-  barra: { height: 3, backgroundColor: cores.vermelho },
+  barra: { height: '100%', backgroundColor: cores.branco },
 });

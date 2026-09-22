@@ -91,6 +91,13 @@ describe('ItemDoFeed — controles do player', () => {
     expect(screen.queryByTestId('barra-progresso')).toBeNull();
   });
 
+  it('o marcador do progresso aparece sem precisar arrastar', async () => {
+    const video = videoDeTeste();
+    await renderizar(<ItemDoFeed video={video} altura={800} ativo proximo={false} meuId={null} />);
+    // antes ele só surgia durante o arrasto e a linha sumia no rodapé
+    expect(screen.getByTestId('marcador-progresso')).toBeTruthy();
+  });
+
   it('o botão de som alterna o mudo global sem pausar', async () => {
     const video = videoDeTeste();
     await renderizar(<ItemDoFeed video={video} altura={800} ativo proximo={false} meuId={null} />);

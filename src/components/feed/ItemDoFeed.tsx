@@ -15,6 +15,7 @@ import { cores, espacos, raios } from '@/theme';
 import type { Video } from '@/types';
 
 import { BarraDeAcoes } from './BarraDeAcoes';
+import { GEOMETRIA_BARRA } from './BarraDeProgresso';
 import { CoracaoAnimado } from './CoracaoAnimado';
 import { LegendaComHashtags } from './LegendaComHashtags';
 import { PlayerDeVideo } from './PlayerDeVideo';
@@ -159,7 +160,10 @@ function ItemDoFeedBase({
       ) : null}
 
       <View
-        style={[estilos.overlay, { paddingBottom: recuoInferior + espacos.xl }]}
+        style={[
+          estilos.overlay,
+          { paddingBottom: recuoInferior + GEOMETRIA_BARRA.espacoReservado },
+        ]}
         pointerEvents="box-none">
         <Pressable
           onPress={abrirPerfil}
