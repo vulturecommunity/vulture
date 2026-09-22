@@ -784,7 +784,7 @@ returns table (
 language sql
 stable
 security definer set search_path = public
-as $
+as $$
   select c.id,
          case when c.usuario_a = auth.uid() then c.usuario_b else c.usuario_a end as outro_id,
          c.ultima_mensagem,
