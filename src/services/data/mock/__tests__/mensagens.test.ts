@@ -97,7 +97,10 @@ describe('MockDataService — mensagens diretas', () => {
     await servico.atualizarPreferenciasDeMensagens({ deQuemSigo: false });
     await servico.sair();
     await servico.entrar('b@teste.com', '123456');
-    expect(await servico.podeConversar(a)).toMatchObject({ permitido: false, motivo: 'nao_aceita' });
+    expect(await servico.podeConversar(a)).toMatchObject({
+      permitido: false,
+      motivo: 'nao_aceita',
+    });
   });
 
   it('envia, lista, marca como lida e avisa assinantes', async () => {

@@ -1,9 +1,10 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 
 import { SalaDaLive } from '@/components/lives/SalaDaLive';
 import { Carregando, Erro } from '@/components/ui';
 import { useEncerrarLive, useLiveAtual } from '@/hooks/useLive';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -11,7 +12,7 @@ import { useUiStore } from '@/stores/uiStore';
 /** Assistir uma live (ou continuar a própria live já iniciada). */
 export default function TelaAssistirLive() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const voltar = useVoltar('/(tabs)/lives');
   const meuId = useAuthStore((s) => s.sessao?.usuario.id);
   const definirFoco = usePlayerStore((s) => s.definirFoco);
   const mostrarAviso = useUiStore((s) => s.mostrarAviso);
@@ -38,13 +39,13 @@ export default function TelaAssistirLive() {
     <SalaDaLive
       live={live.data}
       anfitriao={anfitriao}
-      aoSair={() => router.back()}
+      aoSair={voltar}
       aoEncerrar={
         anfitriao
           ? async () => {
               await encerrar.mutateAsync(live.data!.id);
               mostrarAviso('Live encerrada. Valeu, nação!', 'sucesso');
-              router.back();
+              voltar();
             }
           : undefined
       }

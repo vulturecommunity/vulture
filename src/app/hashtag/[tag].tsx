@@ -1,4 +1,4 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FeedVertical } from '@/components/feed/FeedVertical';
 import { Erro, Icone, Texto } from '@/components/ui';
 import { useFeed } from '@/hooks/useFeed';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { cores, espacos, raios } from '@/theme';
@@ -13,7 +14,7 @@ import { cores, espacos, raios } from '@/theme';
 /** Feed vertical filtrado por hashtag. */
 export default function TelaHashtag() {
   const { tag } = useLocalSearchParams<{ tag: string }>();
-  const router = useRouter();
+  const voltar = useVoltar('/(tabs)/explorar');
   const insets = useSafeAreaInsets();
   const meuId = useAuthStore((s) => s.sessao?.usuario.id ?? null);
   const definirFoco = usePlayerStore((s) => s.definirFoco);
@@ -46,11 +47,7 @@ export default function TelaHashtag() {
       <View
         style={[estilos.topo, { paddingTop: insets.top + espacos.sm }]}
         pointerEvents="box-none">
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityLabel="Voltar"
-          style={estilos.voltar}>
+        <Pressable onPress={voltar} hitSlop={12} accessibilityLabel="Voltar" style={estilos.voltar}>
           <Icone nome="voltar" tamanho={20} cor={cores.branco} />
         </Pressable>
         <View style={estilos.etiqueta}>

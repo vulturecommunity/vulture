@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -15,6 +14,7 @@ import { Avatar, Botao, Cabecalho, Icone, Input, Texto } from '@/components/ui';
 import type { Interesse } from '@/constants/interesses';
 import { useEscolherImagem } from '@/hooks/useEscolherImagem';
 import { useAtualizarPerfil } from '@/hooks/usePerfil';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos } from '@/theme';
@@ -22,7 +22,7 @@ import { apelidoValido, normalizarApelido } from '@/utils/validacao';
 
 /** Edição do meu perfil: foto, apelido, nome, bio e interesses. */
 export default function TelaEditarPerfil() {
-  const router = useRouter();
+  const voltar = useVoltar('/(tabs)/perfil');
   const insets = useSafeAreaInsets();
   const usuario = useAuthStore((s) => s.sessao?.usuario);
   const mostrarAviso = useUiStore((s) => s.mostrarAviso);
@@ -54,7 +54,7 @@ export default function TelaEditarPerfil() {
         avatarUriLocal: novaFoto ?? undefined,
       });
       mostrarAviso('Perfil atualizado!', 'sucesso');
-      router.back();
+      voltar();
     } catch (erro) {
       mostrarAviso(erro instanceof Error ? erro.message : 'Falha ao salvar', 'erro');
     }
@@ -64,7 +64,7 @@ export default function TelaEditarPerfil() {
     <KeyboardAvoidingView
       style={[estilos.tela, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Cabecalho titulo="Editar perfil" aoVoltar={() => router.back()} />
+      <Cabecalho titulo="Editar perfil" aoVoltar={voltar} />
       <ScrollView
         contentContainerStyle={[estilos.conteudo, { paddingBottom: insets.bottom + espacos.xl }]}
         keyboardShouldPersistTaps="handled">

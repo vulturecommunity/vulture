@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Carregando, EstadoVazio, Icone, Texto } from '@/components/ui';
+import { useVoltar } from '@/hooks/useVoltar';
 import {
   useExcluirRasante,
   useMarcarRasanteVisto,
@@ -36,6 +37,7 @@ function seguro(acao: () => void): void {
 export default function TelaRasante() {
   const { usuarioId } = useLocalSearchParams<{ usuarioId: string }>();
   const router = useRouter();
+  const fechar = useVoltar('/mensagens');
   const insets = useSafeAreaInsets();
   const meuId = useAuthStore((s) => s.sessao?.usuario.id ?? null);
   const definirFoco = usePlayerStore((s) => s.definirFoco);
@@ -75,8 +77,8 @@ export default function TelaRasante() {
     const proxima = posicao >= 0 ? ordem[posicao + 1] : undefined;
     if (proxima)
       router.replace({ pathname: '/rasante/[usuarioId]', params: { usuarioId: proxima } });
-    else router.back();
-  }, [grupos.data, usuarioId, router]);
+    else fechar();
+  }, [grupos.data, usuarioId, router, fechar]);
 
   const avancar = useCallback(() => {
     if (indice + 1 < rasantes.length) {
@@ -119,10 +121,10 @@ export default function TelaRasante() {
   // lista vazia (tudo expirou) ou índice fora: fecha
   useEffect(() => {
     if (lista.isSuccess && rasantes.length === 0) {
-      const timer = setTimeout(() => router.back(), 1500);
+      const timer = setTimeout(fechar, 1500);
       return () => clearTimeout(timer);
     }
-  }, [lista.isSuccess, rasantes.length, router]);
+  }, [lista.isSuccess, rasantes.length, fechar]);
 
   function apagar() {
     if (!atual) return;
@@ -135,7 +137,7 @@ export default function TelaRasante() {
           try {
             await excluir.mutateAsync(atual.id);
             mostrarAviso('Rasante apagado.', 'sucesso');
-            if (rasantes.length <= 1) router.back();
+            if (rasantes.length <= 1) fechar();
             else setIndice((i) => Math.max(0, Math.min(i, rasantes.length - 2)));
           } catch (erro) {
             mostrarAviso(erro instanceof Error ? erro.message : 'Não foi possível apagar.', 'erro');
@@ -153,7 +155,7 @@ export default function TelaRasante() {
           icone="rasante"
           titulo="Esse rasante já voou"
           descricao="Rasantes somem depois de 24 horas."
-          acao={{ titulo: 'Voltar', aoPressionar: () => router.back() }}
+          acao={{ titulo: 'Voltar', aoPressionar: fechar }}
         />
       </View>
     );
@@ -260,7 +262,7 @@ export default function TelaRasante() {
             </Pressable>
           ) : null}
           <Pressable
-            onPress={() => router.back()}
+            onPress={fechar}
             hitSlop={10}
             accessibilityLabel="Fechar"
             style={estilos.botao}

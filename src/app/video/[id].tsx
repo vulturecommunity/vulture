@@ -1,4 +1,4 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FeedVertical } from '@/components/feed/FeedVertical';
 import { Erro, Icone } from '@/components/ui';
 import { useListaDeVideos, type OrigemDaLista } from '@/hooks/useListasDeVideos';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { cores, espacos } from '@/theme';
@@ -17,7 +18,7 @@ import { cores, espacos } from '@/theme';
 export default function TelaVideo() {
   const params = useLocalSearchParams<{ id: string; origem?: OrigemDaLista; usuarioId?: string }>();
   const origem: OrigemDaLista = params.origem ?? 'video';
-  const router = useRouter();
+  const voltar = useVoltar('/(tabs)');
   const insets = useSafeAreaInsets();
   const meuId = useAuthStore((s) => s.sessao?.usuario.id ?? null);
   const definirFoco = usePlayerStore((s) => s.definirFoco);
@@ -49,7 +50,7 @@ export default function TelaVideo() {
         vazio={{ titulo: 'Vídeo não encontrado', descricao: 'Ele pode ter sido removido.' }}
       />
       <Pressable
-        onPress={() => router.back()}
+        onPress={voltar}
         hitSlop={12}
         accessibilityLabel="Voltar"
         style={[estilos.voltar, { top: insets.top + espacos.sm }]}>

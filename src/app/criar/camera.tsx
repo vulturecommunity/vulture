@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Botao, Icone, Texto } from '@/components/ui';
 import { DURACAO_MAXIMA_VIDEO_SEGUNDOS } from '@/constants/interesses';
 import { DURACAO_MAXIMA_RASANTE_SEGUNDOS } from '@/constants/rasantes';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useCriacaoStore } from '@/stores/criacaoStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -29,6 +30,7 @@ type Modo = 'video' | 'foto';
  */
 export default function TelaCamera() {
   const router = useRouter();
+  const voltar = useVoltar('/(tabs)');
   const insets = useSafeAreaInsets();
   const { destino } = useLocalSearchParams<{ destino?: string }>();
   const rasante = destino === 'rasante';
@@ -266,7 +268,7 @@ export default function TelaCamera() {
           }}
         />
         <Botao titulo="Importar da galeria" variante="contorno" onPress={importarDaGaleria} />
-        <Botao titulo="Voltar" variante="fantasma" onPress={() => router.back()} />
+        <Botao titulo="Voltar" variante="fantasma" onPress={voltar} />
       </View>
     );
   }
@@ -297,7 +299,7 @@ export default function TelaCamera() {
 
       <View style={[estilos.topo, { paddingTop: insets.top + espacos.sm }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={voltar}
           hitSlop={12}
           disabled={gravando}
           accessibilityLabel="Fechar"

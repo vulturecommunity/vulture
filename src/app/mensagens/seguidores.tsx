@@ -7,6 +7,7 @@ import { Avatar, Botao, Cabecalho, Carregando, EstadoVazio, Texto } from '@/comp
 import { useSeguir } from '@/hooks/useInteracoes';
 import { useMarcarNotificacoesComoLidas } from '@/hooks/useNotificacoes';
 import { useNovosSeguidores } from '@/hooks/useSeguidores';
+import { useVoltar } from '@/hooks/useVoltar';
 import { cores, espacos } from '@/theme';
 import { formatarQuandoSeguiu } from '@/utils/formatadores';
 
@@ -16,6 +17,7 @@ import { formatarQuandoSeguiu } from '@/utils/formatadores';
  */
 export default function TelaNovosSeguidores() {
   const router = useRouter();
+  const voltar = useVoltar('/mensagens');
   const insets = useSafeAreaInsets();
   const seguidores = useNovosSeguidores();
   const { alternar, ocupado } = useSeguir();
@@ -29,7 +31,7 @@ export default function TelaNovosSeguidores() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <Cabecalho titulo="Novos seguidores" aoVoltar={() => router.back()} />
+      <Cabecalho titulo="Novos seguidores" aoVoltar={voltar} />
       {seguidores.isLoading ? (
         <Carregando />
       ) : (

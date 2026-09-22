@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Botao, Cabecalho, Icone, Input, Texto } from '@/components/ui';
 import { ICONE_INTERESSE, INTERESSES } from '@/constants/interesses';
 import { usePublicar } from '@/hooks/usePublicar';
+import { useFecharFluxo, useVoltar } from '@/hooks/useVoltar';
 import { useCriacaoStore } from '@/stores/criacaoStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios } from '@/theme';
@@ -44,6 +45,8 @@ function PreviewDeVideo({ uri }: { uri: string }) {
 /** Pré-visualização da captura + legenda, hashtags, categoria e publicação com progresso. */
 export default function TelaPreview() {
   const router = useRouter();
+  const voltar = useVoltar('/(tabs)');
+  const fecharFluxo = useFecharFluxo('/(tabs)');
   const insets = useSafeAreaInsets();
   const midia = useCriacaoStore((s) => s.midia);
   const legenda = useCriacaoStore((s) => s.legenda);
@@ -82,8 +85,7 @@ export default function TelaPreview() {
       await publicar.mutateAsync({ salvarNaGaleria });
       limpar();
       mostrarAviso('Publicado! Seu vídeo já está no feed.', 'sucesso');
-      router.dismissAll();
-      router.replace('/(tabs)');
+      fecharFluxo();
     } catch {
       // erro exibido pelo store
     }
@@ -91,7 +93,7 @@ export default function TelaPreview() {
 
   function refazer() {
     limpar();
-    router.back();
+    voltar();
   }
 
   return (

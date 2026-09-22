@@ -13,6 +13,7 @@ import {
   type NomeDeIcone,
 } from '@/components/ui';
 import { useMarcarNotificacoesComoLidas, useNotificacoes } from '@/hooks/useNotificacoes';
+import { useVoltar } from '@/hooks/useVoltar';
 import { cores, espacos, raios } from '@/theme';
 import type { Notificacao } from '@/types';
 import { tempoRelativo } from '@/utils/formatadores';
@@ -53,6 +54,7 @@ const TITULOS: Record<Grupo, string> = {
  */
 export default function TelaNotificacoes() {
   const router = useRouter();
+  const voltar = useVoltar('/(tabs)');
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ grupo?: string }>();
   const grupo: Grupo =
@@ -81,7 +83,7 @@ export default function TelaNotificacoes() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <Cabecalho titulo={TITULOS[grupo]} aoVoltar={() => router.back()} />
+      <Cabecalho titulo={TITULOS[grupo]} aoVoltar={voltar} />
       {notificacoes.isLoading ? (
         <Carregando />
       ) : (

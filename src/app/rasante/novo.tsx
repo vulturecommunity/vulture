@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Botao, Cabecalho, Icone, Texto } from '@/components/ui';
 import { DURACAO_MAXIMA_RASANTE_SEGUNDOS, VALIDADE_RASANTE_HORAS } from '@/constants/rasantes';
 import { usePublicarRasante } from '@/hooks/useRasantes';
+import { useFecharFluxo, useVoltar } from '@/hooks/useVoltar';
 import { useCriacaoStore } from '@/stores/criacaoStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios } from '@/theme';
@@ -32,6 +33,8 @@ function PreviewDoRasante({ uri }: { uri: string }) {
 /** Pré-visualização do rasante gravado e publicação (some sozinho em 24 h). */
 export default function TelaNovoRasante() {
   const router = useRouter();
+  const voltar = useVoltar('/(tabs)');
+  const fecharFluxo = useFecharFluxo('/mensagens');
   const insets = useSafeAreaInsets();
   const midia = useCriacaoStore((s) => s.midia);
   const limpar = useCriacaoStore((s) => s.limpar);
@@ -71,8 +74,7 @@ export default function TelaNovoRasante() {
       });
       limpar();
       mostrarAviso('Rasante no ar! Some em 24 h.', 'sucesso');
-      router.dismissAll();
-      router.replace('/mensagens');
+      fecharFluxo();
     } catch (erro) {
       setProgresso(null);
       mostrarAviso(erro instanceof Error ? erro.message : 'Não foi possível publicar.', 'erro');
@@ -87,7 +89,7 @@ export default function TelaNovoRasante() {
           titulo="Novo rasante"
           aoVoltar={() => {
             limpar();
-            router.back();
+            voltar();
           }}
           rotuloVoltar="Refazer"
           sobreposto

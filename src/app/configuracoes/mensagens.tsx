@@ -1,8 +1,8 @@
-import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Cabecalho, Carregando, Erro, Icone, Texto, type NomeDeIcone } from '@/components/ui';
+import { useVoltar } from '@/hooks/useVoltar';
 import {
   useAtualizarPreferenciasDeMensagens,
   usePreferenciasDeMensagens,
@@ -33,7 +33,7 @@ const OPCOES: {
 
 /** Privacidade das mensagens diretas: quem pode me chamar no privado. */
 export default function TelaConfiguracoesDeMensagens() {
-  const router = useRouter();
+  const voltar = useVoltar('/(tabs)/perfil');
   const insets = useSafeAreaInsets();
   const mostrarAviso = useUiStore((s) => s.mostrarAviso);
   const preferencias = usePreferenciasDeMensagens();
@@ -54,11 +54,7 @@ export default function TelaConfiguracoesDeMensagens() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <Cabecalho
-        titulo="Mensagens"
-        subtitulo="Quem pode te chamar no privado"
-        aoVoltar={() => router.back()}
-      />
+      <Cabecalho titulo="Mensagens" subtitulo="Quem pode te chamar no privado" aoVoltar={voltar} />
       {preferencias.isLoading ? (
         <Carregando />
       ) : preferencias.isError ? (

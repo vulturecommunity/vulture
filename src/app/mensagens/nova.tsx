@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Cabecalho, Carregando, EstadoVazio, Icone, Texto } from '@/components/ui';
 import { useAbrirConversa, useContatos } from '@/hooks/useMensagens';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios, tipografia } from '@/theme';
 import type { Usuario } from '@/types';
@@ -12,6 +13,7 @@ import type { Usuario } from '@/types';
 /** Escolher com quem conversar: quem eu sigo e quem me segue, com busca. */
 export default function TelaNovaConversa() {
   const router = useRouter();
+  const voltar = useVoltar('/mensagens');
   const insets = useSafeAreaInsets();
   const mostrarAviso = useUiStore((s) => s.mostrarAviso);
   const contatos = useContatos();
@@ -44,7 +46,7 @@ export default function TelaNovaConversa() {
       <Cabecalho
         titulo="Nova conversa"
         subtitulo="Quem você segue e quem te segue"
-        aoVoltar={() => router.back()}
+        aoVoltar={voltar}
       />
       <View style={estilos.busca}>
         <Icone nome="buscar" tamanho={18} cor={cores.textoTerciario} />

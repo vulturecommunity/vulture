@@ -17,6 +17,7 @@ import { ICONE_INTERESSE } from '@/constants/interesses';
 import { useBuscaDeUsuarios, useValorAtrasado } from '@/hooks/useExplorar';
 import { useSeguir } from '@/hooks/useInteracoes';
 import { useSugestoesDeTorcedores } from '@/hooks/useSeguidores';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios, tipografia } from '@/theme';
@@ -29,6 +30,7 @@ import { formatarContador } from '@/utils/formatadores';
  */
 export default function TelaEncontrarTorcedores() {
   const router = useRouter();
+  const voltar = useVoltar('/(tabs)/perfil');
   const insets = useSafeAreaInsets();
   const eu = useAuthStore((s) => s.sessao?.usuario ?? null);
   const mostrarAviso = useUiStore((s) => s.mostrarAviso);
@@ -66,7 +68,7 @@ export default function TelaEncontrarTorcedores() {
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <Cabecalho titulo="Adicionar torcedores" aoVoltar={() => router.back()} />
+      <Cabecalho titulo="Adicionar torcedores" aoVoltar={voltar} />
       <ScrollView contentContainerStyle={estilos.conteudo} keyboardShouldPersistTaps="handled">
         <View style={estilos.busca}>
           <Icone nome="buscar" tamanho={18} cor={cores.textoTerciario} />

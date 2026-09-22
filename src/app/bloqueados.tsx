@@ -1,21 +1,21 @@
-import { useRouter } from 'expo-router';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Botao, Cabecalho, Carregando, EstadoVazio, Texto } from '@/components/ui';
 import { useBloqueados, useDesbloquear } from '@/hooks/usePerfil';
+import { useVoltar } from '@/hooks/useVoltar';
 import { cores, espacos, raios } from '@/theme';
 
 /** Lista de contas bloqueadas, com opção de desbloquear. */
 export default function TelaBloqueados() {
-  const router = useRouter();
+  const voltar = useVoltar('/(tabs)/perfil');
   const insets = useSafeAreaInsets();
   const bloqueados = useBloqueados();
   const desbloquear = useDesbloquear();
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
-      <Cabecalho titulo="Contas bloqueadas" aoVoltar={() => router.back()} />
+      <Cabecalho titulo="Contas bloqueadas" aoVoltar={voltar} />
       {bloqueados.isLoading ? (
         <Carregando />
       ) : (

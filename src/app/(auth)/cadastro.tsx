@@ -1,15 +1,15 @@
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Botao, Cabecalho, Input, Listras, Texto } from '@/components/ui';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos } from '@/theme';
 import { emailValido, normalizarApelido, senhaValida } from '@/utils/validacao';
 
 export default function TelaCadastro() {
-  const router = useRouter();
+  const voltar = useVoltar('/(auth)/login');
   const insets = useSafeAreaInsets();
   const cadastrar = useAuthStore((s) => s.cadastrar);
   const ocupado = useAuthStore((s) => s.ocupado);
@@ -45,7 +45,7 @@ export default function TelaCadastro() {
     <KeyboardAvoidingView
       style={[estilos.tela, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Cabecalho titulo="Criar conta" aoVoltar={() => router.back()} />
+      <Cabecalho titulo="Criar conta" aoVoltar={voltar} />
       <ScrollView
         contentContainerStyle={[estilos.conteudo, { paddingBottom: insets.bottom + espacos.xl }]}
         keyboardShouldPersistTaps="handled">

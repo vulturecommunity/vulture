@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SalaDaLive } from '@/components/lives/SalaDaLive';
 import { Botao, Icone, Input, Listras, Texto } from '@/components/ui';
 import { useCriarLive, useEncerrarLive } from '@/hooks/useLive';
+import { useVoltar } from '@/hooks/useVoltar';
 import { modoDeLive, motivoDoModoSimulado } from '@/services/live';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -15,7 +16,7 @@ import type { Live } from '@/types';
 
 /** Iniciar transmissão: título + preview da câmera → "Entrar ao vivo" → sala com chat → encerrar. */
 export default function TelaIniciarLive() {
-  const router = useRouter();
+  const voltar = useVoltar('/(tabs)/lives');
   const insets = useSafeAreaInsets();
   const definirFoco = usePlayerStore((s) => s.definirFoco);
   const mostrarAviso = useUiStore((s) => s.mostrarAviso);
@@ -57,7 +58,7 @@ export default function TelaIniciarLive() {
     try {
       await encerrar.mutateAsync(live.id);
       mostrarAviso('Live encerrada. Valeu, nação!', 'sucesso');
-      router.back();
+      voltar();
     } catch (e) {
       mostrarAviso(e instanceof Error ? e.message : 'Falha ao encerrar', 'erro');
     }
@@ -93,7 +94,7 @@ export default function TelaIniciarLive() {
 
       <View style={[estilos.topo, { paddingTop: insets.top + espacos.sm }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={voltar}
           hitSlop={12}
           accessibilityLabel="Fechar"
           style={estilos.fechar}

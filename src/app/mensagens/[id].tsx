@@ -15,6 +15,7 @@ import { BalaoDeMensagem } from '@/components/mensagens/BalaoDeMensagem';
 import { Avatar, Carregando, Erro, Icone, Texto } from '@/components/ui';
 import { TAMANHO_MAXIMO_MENSAGEM } from '@/constants/rasantes';
 import { useConversa, useEnviarMensagem, useMensagens } from '@/hooks/useMensagens';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios, tipografia } from '@/theme';
@@ -42,6 +43,7 @@ function montarItens(mensagens: Mensagem[]): Item[] {
 export default function TelaConversa() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const voltar = useVoltar('/mensagens');
   const insets = useSafeAreaInsets();
   const meuId = useAuthStore((s) => s.sessao?.usuario.id ?? '');
   const abrirDenuncia = useUiStore((s) => s.abrirDenuncia);
@@ -69,7 +71,7 @@ export default function TelaConversa() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={estilos.cabecalho}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={voltar}
           hitSlop={10}
           accessibilityLabel="Voltar"
           style={estilos.botaoVoltar}>

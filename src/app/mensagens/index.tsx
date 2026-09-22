@@ -9,6 +9,7 @@ import { FileiraDeRasantes } from '@/components/rasantes/FileiraDeRasantes';
 import { Cabecalho, Carregando, EstadoVazio, Icone, Texto, TituloDeSecao } from '@/components/ui';
 import { useConversas } from '@/hooks/useMensagens';
 import { useNotificacoes } from '@/hooks/useNotificacoes';
+import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos } from '@/theme';
 import type { Notificacao } from '@/types';
@@ -21,6 +22,7 @@ const TIPOS_ATIVIDADE: Notificacao['tipo'][] = ['curtida', 'comentario', 'live']
  */
 export default function TelaMensagens() {
   const router = useRouter();
+  const voltar = useVoltar('/(tabs)');
   const insets = useSafeAreaInsets();
   const meuId = useAuthStore((s) => s.sessao?.usuario.id ?? '');
   const conversas = useConversas();
@@ -46,7 +48,7 @@ export default function TelaMensagens() {
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
       <Cabecalho
         titulo="Mensagens"
-        aoVoltar={() => router.back()}
+        aoVoltar={voltar}
         direita={
           <>
             <Pressable
