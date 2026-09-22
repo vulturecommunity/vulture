@@ -23,10 +23,11 @@ export default function LayoutAbas() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: cores.fundo,
-          borderTopWidth: 2,
-          borderTopColor: cores.vermelho,
+          borderTopWidth: 0.5,
+          borderTopColor: cores.borda,
           height: 64,
           paddingTop: 6,
+          paddingHorizontal: 12,
         },
         tabBarActiveTintColor: cores.vermelhoVivo,
         tabBarInactiveTintColor: cores.textoTerciario,
