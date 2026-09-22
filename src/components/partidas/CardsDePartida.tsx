@@ -89,8 +89,8 @@ export function CardsDePartida() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={estilos.lista}>
-          {data.proximo ? <ChipDePartida titulo="Próximo jogo" partida={data.proximo} /> : null}
           {data.ultimo ? <ChipDePartida titulo="Último resultado" partida={data.ultimo} /> : null}
+          {data.proximo ? <ChipDePartida titulo="Próximo jogo" partida={data.proximo} /> : null}
         </ScrollView>
       ) : (
         <Pressable onPress={alternar} style={estilos.recolhido} testID="placar-recolhido">
