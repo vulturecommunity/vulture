@@ -434,7 +434,7 @@ $$;
 -- Registra o token deste aparelho para o usuário logado. Se o token já era de outra conta
 -- (troca de usuário no mesmo celular), passa a ser do usuário atual.
 create or replace function public.registrar_token_push(p_token text, p_plataforma text default 'android')
-returns void language plpgsql security definer set search_path = public as $
+returns void language plpgsql security definer set search_path = public as $$
 begin
   if auth.uid() is null then
     raise exception 'não autenticado';
@@ -445,7 +445,7 @@ begin
   on conflict (token) do update
     set usuario_id = excluded.usuario_id, plataforma = excluded.plataforma, atualizado_em = now();
 end;
-$;
+$$;
 
 create or replace function public.buscar_hashtags(p_termo text)
 returns table (tag text, total bigint)
