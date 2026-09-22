@@ -49,3 +49,8 @@ example
 # testes
 coverage/
 supabase/.temp/
+
+# chave de conta de serviço do Firebase (push no Android) — nunca commitar
+# google-services.json em si é público (só identificadores) e pode ficar no Git
+*firebase-adminsdk*.json
+*service-account*.json

@@ -86,6 +86,37 @@ Quando alguém que o usuário segue inicia uma live, os seguidores recebem uma n
 celular; tocar nela abre a transmissão. O envio é feito pela Edge Function `notificar-live`
 (o app a chama logo depois de criar a live) usando o **Expo Push Service** (gratuito).
 
+> **Sem o passo 0 abaixo, a notificação em tela (sino do app) continua funcionando, mas o
+> aviso do sistema (banner/som fora do app) não chega** — o Android exige um projeto Firebase
+> próprio para push remoto. É o único passo trabalhoso aqui; o resto é rápido.
+
+### 0. Criar um projeto Firebase e conectar ao EAS (obrigatório para o banner do sistema)
+
+1. Abra **https://console.firebase.google.com** → **Adicionar projeto** → dê um nome (ex.:
+   `vulture`) → pode desligar o Google Analytics → **Criar projeto**.
+2. Dentro do projeto, clique no ícone **Android** (⚙️ → *Adicionar app* → Android) e cadastre o
+   pacote exatamente como está em `app.json` → `expo.android.package`: **`app.vulture.torcida`**.
+   Não precisa preencher apelido nem SHA-1. Clique **Registrar app**.
+3. Baixe o arquivo **`google-services.json`** que a tela oferece e coloque-o na **raiz do
+   projeto** (mesma pasta do `app.json`). Pode pular o resto do assistente do Firebase (os
+   passos de adicionar o SDK manualmente não se aplicam ao Expo).
+4. No painel do Firebase, vá em **⚙️ Configurações do projeto → Contas de serviço** → aba
+   **Firebase Admin SDK** → **Gerar nova chave privada**. Baixa um `.json` — **não** o coloque
+   no Git (é secreto).
+5. Envie essa chave para o EAS:
+   ```bash
+   npx eas-cli credentials
+   ```
+   Escolha **Android** → o perfil do app → **Push Notifications: Manage your FCM V1 key** →
+   **Upload a new FCM V1 key** → aponte para o arquivo baixado no passo 4.
+6. Diga que o arquivo existe para eu ligar o `googleServicesFile` no `app.json` (ou faça você
+   mesmo: adicione `"googleServicesFile": "./google-services.json"` dentro de `expo.android`).
+   **Sem essa linha o build ignora o arquivo e o push continua sem funcionar.**
+7. Gere um **novo build** (`npx eas-cli build -p android --profile preview`) — sempre necessário
+   depois de mudar configuração nativa como essa.
+
+### Backend
+
 1. Rode o `supabase/schema.sql` de novo (ele cria a tabela `push_tokens` e o tipo de
    notificação `live`; é idempotente).
 2. Publique a função (mesmos passos do `SETUP_LIVEKIT.md`, seção 2, para `login` e `link`):
@@ -96,15 +127,15 @@ celular; tocar nela abre a transmissão. O envio é feito pela Edge Function `no
    `SUPABASE_SERVICE_ROLE_KEY`) — não precisa cadastrar segredos.
 3. **Requisitos no aparelho:** push só funciona no **APK/development build** (o Expo Go no
    Android não recebe push desde o SDK 53). O app pede permissão de notificação no primeiro
-   login e registra o token do aparelho em `push_tokens`.
+   login e registra o token do aparelho em `push_tokens` — isso só dá certo depois do passo 0.
 4. Teste com dois celulares: A segue B → B toca **Iniciar live** → A recebe
    "🔴 @b está ao vivo · título · Toque para assistir" → tocar abre a live.
 5. (Opcional) Para volumes maiores, crie um _Access Token_ em https://expo.dev/settings/access-tokens
    e cadastre `npx supabase secrets set EXPO_ACCESS_TOKEN=...` — a função passa a autenticar no
-   Expo Push Service (limites maiores).
+   Expo Push Service (limites maiores). Isso não substitui o passo 0.
 
 No **modo demo** (driver `mock`) não há servidor: ao iniciar uma live, a notificação aparece no
-próprio aparelho, só para demonstrar o aviso e o toque que abre a live.
+próprio aparelho, só para demonstrar o aviso e o toque que abre a live (não depende do Firebase).
 
 ## 6. Problemas comuns
 
