@@ -133,7 +133,7 @@ const estilos = StyleSheet.create({
     justifyContent: 'center',
   },
   reacaoPressionada: { borderColor: cores.vermelho, backgroundColor: cores.vermelhoSuave },
-  emoji: { fontSize: 22 },
+  emoji: { fontSize: 22, lineHeight: 26 },
   caixa: {
     flexDirection: 'row',
     alignItems: 'center',

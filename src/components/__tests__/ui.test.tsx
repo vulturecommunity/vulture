@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { Avatar, Botao, Carregando, Erro, EstadoVazio, Input, Sheet, Texto } from '@/components/ui';
 import { Aviso } from '@/components/ui/Aviso';
@@ -25,6 +25,26 @@ describe('componentes base', () => {
     expect(screen.getByText('MS')).toBeTruthy();
     await render(<Avatar nome="Ana" url="https://exemplo.com/a.jpg" />);
     expect(screen.getByLabelText('Foto de Ana')).toBeTruthy();
+  });
+
+  it('as iniciais crescem com o avatar sem serem cortadas', async () => {
+    // a variante do tema traz lineHeight fixo (21); num avatar de 88px a fonte passa
+    // de 30px e o texto aparecia cortado no topo, como no cabeçalho do perfil
+    const alturaDeLinha = async (tamanho: number) => {
+      const tela = await render(<Avatar nome="Canal Bute" tamanho={tamanho} borda />);
+      return StyleSheet.flatten(tela.getByText('CB').props.style) as {
+        fontSize: number;
+        lineHeight: number;
+      };
+    };
+
+    const grande = await alturaDeLinha(88);
+    expect(grande.fontSize).toBeGreaterThan(21);
+    expect(grande.lineHeight).toBeGreaterThanOrEqual(grande.fontSize);
+
+    const pequeno = await alturaDeLinha(34);
+    expect(pequeno.lineHeight).toBeGreaterThanOrEqual(pequeno.fontSize);
+    expect(pequeno.fontSize).toBeLessThan(grande.fontSize);
   });
 
   it('Input exibe rótulo, prefixo, erro e ajuda', async () => {

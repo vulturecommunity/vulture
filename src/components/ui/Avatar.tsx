@@ -27,6 +27,9 @@ export function Avatar({ url, nome, tamanho = 40, borda = false }: AvatarProps) 
   const anel = borda ? Math.max(2, Math.round(tamanho / 28)) : 0;
   const interno = tamanho - anel * 2 - (borda ? 4 : 0);
   const estiloInterno = { width: interno, height: interno, borderRadius: interno / 2 };
+  // a altura de linha precisa acompanhar a fonte: a do tema é fixa (21) e cortava
+  // as iniciais nos avatares grandes, como o do perfil
+  const fonte = Math.round(interno * 0.38);
 
   const miolo = url ? (
     <Image
@@ -41,7 +44,15 @@ export function Avatar({ url, nome, tamanho = 40, borda = false }: AvatarProps) 
     <View
       accessibilityLabel={'Avatar de ' + nome}
       style={[estiloInterno, estilos.centro, { backgroundColor: corPeloNome(nome) }]}>
-      <Texto variante="corpoForte" style={{ fontSize: interno * 0.38, color: cores.branco }}>
+      <Texto
+        variante="corpoForte"
+        style={{
+          fontSize: fonte,
+          lineHeight: Math.round(fonte * 1.2),
+          color: cores.branco,
+          textAlign: 'center',
+          includeFontPadding: false,
+        }}>
         {iniciais(nome)}
       </Texto>
     </View>
