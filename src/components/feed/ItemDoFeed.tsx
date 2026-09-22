@@ -124,7 +124,7 @@ function ItemDoFeedBase({
       <GestureDetector gesture={gestos}>
         <View style={StyleSheet.absoluteFill}>
           {video.tipo === 'foto' ? (
-            <PostDeFoto video={video} ativo={tocando} />
+            <PostDeFoto video={video} />
           ) : ativo || proximo ? (
             <PlayerDeVideo video={video} tocando={tocando} pausado={pausado} mudo={mudo} />
           ) : (
@@ -159,7 +159,11 @@ function ItemDoFeedBase({
       <View
         style={[
           estilos.overlay,
-          { paddingBottom: recuoInferior + GEOMETRIA_BARRA.espacoReservado },
+          {
+            paddingBottom:
+              recuoInferior +
+              (video.tipo === 'video' ? GEOMETRIA_BARRA.espacoReservado : espacos.lg),
+          },
         ]}
         pointerEvents="box-none">
         <Pressable

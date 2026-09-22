@@ -48,11 +48,14 @@ describe('ItemDoFeed', () => {
     expect(screen.queryByTestId('player-v-teste')).toBeNull();
   });
 
-  it('foto usa o post estático com barra de 5 segundos', async () => {
+  it('foto é só a imagem, sem barra de progresso', async () => {
     const foto = videoDeTeste({ id: 'f-1', tipo: 'foto', url: 'file:///foto.jpg' });
     await renderizar(<ItemDoFeed video={foto} altura={800} ativo proximo={false} meuId={null} />);
     expect(screen.getByTestId('foto-f-1')).toBeTruthy();
     expect(screen.queryByTestId('player-f-1')).toBeNull();
+    // nada corre numa foto: barra ali só pareceria carregamento
+    expect(screen.queryByTestId('barra-progresso')).toBeNull();
+    expect(screen.queryByTestId('marcador-progresso')).toBeNull();
   });
 
   it('abre os comentários e o painel "mais" pelo uiStore', async () => {
