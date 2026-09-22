@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
-import { Avatar, Icone, Texto } from '@/components/ui';
+import { Avatar, Degrade, Icone, Texto } from '@/components/ui';
 import { ICONE_INTERESSE } from '@/constants/interesses';
 import { useCompartilhar, useCurtir, useSalvar } from '@/hooks/useInteracoes';
 import { dataService } from '@/services/data';
@@ -61,6 +61,9 @@ function ItemDoFeedBase({
   }
 
   const tocando = ativo && feedEmFoco;
+  // o nome só entra quando diz algo além do apelido
+  const mostrarNome =
+    video.autor.nome.trim().toLowerCase() !== video.autor.apelido.trim().toLowerCase();
 
   // registra a visualização depois de 2s com o item ativo
   useEffect(() => {
@@ -140,71 +143,73 @@ function ItemDoFeedBase({
         </View>
       </GestureDetector>
 
+      {/* véu para o texto ler bem sobre qualquer vídeo */}
+      <Degrade altura={280} intensidade={0.82} />
+
+      {video.tipo === 'video' ? (
+        <Pressable
+          onPress={alternarMudo}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={mudo ? 'Ativar som' : 'Silenciar'}
+          testID="botao-mudo"
+          style={estilos.botaoMudo}>
+          <Icone nome={mudo ? 'somDesligado' : 'somLigado'} tamanho={18} cor={cores.branco} />
+        </Pressable>
+      ) : null}
+
       <View
-        style={[estilos.overlay, { paddingBottom: recuoInferior + espacos.md }]}
+        style={[estilos.overlay, { paddingBottom: recuoInferior + espacos.xl }]}
         pointerEvents="box-none">
-        {video.tipo === 'video' ? (
-          <Pressable
-            onPress={alternarMudo}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={mudo ? 'Ativar som' : 'Silenciar'}
-            testID="botao-mudo"
-            style={estilos.botaoMudo}>
-            <Icone nome={mudo ? 'somDesligado' : 'somLigado'} tamanho={18} cor={cores.branco} />
-          </Pressable>
-        ) : null}
-        <View style={estilos.painel}>
-          <View style={estilos.linhaAutor}>
-            <Pressable
-              onPress={abrirPerfil}
-              accessibilityRole="button"
-              accessibilityLabel={`Perfil de @${video.autor.apelido}`}
-              style={estilos.autor}>
-              <Avatar url={video.autor.avatarUrl} nome={video.autor.nome} tamanho={40} borda />
-              <View style={estilos.nomes}>
-                <Texto variante="corpoForte" numberOfLines={1}>
-                  @{video.autor.apelido}
-                </Texto>
-                <Texto variante="legenda" cor={cores.textoSecundario} numberOfLines={1}>
-                  {video.autor.nome}
-                </Texto>
-              </View>
-            </Pressable>
-            <View style={estilos.categoria}>
-              <Icone
-                nome={ICONE_INTERESSE[video.categoria]}
-                tamanho={12}
-                cor={cores.vermelhoVivo}
-              />
-              <Texto variante="rotulo" cor={cores.textoSecundario}>
-                {video.categoria}
-              </Texto>
-            </View>
-          </View>
-
-          {video.legenda ? <LegendaComHashtags texto={video.legenda} numberOfLines={3} /> : null}
-
-          <View style={estilos.linhaAudio}>
-            <Icone nome="microfone" tamanho={13} cor={cores.textoSecundario} />
+        <Pressable
+          onPress={abrirPerfil}
+          accessibilityRole="button"
+          accessibilityLabel={`Perfil de @${video.autor.apelido}`}
+          style={estilos.autor}>
+          <Avatar url={video.autor.avatarUrl} nome={video.autor.nome} tamanho={34} borda />
+          <Texto variante="corpoForte" numberOfLines={1} style={estilos.sombra}>
+            @{video.autor.apelido}
+          </Texto>
+          {mostrarNome ? (
             <Texto
               variante="pequeno"
               cor={cores.textoSecundario}
               numberOfLines={1}
-              style={estilos.audio}>
-              {video.audio || `Som original - ${video.autor.apelido}`}
+              style={[estilos.sombra, estilos.nome]}>
+              {video.autor.nome}
+            </Texto>
+          ) : null}
+        </Pressable>
+
+        {video.legenda ? (
+          <LegendaComHashtags texto={video.legenda} numberOfLines={2} style={estilos.sombra} />
+        ) : null}
+
+        <View style={estilos.linhaMeta}>
+          <Icone nome="microfone" tamanho={12} cor={cores.textoSecundario} />
+          <Texto
+            variante="legenda"
+            cor={cores.textoSecundario}
+            numberOfLines={1}
+            style={[estilos.audio, estilos.sombra]}>
+            {video.audio || `Som original - ${video.autor.apelido}`}
+          </Texto>
+          <View style={estilos.categoria}>
+            <Icone nome={ICONE_INTERESSE[video.categoria]} tamanho={10} cor={cores.vermelhoVivo} />
+            <Texto variante="legenda" cor={cores.textoSecundario}>
+              {video.categoria}
             </Texto>
           </View>
-
-          <BarraDeAcoes
-            video={video}
-            aoCurtir={() => alternarCurtida(video)}
-            aoComentar={() => abrirComentarios(video.id)}
-            aoSalvar={() => alternarSalvo(video)}
-            aoCompartilhar={() => compartilhar(video)}
-            aoMais={abrirMais}
-          />
         </View>
+
+        <BarraDeAcoes
+          video={video}
+          aoCurtir={() => alternarCurtida(video)}
+          aoComentar={() => abrirComentarios(video.id)}
+          aoSalvar={() => alternarSalvo(video)}
+          aoCompartilhar={() => compartilhar(video)}
+          aoMais={abrirMais}
+        />
       </View>
     </View>
   );
@@ -222,36 +227,30 @@ const estilos = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: espacos.md,
-  },
-  painel: {
-    backgroundColor: cores.vidro,
-    borderRadius: raios.lg,
-    borderWidth: 1,
-    borderColor: cores.bordaClara,
-    padding: espacos.md,
+    paddingHorizontal: espacos.lg,
     gap: espacos.sm,
   },
-  linhaAutor: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
-  autor: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm, flex: 1 },
-  nomes: { flexShrink: 1 },
+  sombra: { textShadowColor: cores.sombra, textShadowRadius: 8 },
+  autor: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
+  nome: { flexShrink: 1 },
+  linhaMeta: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs + 2 },
+  audio: { flex: 1 },
   categoria: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacos.xs,
     paddingHorizontal: espacos.sm,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: raios.sm,
-    backgroundColor: cores.vidroClaro,
+    backgroundColor: cores.vidro,
   },
-  linhaAudio: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs },
-  audio: { flex: 1 },
   botaoMudo: {
-    alignSelf: 'flex-end',
+    position: 'absolute',
+    top: espacos.md,
+    right: espacos.lg,
     width: 36,
     height: 36,
     borderRadius: 18,
-    marginBottom: espacos.sm,
     backgroundColor: cores.vidro,
     borderWidth: 1,
     borderColor: cores.bordaClara,

@@ -2,6 +2,7 @@ export { Avatar } from './Avatar';
 export { Botao } from './Botao';
 export { Cabecalho } from './Cabecalho';
 export { Carregando } from './Carregando';
+export { Degrade } from './Degrade';
 export { Erro } from './Erro';
 export { EstadoVazio } from './EstadoVazio';
 export { Icone, type NomeDeIcone } from './Icone';

@@ -7,6 +7,7 @@ import { CardsDePartida } from '@/components/partidas/CardsDePartida';
 import { CabecalhoDePerfil } from '@/components/perfil/CabecalhoDePerfil';
 import { GradeDeVideos } from '@/components/perfil/GradeDeVideos';
 import { CANAIS } from '@/constants/interesses';
+import { useUiStore } from '@/stores/uiStore';
 import type { Perfil } from '@/types';
 
 import { criarServicoDeTeste, renderizar, videoDeTeste } from './utilitarios-de-teste';
@@ -39,11 +40,25 @@ describe('camada temática e perfil', () => {
     });
   });
 
-  it('CardsDePartida mostra próximo jogo e último resultado', async () => {
+  it('CardsDePartida resume as partidas em chips de uma linha', async () => {
+    useUiStore.setState({ placarVisivel: true });
     await renderizar(<CardsDePartida />);
     await waitFor(() => expect(screen.getByTestId('card-Próximo jogo')).toBeTruthy());
     expect(screen.getByTestId('card-Último resultado')).toBeTruthy();
-    expect(screen.getAllByText(/Flamengo/).length).toBeGreaterThan(0);
+    // times abreviados para a faixa caber numa linha
+    expect(screen.getAllByText('FLA').length).toBe(2);
+    expect(screen.queryByText(/Flamengo/)).toBeNull();
+  });
+
+  it('a faixa de placar pode ser recolhida para liberar o feed', async () => {
+    useUiStore.setState({ placarVisivel: true });
+    await renderizar(<CardsDePartida />);
+    await waitFor(() => expect(screen.getByTestId('card-Próximo jogo')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('botao-recolher-placar'));
+    expect(screen.queryByTestId('card-Próximo jogo')).toBeNull();
+    expect(screen.getByTestId('placar-recolhido')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('botao-recolher-placar'));
+    expect(screen.getByTestId('card-Próximo jogo')).toBeTruthy();
   });
 
   it('RankingSemanal lista os melhores torcedores da semana', async () => {

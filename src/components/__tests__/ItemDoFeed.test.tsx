@@ -22,6 +22,24 @@ describe('ItemDoFeed', () => {
     expect(screen.getByTestId('player-v-teste')).toBeTruthy();
   });
 
+  it('esconde o nome quando ele só repete o apelido (menos poluição)', async () => {
+    const igual = videoDeTeste({
+      autor: { id: 'u-1', apelido: 'lucao', nome: 'LUCAO', avatarUrl: null },
+    });
+    await renderizar(<ItemDoFeed video={igual} altura={800} ativo proximo={false} meuId={null} />);
+    expect(screen.getByText('@lucao')).toBeTruthy();
+    expect(screen.queryByText('LUCAO')).toBeNull();
+
+    const diferente = videoDeTeste({
+      id: 'v-2',
+      autor: { id: 'u-2', apelido: 'gavea.insider', nome: 'Gávea Insider', avatarUrl: null },
+    });
+    await renderizar(
+      <ItemDoFeed video={diferente} altura={800} ativo proximo={false} meuId={null} />,
+    );
+    expect(screen.getByText('Gávea Insider')).toBeTruthy();
+  });
+
   it('só monta o player para o item ativo ou vizinho', async () => {
     const video = videoDeTeste();
     await renderizar(

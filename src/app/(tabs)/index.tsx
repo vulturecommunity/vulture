@@ -18,6 +18,10 @@ const ABAS: { id: AbaDoFeed; rotulo: string }[] = [
   { id: 'seguindo', rotulo: 'Seguindo' },
 ];
 
+/**
+ * Feed principal. O cabeçalho (marca, abas, mensagens e placar) fica em fluxo
+ * normal e os posts começam logo abaixo dele — nada de controles por cima do vídeo.
+ */
 export default function TelaFeed() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -44,42 +48,11 @@ export default function TelaFeed() {
 
   return (
     <View style={estilos.tela}>
-      <FeedVertical
-        listaId={`feed-${aba}`}
-        videos={feed.videos}
-        meuId={meuId}
-        carregando={feed.isLoading}
-        atualizando={feed.isRefetching && !feed.isFetchingNextPage}
-        aoAtualizar={() => feed.refetch()}
-        aoChegarNoFim={aoChegarNoFim}
-        temMais={feed.hasNextPage}
-        vazio={
-          aba === 'seguindo'
-            ? {
-                titulo: 'Você ainda não segue ninguém',
-                descricao: 'Siga torcedores no Explorar para ver os vídeos deles aqui.',
-                acao: {
-                  titulo: 'Ir para o Explorar',
-                  aoPressionar: () => router.push('/(tabs)/explorar'),
-                },
-              }
-            : {
-                titulo: 'Nenhum vídeo por aqui',
-                descricao: 'Seja o primeiro a publicar!',
-                acao: { titulo: 'Gravar', aoPressionar: () => router.push('/criar/camera') },
-              }
-        }
-      />
-
-      <View
-        style={[estilos.topo, { paddingTop: insets.top + espacos.sm }]}
-        pointerEvents="box-none">
-        <View style={estilos.linhaMarca} pointerEvents="box-none">
+      <View style={[estilos.cabecalho, { paddingTop: insets.top + espacos.xs }]}>
+        <View style={estilos.linhaMarca}>
           <View style={estilos.marca}>
             <Listras altura={14} faixas={6} style={estilos.marcaListras} />
-            <Texto variante="marca" style={estilos.sombra}>
-              VULTURE
-            </Texto>
+            <Texto variante="marca">VULTURE</Texto>
           </View>
           <View style={estilos.seletor}>
             {ABAS.map((item) => {
@@ -108,7 +81,7 @@ export default function TelaFeed() {
             hitSlop={8}
             accessibilityLabel="Mensagens"
             testID="botao-mensagens">
-            <Icone nome="mensagens" tamanho={21} cor={cores.branco} />
+            <Icone nome="mensagens" tamanho={21} cor={cores.texto} />
             {naoLidas > 0 ? (
               <View style={estilos.badge}>
                 <Texto variante="legenda" style={estilos.badgeTexto}>
@@ -120,13 +93,42 @@ export default function TelaFeed() {
         </View>
         <CardsDePartida />
       </View>
+
+      <View style={estilos.palco}>
+        <FeedVertical
+          listaId={`feed-${aba}`}
+          videos={feed.videos}
+          meuId={meuId}
+          carregando={feed.isLoading}
+          atualizando={feed.isRefetching && !feed.isFetchingNextPage}
+          aoAtualizar={() => feed.refetch()}
+          aoChegarNoFim={aoChegarNoFim}
+          temMais={feed.hasNextPage}
+          vazio={
+            aba === 'seguindo'
+              ? {
+                  titulo: 'Você ainda não segue ninguém',
+                  descricao: 'Siga torcedores no Explorar para ver os vídeos deles aqui.',
+                  acao: {
+                    titulo: 'Ir para o Explorar',
+                    aoPressionar: () => router.push('/(tabs)/explorar'),
+                  },
+                }
+              : {
+                  titulo: 'Nenhum vídeo por aqui',
+                  descricao: 'Seja o primeiro a publicar!',
+                  acao: { titulo: 'Gravar', aoPressionar: () => router.push('/criar/camera') },
+                }
+          }
+        />
+      </View>
     </View>
   );
 }
 
 const estilos = StyleSheet.create({
-  tela: { flex: 1, backgroundColor: cores.pretoPuro },
-  topo: { position: 'absolute', top: 0, left: 0, right: 0, gap: espacos.sm },
+  tela: { flex: 1, backgroundColor: cores.fundo },
+  cabecalho: { backgroundColor: cores.fundo, paddingBottom: espacos.sm, gap: espacos.sm },
   linhaMarca: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -135,7 +137,6 @@ const estilos = StyleSheet.create({
   },
   marca: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs + 2 },
   marcaListras: { width: 18 },
-  sombra: { textShadowColor: cores.sombra, textShadowRadius: 6 },
   seletor: {
     flex: 1,
     flexDirection: 'row',
@@ -143,17 +144,12 @@ const estilos = StyleSheet.create({
     marginLeft: espacos.xs,
     padding: 3,
     borderRadius: raios.redondo,
-    backgroundColor: cores.vidro,
+    backgroundColor: cores.fundoElevado,
     borderWidth: 1,
-    borderColor: cores.bordaClara,
-    maxWidth: 210,
+    borderColor: cores.borda,
+    maxWidth: 200,
   },
-  opcao: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderRadius: raios.redondo,
-  },
+  opcao: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: raios.redondo },
   opcaoAtiva: { backgroundColor: cores.vermelho },
   opcaoTextoAtivo: { fontWeight: '700' },
   mensagens: {
@@ -161,9 +157,9 @@ const estilos = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: cores.vidro,
+    backgroundColor: cores.fundoElevado,
     borderWidth: 1,
-    borderColor: cores.bordaClara,
+    borderColor: cores.borda,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -177,9 +173,17 @@ const estilos = StyleSheet.create({
     paddingHorizontal: 4,
     backgroundColor: cores.vermelhoVivo,
     borderWidth: 2,
-    borderColor: cores.pretoPuro,
+    borderColor: cores.fundo,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeTexto: { fontSize: 10, lineHeight: 12 },
+  // os posts vivem aqui, abaixo do cabeçalho; o canto arredondado separa as duas áreas
+  palco: {
+    flex: 1,
+    overflow: 'hidden',
+    borderTopLeftRadius: raios.lg,
+    borderTopRightRadius: raios.lg,
+    backgroundColor: cores.pretoPuro,
+  },
 });

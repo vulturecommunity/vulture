@@ -1,4 +1,5 @@
 import {
+  abreviarTime,
   formatarContador,
   formatarData,
   formatarDataHora,
@@ -89,5 +90,18 @@ describe('formatarQuandoSeguiu', () => {
 
   it('formatarHora mostra hh:mm', () => {
     expect(formatarHora('2026-09-22T08:05:00')).toBe('08:05');
+  });
+});
+
+describe('abreviarTime', () => {
+  it('reduz o nome do time para 3 letras na faixa de placar', () => {
+    expect(abreviarTime('Flamengo')).toBe('FLA');
+    expect(abreviarTime('Palmeiras')).toBe('PAL');
+    expect(abreviarTime('Atlético-MG')).toBe('ATL');
+    expect(abreviarTime('  vasco da gama ')).toBe('VAS');
+  });
+  it('não quebra com nomes curtos ou vazios', () => {
+    expect(abreviarTime('')).toBe('???');
+    expect(abreviarTime('RB Bragantino')).toBe('RBB');
   });
 });

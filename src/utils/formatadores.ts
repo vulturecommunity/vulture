@@ -92,3 +92,13 @@ export function rotuloDoDia(dataIso: string, agora: Date = new Date()): string {
   const texto = formatarQuandoSeguiu(dataIso, agora);
   return texto.startsWith('Há ') ? formatarData(dataIso) : texto;
 }
+
+/** Abrevia o nome de um time para a faixa de placar: "Flamengo" → "FLA". */
+export function abreviarTime(nome: string): string {
+  const limpo = nome.trim();
+  if (!limpo) return '???';
+  const partes = limpo.split(/[\s-]+/).filter(Boolean);
+  // nomes compostos curtos viram iniciais: "São Paulo" → "SPA"? não: mantém o primeiro termo
+  const base = partes[0].length >= 3 ? partes[0] : partes.join('');
+  return base.slice(0, 3).toUpperCase();
+}

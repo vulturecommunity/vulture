@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Icone, Texto } from '@/components/ui';
-import { cores, espacos, raios } from '@/theme';
+import { cores, espacos } from '@/theme';
 import { formatarContador } from '@/utils/formatadores';
 
 export interface BotaoCurtirProps {
@@ -18,8 +18,8 @@ export interface BotaoCurtirProps {
   tamanho?: number;
 }
 
-/** Pílula de curtir da barra de ações: contorno quando neutro, preenchida em vermelho quando curtido. */
-export function BotaoCurtir({ curtido, total, aoPressionar, tamanho = 20 }: BotaoCurtirProps) {
+/** Curtir da barra de ações: coração branco quando neutro, vermelho e com pulo quando curtido. */
+export function BotaoCurtir({ curtido, total, aoPressionar, tamanho = 24 }: BotaoCurtirProps) {
   const escala = useSharedValue(1);
 
   useEffect(() => {
@@ -31,20 +31,21 @@ export function BotaoCurtir({ curtido, total, aoPressionar, tamanho = 20 }: Bota
   return (
     <Pressable
       onPress={aoPressionar}
-      hitSlop={6}
-      style={({ pressed }) => [
-        estilos.pilula,
-        curtido && estilos.curtido,
-        pressed && estilos.pressionado,
-      ]}
+      hitSlop={10}
+      style={({ pressed }) => [estilos.acao, pressed && estilos.pressionado]}
       accessibilityRole="button"
       accessibilityLabel={curtido ? 'Descurtir' : 'Curtir'}
       accessibilityState={{ selected: curtido }}
       testID="botao-curtir">
       <Animated.View style={estiloAnimado}>
-        <Icone nome={curtido ? 'curtido' : 'curtir'} tamanho={tamanho} cor={cores.branco} />
+        <Icone
+          nome={curtido ? 'curtido' : 'curtir'}
+          tamanho={tamanho}
+          cor={curtido ? cores.vermelhoVivo : cores.branco}
+          style={estilos.sombraIcone}
+        />
       </Animated.View>
-      <Texto variante="legenda" testID="total-curtidas">
+      <Texto variante="legenda" cor={cores.branco} style={estilos.contador} testID="total-curtidas">
         {formatarContador(total)}
       </Texto>
     </Pressable>
@@ -52,17 +53,8 @@ export function BotaoCurtir({ curtido, total, aoPressionar, tamanho = 20 }: Bota
 }
 
 const estilos = StyleSheet.create({
-  pilula: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: espacos.xs + 2,
-    height: 38,
-    paddingHorizontal: espacos.md,
-    borderRadius: raios.redondo,
-    backgroundColor: cores.vidroClaro,
-    borderWidth: 1,
-    borderColor: cores.bordaClara,
-  },
-  curtido: { backgroundColor: cores.vermelho, borderColor: cores.vermelho },
-  pressionado: { opacity: 0.8 },
+  acao: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs + 2 },
+  pressionado: { opacity: 0.6 },
+  sombraIcone: { textShadowColor: cores.sombra, textShadowRadius: 6 },
+  contador: { textShadowColor: cores.sombra, textShadowRadius: 5 },
 });
