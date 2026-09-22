@@ -845,7 +845,7 @@ create table if not exists public.rasante_views (
   primary key (rasante_id, usuario_id)
 );
 
-create index if not exists rasantes_ativos_idx on public.rasantes (autor_id, criado_em) where expira_em > now();
+create index if not exists rasantes_ativos_idx on public.rasantes (autor_id, criado_em);
 create index if not exists rasantes_expira_idx on public.rasantes (expira_em);
 
 -- -------------------------------------------------------------------------------------
