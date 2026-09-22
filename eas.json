@@ -7,14 +7,16 @@
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -Pexpo.camera.barcode-scanner-enabled=false"
       },
       "env": {
         "EXPO_PUBLIC_DATA_DRIVER": "supabase",
         "EXPO_PUBLIC_SUPABASE_URL": "https://vcajpsizbjcblyufuclh.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjYWpwc2l6YmpjYmx5dWZ1Y2xoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MzgxMzMsImV4cCI6MjEwNTUxNDEzM30.AwiOMda5MAmm5A04toYsfy06P3HwZRyOBBm_sGGUgPc",
         "EXPO_PUBLIC_LIVEKIT_URL": "wss://vulture-i9dz6wb0.livekit.cloud",
-        "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://vcajpsizbjcblyufuclh.supabase.co/functions/v1/livekit-token"
+        "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://vcajpsizbjcblyufuclh.supabase.co/functions/v1/livekit-token",
+        "VULTURE_ABIS": "arm64-v8a"
       }
     },
     "production": {
@@ -25,6 +27,9 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjYWpwc2l6YmpjYmx5dWZ1Y2xoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MzgxMzMsImV4cCI6MjEwNTUxNDEzM30.AwiOMda5MAmm5A04toYsfy06P3HwZRyOBBm_sGGUgPc",
         "EXPO_PUBLIC_LIVEKIT_URL": "wss://vulture-i9dz6wb0.livekit.cloud",
         "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://vcajpsizbjcblyufuclh.supabase.co/functions/v1/livekit-token"
+      },
+      "android": {
+        "gradleCommand": ":app:bundleRelease -Pexpo.camera.barcode-scanner-enabled=false"
       }
     }
   },

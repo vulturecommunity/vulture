@@ -97,6 +97,29 @@ seu PC ligado. Como o APK inclui os módulos nativos do LiveKit, basta preencher
 iOS exige o Apple Developer Program (US$ 99/ano) e distribuição por TestFlight; por isso o piloto
 é só Android.
 
+#### Tamanho do APK
+
+O primeiro APK saiu com **177 MB**, e 80% disso era biblioteca nativa. Duas correções no
+`eas.json`/`plugins/tamanho-do-android.js` cortaram a maior parte:
+
+| O que                      | Quanto pesava | Por quê                                               |
+| -------------------------- | ------------- | ----------------------------------------------------- |
+| `lib/x86` + `lib/x86_64`   | 82 MB         | arquiteturas de **emulador**; nenhum celular usa      |
+| `lib/armeabi-v7a`          | 24 MB         | ARM de 32 bits; a Play Store exige 64 bits desde 2019 |
+| ML Kit de código de barras | ~20 MB        | vem no `expo-camera`; o Vulture nunca lê códigos      |
+
+O perfil `preview` empacota só `arm64-v8a` (`VULTURE_ABIS`) e desliga o leitor de códigos
+(`-Pexpo.camera.barcode-scanner-enabled=false`) — **APK de ~65 MB**. O perfil `production` gera
+um `.aab` **com todas as arquiteturas**: quem fatia por aparelho é a Play Store, e cada pessoa
+baixa só a sua (~40 MB).
+
+> Emulador x86 precisa de um build próprio: `VULTURE_ABIS=x86_64 npx eas-cli build ...`.
+
+O que ainda pesa, se precisar apertar mais: **WebRTC do LiveKit (11,5 MB)**, necessário para as
+lives reais, e o **código Java/Kotlin (~18 MB)**, que o R8 encolheria com
+`-Pandroid.enableMinifyInReleaseBuilds=true` — ganho de ~7 MB, mas exige testar no aparelho,
+porque o R8 pode remover código chamado por reflexão.
+
 ## Scripts
 
 | Comando                                                     | O que faz                   |
