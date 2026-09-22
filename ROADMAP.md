@@ -72,9 +72,11 @@ redes ruins; limite de 60 s já existe.
 
 ## Fase G — Camada temática (contínuo)
 
-- **API de partidas**: implementar `MatchService` real em `src/services/partidas/` (a interface está pronta).
-  Opções: API-Football (plano Free: 100 req/dia — suficiente com cache no Supabase e `pg_cron` a cada 30 min), SofaScore (sem API pública oficial), Football-Data.org (Free, mas cobertura limitada do Brasileirão). Guardar em tabela `partidas` e servir pelo `SupabaseDataService`.
-  > TODO documentado: `src/services/partidas/index.ts` — trocar `MatchServiceMock` pelo adaptador real.
+- ~~**API de partidas**~~ **feito**: `MatchServiceTheSportsDB` traz o último resultado e o próximo
+  jogo do Flamengo da TheSportsDB (chave de teste pública, sem cadastro), com cache no aparelho
+  para sobreviver a quedas de rede. `EXPO_PUBLIC_MATCH_DRIVER=mock` volta ao JSON local.
+  Próximo passo opcional: espelhar as partidas numa tabela do Supabase com `pg_cron` para não
+  depender do limite da API pública quando a base de torcedores crescer.
 - Placar ao vivo com "gol!" em push, enquetes de escalação, ranking mensal/anual com badges, "Torcedor do jogo".
 - Comunidades por região/embaixadas de torcida.
 

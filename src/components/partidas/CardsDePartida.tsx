@@ -6,27 +6,36 @@ import { matchService, type Partida } from '@/services/partidas';
 import { chaves } from '@/services/queryClient';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios } from '@/theme';
-import { abreviarTime, formatarDataHora } from '@/utils/formatadores';
+import { abreviarTime, formatarDataHora, formatarDiaEMes } from '@/utils/formatadores';
 
 /**
  * Chip de uma partida em uma linha só: "⚽ FLA vs PAL · 25/09 18:30".
  * Compacto de propósito — no feed o vídeo é o que importa.
  */
 function ChipDePartida({ titulo, partida }: { titulo: string; partida: Partida }) {
-  const encerrada = partida.status === 'encerrada' && partida.placar;
+  const aoVivo = partida.status === 'ao_vivo';
+  const comPlacar = partida.placar && (aoVivo || partida.status === 'encerrada');
   const mandante = abreviarTime(partida.mandante);
   const visitante = abreviarTime(partida.visitante);
-  const meio = encerrada ? `${partida.placar!.mandante} – ${partida.placar!.visitante}` : 'vs';
-  const detalhe = encerrada ? 'Encerrado' : formatarDataHora(partida.dataHora);
+  const meio = comPlacar ? `${partida.placar!.mandante} – ${partida.placar!.visitante}` : 'vs';
+  const detalhe = aoVivo
+    ? 'AO VIVO'
+    : partida.status === 'encerrada'
+      ? formatarDiaEMes(partida.dataHora)
+      : formatarDataHora(partida.dataHora);
 
   return (
     <View style={estilos.chip} testID={`card-${titulo}`}>
       <View style={estilos.faixa} />
-      <Icone
-        nome={encerrada ? 'apito' : 'estadio'}
-        tamanho={12}
-        cor={encerrada ? cores.textoSecundario : cores.vermelhoVivo}
-      />
+      {aoVivo ? (
+        <View style={estilos.pontoAoVivo} testID="ponto-ao-vivo" />
+      ) : (
+        <Icone
+          nome={partida.status === 'encerrada' ? 'apito' : 'estadio'}
+          tamanho={12}
+          cor={partida.status === 'encerrada' ? cores.textoSecundario : cores.vermelhoVivo}
+        />
+      )}
       <Texto variante="pequeno" numberOfLines={1}>
         <Texto variante="corpoForte" style={estilos.time}>
           {mandante}
@@ -39,7 +48,10 @@ function ChipDePartida({ titulo, partida }: { titulo: string; partida: Partida }
           {visitante}
         </Texto>
       </Texto>
-      <Texto variante="legenda" cor={cores.textoTerciario} numberOfLines={1}>
+      <Texto
+        variante="legenda"
+        cor={aoVivo ? cores.vermelhoVivo : cores.textoTerciario}
+        numberOfLines={1}>
         · {detalhe}
       </Texto>
     </View>
@@ -60,6 +72,12 @@ export function CardsDePartida() {
       return { proximo, ultimo };
     },
     staleTime: 5 * 60 * 1000,
+    // com a bola rolando, o placar se atualiza sozinho a cada minuto
+    refetchInterval: (consulta) => {
+      const d = consulta.state.data;
+      const rolando = d?.proximo?.status === 'ao_vivo' || d?.ultimo?.status === 'ao_vivo';
+      return rolando ? 60 * 1000 : false;
+    },
   });
 
   if (!data || (!data.proximo && !data.ultimo)) return null;
@@ -115,6 +133,7 @@ const estilos = StyleSheet.create({
     overflow: 'hidden',
   },
   faixa: { width: 3, alignSelf: 'stretch', backgroundColor: cores.vermelho },
+  pontoAoVivo: { width: 8, height: 8, borderRadius: 4, backgroundColor: cores.vermelhoVivo },
   time: { letterSpacing: 0.5 },
   recolhido: {
     flexDirection: 'row',

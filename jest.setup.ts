@@ -3,6 +3,8 @@
 
 // Variáveis de ambiente padrão: os testes sempre usam o driver mock.
 process.env.EXPO_PUBLIC_DATA_DRIVER = 'mock';
+// partidas: JSON local nos testes (o driver real vai à rede)
+process.env.EXPO_PUBLIC_MATCH_DRIVER = 'mock';
 
 // AsyncStorage em memória
 jest.mock('@react-native-async-storage/async-storage', () =>

@@ -45,7 +45,7 @@ src/
   services/
     data/              DataService (types.ts) + drivers: mock/ (AsyncStorage) e supabase/ (Postgres/Auth/Storage/Realtime)
     live/              detecção do LiveKit em runtime, tokens, modo simulado
-    partidas/          MatchService (JSON local; interface pronta para API real)
+    partidas/          MatchService (TheSportsDB real + JSON local de reserva)
     midia/             arquivos locais e thumbnails
   theme/ constants/ types/ utils/
 supabase/schema.sql    script idempotente: tabelas, índices, triggers, RLS, buckets (sem dados fictícios)

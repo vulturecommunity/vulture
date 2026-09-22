@@ -102,3 +102,9 @@ export function abreviarTime(nome: string): string {
   const base = partes[0].length >= 3 ? partes[0] : partes.join('');
   return base.slice(0, 3).toUpperCase();
 }
+
+/** Dia e mês, para a faixa de placar: 20/09 */
+export function formatarDiaEMes(dataIso: string): string {
+  const d = new Date(dataIso);
+  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+}

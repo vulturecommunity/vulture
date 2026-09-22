@@ -74,11 +74,11 @@ Registro das escolhas feitas durante a construção do MVP, com o porquê e o qu
 
 ## Camada temática
 
-| Decisão                                                                        | Motivo / trade-off                                                                                                            |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| **`MatchService` com JSON local e datas relativas a "hoje"**                   | A demo nunca mostra jogos "velhos". A interface `MatchService` permite plugar uma API real (ver ROADMAP) sem tocar nas telas. |
-| **Ranking semanal = soma de curtidas dos vídeos dos últimos 7 dias por autor** | Simples de explicar e de calcular nos dois drivers (RPC `ranking_semanal` no Supabase).                                       |
-| **Reações 🔴⚫🦅🏆 só na live**                                                | Requisito: no feed permanece o coração.                                                                                       |
+| Decisão                                                                        | Motivo / trade-off                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Partidas reais pela TheSportsDB, com JSON local de reserva**                 | A chave de teste é pública (sem cadastro) e cobre Brasileirão, Libertadores e Copa do Brasil. O mapeamento fica isolado em `mapeamento.ts`, sem dependência de React Native, para ser conferido contra a API de verdade. O último resultado fica guardado no aparelho: sem rede, o torcedor vê a informação verdadeira mais recente em vez de nada. |
+| **Ranking semanal = soma de curtidas dos vídeos dos últimos 7 dias por autor** | Simples de explicar e de calcular nos dois drivers (RPC `ranking_semanal` no Supabase).                                                                                                                                                                                                                                                             |
+| **Reações 🔴⚫🦅🏆 só na live**                                                | Requisito: no feed permanece o coração.                                                                                                                                                                                                                                                                                                             |
 
 ## Identidade visual
 
@@ -105,4 +105,3 @@ Registro das escolhas feitas durante a construção do MVP, com o porquê e o qu
 - **Push notifications** — exige development build/EAS e credenciais das lojas; as notificações são em tela.
 - **Painel de moderação** — as denúncias ficam na tabela `reports`.
 - **Curtir comentários** — a coluna `likes_count` existe no schema, mas a UI não foi priorizada.
-- **API real de partidas** — todas as boas são pagas ou com limite muito baixo; ficou a interface pronta.

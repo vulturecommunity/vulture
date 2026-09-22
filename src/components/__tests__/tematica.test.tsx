@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { BarraDeCanais } from '@/components/explorar/BarraDeCanais';
 import { RankingSemanal } from '@/components/explorar/RankingSemanal';
 import { CardsDePartida } from '@/components/partidas/CardsDePartida';
+import { definirMatchService } from '@/services/partidas';
 import { CabecalhoDePerfil } from '@/components/perfil/CabecalhoDePerfil';
 import { GradeDeVideos } from '@/components/perfil/GradeDeVideos';
 import { CANAIS } from '@/constants/interesses';
@@ -48,6 +49,30 @@ describe('camada temática e perfil', () => {
     // times abreviados para a faixa caber numa linha
     expect(screen.getAllByText('FLA').length).toBe(2);
     expect(screen.queryByText(/Flamengo/)).toBeNull();
+  });
+
+  it('jogo em andamento vira AO VIVO com o placar do momento', async () => {
+    useUiStore.setState({ placarVisivel: true });
+    const partida = {
+      id: 'p-1',
+      competicao: 'Brasileirão',
+      mandante: 'Flamengo',
+      visitante: 'Bragantino',
+      dataHora: new Date().toISOString(),
+      estadio: 'Maracanã',
+      placar: { mandante: 1, visitante: 0 },
+      status: 'ao_vivo' as const,
+    };
+    definirMatchService({
+      proximoJogo: async () => partida,
+      ultimoResultado: async () => null,
+      listarPartidas: async () => [partida],
+    });
+    await renderizar(<CardsDePartida />);
+    await waitFor(() => expect(screen.getByTestId('ponto-ao-vivo')).toBeTruthy());
+    expect(screen.getByText(/AO VIVO/)).toBeTruthy();
+    expect(screen.getByText(/1 – 0/)).toBeTruthy();
+    definirMatchService(null);
   });
 
   it('a faixa de placar pode ser recolhida para liberar o feed', async () => {
