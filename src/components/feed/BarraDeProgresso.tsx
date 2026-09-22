@@ -49,10 +49,10 @@ export const GEOMETRIA_BARRA = {
 } as const;
 
 /**
- * Linha de progresso do vídeo. Fica sempre visível — trilha em pílula recuada das
- * bordas e um marcador branco com anel — e arrastar para os lados avança/volta.
- * Ao arrastar, a barra engrossa, o preenchimento vira vermelho e o anel acende:
- * o torcedor vê na hora que está no comando. Tudo na thread de UI.
+ * Progresso do vídeo à nossa maneira: em repouso é só uma trilha discreta com o
+ * marcador deslizando — sem faixa branca enchendo, que lembraria carregamento.
+ * O rastro vermelho e o anel aceso aparecem só enquanto o dedo arrasta, mostrando
+ * até onde você já puxou. Tudo na thread de UI.
  */
 export function BarraDeProgresso({
   posicao,
@@ -132,9 +132,10 @@ export function BarraDeProgresso({
     const altura = ALTURA_REPOUSO + destaque.get() * (ALTURA_ARRASTO - ALTURA_REPOUSO);
     return { height: altura, borderRadius: altura / 2 };
   });
+  // o rastro vermelho é resposta ao arrasto: em repouso ele simplesmente não existe
   const estiloPreenchido = useAnimatedStyle(() => ({
     width: `${fracao.get() * 100}%`,
-    backgroundColor: interpolateColor(destaque.get(), [0, 1], [cores.branco, cores.vermelhoVivo]),
+    opacity: destaque.get(),
   }));
   const estiloMarcador = useAnimatedStyle(() => {
     const d = DIAMETRO_REPOUSO + destaque.get() * (DIAMETRO_ARRASTO - DIAMETRO_REPOUSO);
@@ -203,10 +204,14 @@ const estilos = StyleSheet.create({
   faixaToque: { height: ALTURA_TOQUE, justifyContent: 'center' },
   trilha: {
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.32)',
+    backgroundColor: 'rgba(255,255,255,0.3)',
     overflow: 'hidden',
   },
-  preenchido: { height: '100%', borderRadius: ALTURA_ARRASTO / 2 },
+  preenchido: {
+    height: '100%',
+    borderRadius: ALTURA_ARRASTO / 2,
+    backgroundColor: cores.vermelhoVivo,
+  },
   marcador: {
     position: 'absolute',
     top: '50%',
@@ -214,7 +219,7 @@ const estilos = StyleSheet.create({
     borderWidth: 2,
     // o marcador precisa aparecer tanto em vídeo claro quanto escuro
     shadowColor: cores.pretoPuro,
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.6,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 3,

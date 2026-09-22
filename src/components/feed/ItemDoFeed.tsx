@@ -5,13 +5,13 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
-import { Avatar, Degrade, Icone, Texto } from '@/components/ui';
+import { Avatar, Icone, Texto } from '@/components/ui';
 import { ICONE_INTERESSE } from '@/constants/interesses';
 import { useCompartilhar, useCurtir, useSalvar } from '@/hooks/useInteracoes';
 import { dataService } from '@/services/data';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
-import { cores, espacos, raios } from '@/theme';
+import { cores, espacos } from '@/theme';
 import type { Video } from '@/types';
 
 import { BarraDeAcoes } from './BarraDeAcoes';
@@ -144,9 +144,6 @@ function ItemDoFeedBase({
         </View>
       </GestureDetector>
 
-      {/* véu para o texto ler bem sobre qualquer vídeo */}
-      <Degrade altura={280} intensidade={0.82} />
-
       {video.tipo === 'video' ? (
         <Pressable
           onPress={alternarMudo}
@@ -234,20 +231,17 @@ const estilos = StyleSheet.create({
     paddingHorizontal: espacos.lg,
     gap: espacos.sm,
   },
-  sombra: { textShadowColor: cores.sombra, textShadowRadius: 8 },
+  // sem véu atrás: o contorno é o que garante a leitura sobre vídeo claro
+  sombra: {
+    textShadowColor: cores.sombraForte,
+    textShadowRadius: 6,
+    textShadowOffset: { width: 0, height: 1 },
+  },
   autor: { flexDirection: 'row', alignItems: 'center', gap: espacos.sm },
   nome: { flexShrink: 1 },
   linhaMeta: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs + 2 },
   audio: { flex: 1 },
-  categoria: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: espacos.xs,
-    paddingHorizontal: espacos.sm,
-    paddingVertical: 3,
-    borderRadius: raios.sm,
-    backgroundColor: cores.vidro,
-  },
+  categoria: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs },
   botaoMudo: {
     position: 'absolute',
     top: espacos.md,

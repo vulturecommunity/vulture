@@ -22,6 +22,8 @@ export const cores = {
   aviso: '#E8B84A',
   erro: '#FF4D5A',
   sombra: 'rgba(0,0,0,0.65)',
+  /** contorno do texto sobre vídeo, onde não há véu escuro atrás */
+  sombraForte: 'rgba(0,0,0,0.92)',
   transparente: 'transparent',
   overlayEscuro: 'rgba(0,0,0,0.55)',
 } as const;

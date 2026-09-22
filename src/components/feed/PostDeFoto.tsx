@@ -40,7 +40,11 @@ export function PostDeFoto({ video, ativo }: PostDeFotoProps) {
     return () => cancelAnimation(progresso);
   }, [ativo, progresso]);
 
-  const estiloBarra = useAnimatedStyle(() => ({ width: `${progresso.value * 100}%` }));
+  // marcador deslizando, igual ao vídeo: nada de faixa branca enchendo
+  const estiloMarcador = useAnimatedStyle(() => ({
+    left: `${progresso.value * 100}%`,
+    transform: [{ translateX: -DIAMETRO_MARCADOR / 2 }],
+  }));
 
   return (
     <View style={estilos.container} testID={`foto-${video.id}`}>
@@ -51,29 +55,43 @@ export function PostDeFoto({ video, ativo }: PostDeFotoProps) {
         cachePolicy="memory-disk"
         transition={200}
       />
-      <View style={estilos.trilha}>
-        <Animated.View style={[estilos.barra, estiloBarra]} />
+      <View style={estilos.faixa} pointerEvents="none">
+        <View style={estilos.trilha} />
+        <Animated.View style={[estilos.marcador, estiloMarcador]} />
       </View>
     </View>
   );
 }
 
 const ABSOLUTO = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 };
+const DIAMETRO_MARCADOR = 11;
 
 const estilos = StyleSheet.create({
   container: { ...ABSOLUTO, backgroundColor: cores.pretoPuro },
-  // mesma altura e recuo da barra do vídeo: o progresso mora sempre no mesmo lugar
-  trilha: {
+  // mesma geometria da barra do vídeo: o progresso mora sempre na mesma altura
+  faixa: {
     position: 'absolute',
     left: GEOMETRIA_BARRA.margemLateral,
     right: GEOMETRIA_BARRA.margemLateral,
-    bottom:
-      GEOMETRIA_BARRA.margemInferior +
-      (GEOMETRIA_BARRA.alturaToque - GEOMETRIA_BARRA.alturaLinha) / 2,
+    bottom: GEOMETRIA_BARRA.margemInferior,
+    height: GEOMETRIA_BARRA.alturaToque,
+    justifyContent: 'center',
+  },
+  trilha: {
+    width: '100%',
     height: GEOMETRIA_BARRA.alturaLinha,
     borderRadius: GEOMETRIA_BARRA.alturaLinha / 2,
-    backgroundColor: 'rgba(255,255,255,0.32)',
-    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
-  barra: { height: '100%', backgroundColor: cores.branco },
+  marcador: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -DIAMETRO_MARCADOR / 2,
+    width: DIAMETRO_MARCADOR,
+    height: DIAMETRO_MARCADOR,
+    borderRadius: DIAMETRO_MARCADOR / 2,
+    backgroundColor: cores.branco,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.45)',
+  },
 });
