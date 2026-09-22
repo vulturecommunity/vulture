@@ -30,7 +30,8 @@ colar 2 chaves no app. Não precisa saber programar.
 
 O que o script fez por você:
 
-- Tabelas `profiles`, `videos`, `likes`, `comments`, `follows`, `saves`, `live_streams`, `live_messages`, `reports`, `blocks`, `notifications`, com índices e triggers de contadores.
+- Tabelas `profiles`, `videos`, `likes`, `comments`, `follows`, `saves`, `live_streams`, `live_messages`, `reports`, `blocks`, `notifications`, `push_tokens`, `conversations`, `messages`, `rasantes`, `rasante_views`, com índices e triggers de contadores.
+- Regra de quem pode mandar mensagem para quem (função `pode_conversar`), usada na RLS e na RPC `abrir_conversa`; preferências em `profiles.msg_de_quem_sigo` / `msg_de_seguidores`.
 - **RLS ativado em todas as tabelas** (leitura pública do feed; escrita só do dono).
 - Buckets de Storage **`videos`**, **`thumbnails`** e **`avatars`** (públicos para leitura; cada usuário só escreve na própria pasta).
 - Realtime ligado para o chat das lives.
@@ -94,7 +95,7 @@ celular; tocar nela abre a transmissão. O envio é feito pela Edge Function `no
 
 1. Abra **https://console.firebase.google.com** → **Adicionar projeto** → dê um nome (ex.:
    `vulture`) → pode desligar o Google Analytics → **Criar projeto**.
-2. Dentro do projeto, clique no ícone **Android** (⚙️ → *Adicionar app* → Android) e cadastre o
+2. Dentro do projeto, clique no ícone **Android** (⚙️ → _Adicionar app_ → Android) e cadastre o
    pacote exatamente como está em `app.json` → `expo.android.package`: **`app.vulture.torcida`**.
    Não precisa preencher apelido nem SHA-1. Clique **Registrar app**.
 3. Baixe o arquivo **`google-services.json`** que a tela oferece e coloque-o na **raiz do
@@ -136,6 +137,27 @@ celular; tocar nela abre a transmissão. O envio é feito pela Edge Function `no
 
 No **modo demo** (driver `mock`) não há servidor: ao iniciar uma live, a notificação aparece no
 próprio aparelho, só para demonstrar o aviso e o toque que abre a live (não depende do Firebase).
+
+## 5c. Mensagens diretas e rasantes
+
+Tudo do backend já está no `supabase/schema.sql`. Se o seu banco foi criado antes deste recurso:
+
+1. Rode o **`supabase/schema.sql` inteiro de novo** no SQL Editor (idempotente). Ele cria
+   `conversations`, `messages`, `rasantes`, `rasante_views`, as colunas de preferência em
+   `profiles`, as funções `pode_conversar` / `abrir_conversa` / `listar_conversas`, a RLS
+   e liga o Realtime da tabela `messages`. **Sem esse passo, a caixa de mensagens do app dá erro.**
+2. Publique a função que avisa quem recebe uma mensagem (push no aparelho):
+   ```bash
+   npx supabase functions deploy notificar-mensagem
+   ```
+   Mesmos requisitos do 5b (Firebase/FCM V1 + APK). Tocar na notificação abre a conversa.
+3. Regra de privacidade (Perfil → ⚙ → **Mensagens: quem pode me chamar**): alguém só consegue
+   iniciar conversa comigo se **eu sigo a pessoa** (e a opção "Quem eu sigo" está ligada) ou se
+   **a pessoa me segue** (e "Meus seguidores" está ligada). Bloquear corta nos dois sentidos.
+   A regra vale no banco (RLS), não só na tela.
+4. Rasantes: vídeos de até 15 s que somem em 24 h. Ficam no bucket `videos` em
+   `<uid>/rasantes/<id>.mp4` (miniatura em `thumbnails`). A leitura filtra por `expira_em`;
+   os arquivos antigos podem ser limpos à vontade no Storage.
 
 ## 6. Problemas comuns
 
