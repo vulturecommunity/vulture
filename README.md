@@ -55,8 +55,9 @@ cp .env.example .env     # no Windows: copy .env.example .env
 | Criação      | câmera com pressionar-e-segurar (até 60 s, contador e barra), frontal/traseira, flash/tocha, foto (post de 5 s), importar da galeria, preview com refazer, legenda + hashtags + categoria, upload com **progresso real**, thumbnail automática, opção de salvar na galeria                                                                          |
 | Social       | curtidas, comentários com respostas em 1 nível, seguir/deixar de seguir, perfil (grade, contadores, curtidos, salvos, editar), explorar (busca por usuário e hashtag, trending, hashtags em alta), notificações em tela, denunciar/bloquear (requisito das lojas)                                                                                   |
 | Lives        | lista de lives ativas com espectadores, assistir + chat em tempo real + reações 🔴⚫🦅🏆 flutuantes, iniciar/encerrar live com preview da câmera. **LiveKit de verdade** em development build; **modo simulado automático** no Expo Go                                                                                                              |
-| Temático     | barra de canais (#Maracanã #Bastidores #Golaço #Torcida #Base #Resenha), faixa com **último resultado e próximo jogo reais do Flamengo** (TheSportsDB, com AO VIVO quando a bola rola), ranking semanal de torcedores                                                                                                                               |
+| Temático     | barra de canais (#Maracanã #Bastidores #Golaço #Torcida #Base #Resenha), faixa com **último resultado e próximo jogo reais do Flamengo** (Highlightly via cache no Supabase, com AO VIVO e minuto do jogo), ranking semanal de torcedores                                                                                                                               |
 | Mensagens    | caixa de entrada com conversas privadas, chat em tempo real com balões e separadores por dia, regra de quem pode te chamar (quem você segue / seus seguidores), novos seguidores com data, "adicionar torcedores" com sugestões por afinidade                                                                                                       |
+| Arquibancada | botão à esquerda do "Para você": **resenha** em texto estilo X (280 caracteres, hashtags, curtidas, respostas em thread, post marcado com o jogo, até 4 fotos ou 1 vídeo de 30 s/15 MB ou 1 GIF do GIPHY) e **jogos** do Flamengo mês a mês (Highlightly, todas as competições) com V-E-D, contagem regressiva e **palpites de placar** que fecham no apito inicial |
 | Rasantes     | vídeo de até 15 s que some em 24 h, fileira no topo das mensagens, anel no avatar do perfil, visualizador em tela cheia                                                                                                                                                                                                                             |
 | Qualidade    | TypeScript strict, ESLint, Prettier, 154 testes (Jest + Testing Library), roteiro de teste manual                                                                                                                                                                                                                                                   |
 
@@ -71,7 +72,7 @@ src/
   services/
     data/              DataService (types.ts) + drivers: mock/ (AsyncStorage) e supabase/ (Postgres/Auth/Storage/Realtime)
     live/              detecção do LiveKit em runtime, tokens, modo simulado
-    partidas/          MatchService (TheSportsDB real + JSON local de reserva)
+    partidas/          jogos lidos da tabela public.partidas (Supabase) + JSON local do modo demo
     midia/             arquivos locais e thumbnails
   theme/ constants/ types/ utils/
 supabase/schema.sql    script idempotente: tabelas, índices, triggers, RLS, buckets (sem dados fictícios)
@@ -182,8 +183,11 @@ nunca coloque segredos nelas (a API Secret do LiveKit fica só na Edge Function)
 - Feed "Para Você" é cronológico (sem algoritmo de recomendação).
 - Push funciona no APK (Firebase/FCM configurado); no Expo Go do Android o push remoto não existe.
 - Lives no Expo Go são simuladas (limitação do Expo Go, não do app).
-- Dados do jogo vêm da TheSportsDB (chave de teste pública); `EXPO_PUBLIC_MATCH_DRIVER=mock` volta
-  ao JSON local.
+- Jogos do Flamengo vêm da **Highlightly** (plano gratuito, 100 consultas/dia). Quem consulta é a
+  Edge Function `atualizar-calendario`, agendada pelo pg_cron, que grava em `public.partidas`; o app
+  só lê essa tabela (e recebe o placar ao vivo pelo Realtime). Por isso a cota não depende do
+  número de usuários. Placar ao vivo com até ~3 min de atraso (limite do plano gratuito).
+  `EXPO_PUBLIC_MATCH_DRIVER=mock` volta ao JSON local.
 - Moderação de denúncias é manual (tabela `reports` no painel do Supabase).
 
 O que falta para virar produto está em [`ROADMAP.md`](ROADMAP.md); as decisões técnicas em

@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Icone, Texto } from '@/components/ui';
+import { haJogoAgora, usePlacarAoVivo } from '@/hooks/usePlacarAoVivo';
 import { matchService, type Partida } from '@/services/partidas';
 import { chaves } from '@/services/queryClient';
 import { useUiStore } from '@/stores/uiStore';
@@ -19,7 +21,7 @@ function ChipDePartida({ titulo, partida }: { titulo: string; partida: Partida }
   const visitante = abreviarTime(partida.visitante);
   const meio = comPlacar ? `${partida.placar!.mandante} – ${partida.placar!.visitante}` : 'vs';
   const detalhe = aoVivo
-    ? 'AO VIVO'
+    ? `AO VIVO${partida.minuto ? ` ${partida.minuto}'` : ''}`
     : partida.status === 'encerrada'
       ? formatarDiaEMes(partida.dataHora)
       : formatarDataHora(partida.dataHora);
@@ -60,6 +62,7 @@ function ChipDePartida({ titulo, partida }: { titulo: string; partida: Partida }
 
 /** Faixa fina com o próximo jogo e o último resultado, recolhível pelo torcedor. */
 export function CardsDePartida() {
+  const router = useRouter();
   const visivel = useUiStore((s) => s.placarVisivel);
   const alternar = useUiStore((s) => s.alternarPlacar);
   const { data } = useQuery({
@@ -72,15 +75,19 @@ export function CardsDePartida() {
       return { proximo, ultimo };
     },
     staleTime: 5 * 60 * 1000,
-    // com a bola rolando, o placar se atualiza sozinho a cada minuto
+    // com a bola rolando o placar chega pelo Realtime; reler a cada 3 min é só a rede de segurança
     refetchInterval: (consulta) => {
       const d = consulta.state.data;
-      const rolando = d?.proximo?.status === 'ao_vivo' || d?.ultimo?.status === 'ao_vivo';
-      return rolando ? 60 * 1000 : false;
+      return haJogoAgora([d?.proximo, d?.ultimo]) ? 3 * 60 * 1000 : false;
     },
   });
+  usePlacarAoVivo(haJogoAgora([data?.proximo, data?.ultimo]));
 
   if (!data || (!data.proximo && !data.ultimo)) return null;
+
+  // tocar num chip abre o calendário completo, com palpites
+  const abrirCalendario = () =>
+    router.push({ pathname: '/arquibancada', params: { aba: 'jogos' } });
 
   return (
     <View style={estilos.linha} testID="cards-partida">
@@ -89,8 +96,16 @@ export function CardsDePartida() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={estilos.lista}>
-          {data.ultimo ? <ChipDePartida titulo="Último resultado" partida={data.ultimo} /> : null}
-          {data.proximo ? <ChipDePartida titulo="Próximo jogo" partida={data.proximo} /> : null}
+          {data.ultimo ? (
+            <Pressable onPress={abrirCalendario} accessibilityRole="button">
+              <ChipDePartida titulo="Último resultado" partida={data.ultimo} />
+            </Pressable>
+          ) : null}
+          {data.proximo ? (
+            <Pressable onPress={abrirCalendario} accessibilityRole="button">
+              <ChipDePartida titulo="Próximo jogo" partida={data.proximo} />
+            </Pressable>
+          ) : null}
         </ScrollView>
       ) : (
         <Pressable onPress={alternar} style={estilos.recolhido} testID="placar-recolhido">

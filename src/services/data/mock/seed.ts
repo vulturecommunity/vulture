@@ -1,6 +1,8 @@
 import type { Interesse } from '@/constants/interesses';
 import type { Comentario, Live, MensagemLive, Notificacao, Usuario, Video } from '@/types';
 
+import type { PostPersistido } from './banco';
+
 /**
  * Dados de demonstração do driver mock.
  * Os vídeos são clipes públicos de teste (Big Buck Bunny, Sintel, Jellyfish — licenças CC/livres)
@@ -508,6 +510,136 @@ export function gerarRasantesSeed(agora: number = Date.now()): {
       criadoEm: new Date(criadoEm).toISOString(),
       expiraEm: new Date(criadoEm + 24 * HORA).toISOString(),
     };
+  });
+}
+
+/**
+ * Resenha de demonstração: posts de texto dos perfis fictícios. Nada de placar ou
+ * notícia específica — só o clima de arquibancada, para a tela não abrir vazia.
+ */
+export function gerarPostsSeed(agora: number = Date.now()): PostPersistido[] {
+  const HORA = 60 * 60 * 1000;
+  const raizes: { autorId: string; texto: string; horasAtras: number; curtidas: number }[] = [
+    {
+      autorId: 'u-nacao',
+      texto: 'Bom dia, Nação! Quem vai estar no Maracanã no próximo jogo? 🔴⚫ #VamosFlamengo',
+      horasAtras: 0.4,
+      curtidas: 214,
+    },
+    {
+      autorId: 'u-taticas',
+      texto:
+        'Pra mim o time rende mais quando o lateral apoia por dentro: o meio ganha um a mais na saída de bola e o ponta fica no 1x1. #Análise',
+      horasAtras: 1.5,
+      curtidas: 88,
+    },
+    {
+      autorId: 'u-memes',
+      texto:
+        'Eu explicando pro meu chefe que jogo quarta às 21h30 é compromisso inadiável 🥲 #Resenha',
+      horasAtras: 3,
+      curtidas: 402,
+    },
+    {
+      autorId: 'u-maraca',
+      texto:
+        'Aquele arrepio quando a arquibancada canta junto antes da bola rolar... não tem igual. #Maracanã',
+      horasAtras: 5,
+      curtidas: 167,
+    },
+    {
+      autorId: 'u-base',
+      texto: 'Fica de olho no sub-20: tem garoto pedindo passagem no profissional 👀 #Base',
+      horasAtras: 9,
+      curtidas: 73,
+    },
+    {
+      autorId: 'u-resenha',
+      texto: 'Qual foi o gol mais bonito que você já viu ao vivo no estádio? Conta aí 👇 #Golaço',
+      horasAtras: 14,
+      curtidas: 51,
+    },
+    {
+      autorId: 'u-gavea',
+      texto:
+        'Calendário apertado nas próximas semanas. Rodízio vai ser inevitável, e tá tudo bem. #Bastidores',
+      horasAtras: 22,
+      curtidas: 96,
+    },
+    {
+      autorId: 'u-golaco',
+      texto:
+        'Mosaico na arquibancada no próximo jogo em casa: quem topa ajudar a organizar? #Torcida',
+      horasAtras: 30,
+      curtidas: 139,
+    },
+  ];
+  const respostas: { pai: number; autorId: string; texto: string; minutosDepois: number }[] = [
+    {
+      pai: 0,
+      autorId: 'u-maraca',
+      texto: 'Presente! Setor norte como sempre 🙌',
+      minutosDepois: 5,
+    },
+    { pai: 0, autorId: 'u-memes', texto: 'Só se o chefe liberar kkkkk', minutosDepois: 12 },
+    {
+      pai: 2,
+      autorId: 'u-resenha',
+      texto: 'Todo rubro-negro já passou por isso 😂',
+      minutosDepois: 20,
+    },
+    {
+      pai: 5,
+      autorId: 'u-nacao',
+      texto: 'Difícil escolher um só, mas vou pensar num aqui',
+      minutosDepois: 40,
+    },
+    { pai: 7, autorId: 'u-nacao', texto: 'Conta comigo! Chama no privado.', minutosDepois: 30 },
+  ];
+
+  const posts: PostPersistido[] = raizes.map((r, i) => ({
+    id: `post-seed-${i + 1}`,
+    autorId: r.autorId,
+    texto: r.texto,
+    hashtags: extrairTags(r.texto),
+    paiId: null,
+    partida: null,
+    midias: [],
+    curtidas: r.curtidas,
+    respostas: respostas.filter((resp) => resp.pai === i).length,
+    criadoEm: new Date(agora - r.horasAtras * HORA).toISOString(),
+  }));
+  respostas.forEach((resp, i) => {
+    const pai = posts[resp.pai];
+    posts.push({
+      id: `post-seed-r${i + 1}`,
+      autorId: resp.autorId,
+      texto: resp.texto,
+      hashtags: [],
+      paiId: pai.id,
+      partida: null,
+      midias: [],
+      curtidas: (i * 7) % 20,
+      respostas: 0,
+      criadoEm: new Date(
+        new Date(pai.criadoEm).getTime() + resp.minutosDepois * 60_000,
+      ).toISOString(),
+    });
+  });
+  return posts;
+}
+
+/**
+ * Palpites dos perfis de demonstração numa partida: determinísticos pelo id do jogo,
+ * para o "o que a torcida aposta" não abrir vazio e não mudar a cada abertura.
+ */
+export function palpitesDeDemo(
+  partidaId: string,
+): { golsMandante: number; golsVisitante: number }[] {
+  return USUARIOS_SEED.map((u) => {
+    let h = 0;
+    for (const ch of `${partidaId}:${u.id}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return { golsMandante: h % 4, golsVisitante: (h >>> 3) % 3 };
   });
 }
 

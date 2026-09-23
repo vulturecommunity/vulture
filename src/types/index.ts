@@ -98,6 +98,8 @@ export interface Notificacao {
   videoId: Id | null;
   /** live relacionada (tipo "live"): tocar abre a transmissão */
   liveId: Id | null;
+  /** post da Arquibancada curtido ou respondido: tocar abre a thread */
+  postId?: Id | null;
   texto: string;
   lida: boolean;
   criadoEm: string;
@@ -110,7 +112,7 @@ export interface TokenPush {
   plataforma: PlataformaPush;
 }
 
-export type AlvoDeDenuncia = 'video' | 'usuario' | 'comentario' | 'live';
+export type AlvoDeDenuncia = 'video' | 'usuario' | 'comentario' | 'live' | 'post';
 
 export const MOTIVOS_DENUNCIA = [
   'Spam ou golpe',
@@ -218,4 +220,68 @@ export interface GrupoDeRasantes {
   rasantes: Rasante[];
   todosVistos: boolean;
   souEu: boolean;
+}
+
+// ---------------------------------------------------------------- arquibancada (resenha e palpites)
+
+export const TAMANHO_MAXIMO_POST = 280;
+
+/** Anexos de post, como no X: até 4 imagens, OU 1 vídeo curto, OU 1 GIF. */
+export const LIMITES_DE_MIDIA = {
+  imagens: 4,
+  videoSegundos: 30,
+  videoBytes: 15 * 1024 * 1024,
+  /** lado maior da imagem depois da compressão no aparelho */
+  imagemLado: 1080,
+} as const;
+
+export type TipoDeMidiaDoPost = 'imagem' | 'video' | 'gif';
+
+export interface MidiaDoPost {
+  tipo: TipoDeMidiaDoPost;
+  url: string;
+  /** miniatura do vídeo: o arquivo só é baixado quando a pessoa dá play */
+  thumbnailUrl: string | null;
+  largura: number | null;
+  altura: number | null;
+  /** segundos (só vídeo) */
+  duracao: number | null;
+}
+
+/** Jogo marcado num post ("SAN x FLA"); o id é o da partida no calendário. */
+export interface MarcacaoDePartida {
+  id: string;
+  rotulo: string;
+}
+
+/** Post de texto da resenha. Respostas são posts com `paiId` (thread de 1 nível). */
+export interface Post {
+  id: Id;
+  autorId: Id;
+  autor: ResumoDeUsuario;
+  texto: string;
+  hashtags: string[];
+  paiId: Id | null;
+  partida: MarcacaoDePartida | null;
+  midias: MidiaDoPost[];
+  curtidas: number;
+  respostas: number;
+  criadoEm: string;
+  curtido: boolean;
+}
+
+export interface Palpite {
+  partidaId: string;
+  golsMandante: number;
+  golsVisitante: number;
+  atualizadoEm: string;
+}
+
+/** O que a torcida está apostando numa partida. */
+export interface ResumoDePalpites {
+  total: number;
+  vitoriaMandante: number;
+  empate: number;
+  vitoriaVisitante: number;
+  placarPopular: { golsMandante: number; golsVisitante: number; votos: number } | null;
 }

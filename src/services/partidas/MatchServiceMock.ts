@@ -1,5 +1,5 @@
 import dados from './partidas.json';
-import type { MatchService, Partida } from './types';
+import type { CalendarioService, MatchService, Partida } from './types';
 
 interface PartidaBruta {
   id: string;
@@ -22,7 +22,7 @@ function dataDe(diasRelativos: number, hora: string, agora: Date): string {
 }
 
 /** Partidas a partir de um JSON local, com datas relativas a "hoje". */
-export class MatchServiceMock implements MatchService {
+export class MatchServiceMock implements MatchService, CalendarioService {
   constructor(private readonly agora: () => Date = () => new Date()) {}
 
   async listarPartidas(): Promise<Partida[]> {
@@ -43,6 +43,10 @@ export class MatchServiceMock implements MatchService {
         };
       })
       .sort((a, b) => a.dataHora.localeCompare(b.dataHora));
+  }
+
+  listarTemporada(): Promise<Partida[]> {
+    return this.listarPartidas();
   }
 
   async proximoJogo(): Promise<Partida | null> {

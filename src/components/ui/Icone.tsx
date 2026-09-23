@@ -91,8 +91,15 @@ const ICONES = {
   enviado: feather('check'),
   lido: material('check-all'),
   chevronBaixo: feather('chevron-down'),
+  chevronEsquerda: feather('chevron-left'),
   link: feather('link'),
   pausa: feather('pause'),
+  // arquibancada
+  calendario: feather('calendar'),
+  palpite: material('bullseye-arrow'),
+  menos: feather('minus'),
+  escrever: material('feather'),
+  gif: material('file-gif-box'),
 } as const;
 
 export type NomeDeIcone = keyof typeof ICONES;

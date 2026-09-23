@@ -52,6 +52,7 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['perfil'] });
       queryClient.invalidateQueries({ queryKey: ['comentarios'] });
+      queryClient.invalidateQueries({ queryKey: ['arquibancada'] });
       queryClient.invalidateQueries({ queryKey: chaves.bloqueados });
       mostrarAviso(
         `@${alvo.autorApelido} bloqueado. Você não verá mais o conteúdo dessa pessoa.`,
@@ -62,20 +63,28 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
     onError: (e) => mostrarAviso(e instanceof Error ? e.message : 'Falha ao bloquear', 'erro'),
   });
 
+  const ehPost = alvo.tipo === 'post';
   const excluir = useMutation({
-    mutationFn: () => dataService().excluirVideo(alvo.id),
+    mutationFn: () =>
+      ehPost ? dataService().excluirPost(alvo.id) : dataService().excluirVideo(alvo.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['videos-usuario'] });
-      queryClient.invalidateQueries({ queryKey: ['perfil'] });
-      mostrarAviso('Vídeo excluído.', 'sucesso');
+      if (ehPost) {
+        queryClient.invalidateQueries({ queryKey: ['arquibancada'] });
+        mostrarAviso('Post excluído.', 'sucesso');
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['feed'] });
+        queryClient.invalidateQueries({ queryKey: ['videos-usuario'] });
+        queryClient.invalidateQueries({ queryKey: ['perfil'] });
+        mostrarAviso('Vídeo excluído.', 'sucesso');
+      }
       fechar();
-      if (router.canGoBack()) router.back();
+      if ((!ehPost || alvo.voltarAoExcluir) && router.canGoBack()) router.back();
     },
     onError: (e) => mostrarAviso(e instanceof Error ? e.message : 'Falha ao excluir', 'erro'),
   });
 
   const meu = !!alvo.autorId && alvo.autorId === meuId;
+  const podeExcluir = meu && (alvo.tipo === 'video' || ehPost);
 
   return (
     <View>
@@ -86,13 +95,14 @@ function ConteudoDaDenuncia({ alvo }: { alvo: AlvoParaDenuncia }) {
       ) : null}
       {etapa === 'opcoes' ? (
         <View style={estilos.opcoes}>
-          {meu && alvo.tipo === 'video' ? (
+          {podeExcluir ? (
             <Opcao
               icone="excluir"
-              rotulo="Excluir meu vídeo"
+              rotulo={ehPost ? 'Excluir meu post' : 'Excluir meu vídeo'}
               cor={cores.erro}
               aoPressionar={() => excluir.mutate()}
               ocupado={excluir.isPending}
+              testID="opcao-excluir"
             />
           ) : null}
           {!meu ? (

@@ -19,14 +19,18 @@ import type {
   Live,
   Mensagem,
   MensagemLive,
+  MidiaDoPost,
   Notificacao,
   NovoSeguidor,
   Pagina,
+  Palpite,
   Perfil,
   PermissaoDeConversa,
+  Post,
   PreferenciasDeMensagens,
   RankingTorcedor,
   Rasante,
+  ResumoDePalpites,
   ResumoDeUsuario,
   Sessao,
   TipoDeNotificacao,
@@ -36,8 +40,10 @@ import type {
 } from '@/types';
 import { ErroDeAplicacao } from '@/utils/erros';
 import { esperar } from '@/utils/espera';
-import { normalizarHashtag } from '@/utils/hashtags';
+import { extrairHashtags, normalizarHashtag } from '@/utils/hashtags';
 import { agoraIso, novoId } from '@/utils/ids';
+import { resumirPalpites, validarPalpite } from '@/utils/palpites';
+import { validarMidiasDoPost, validarTextoDoPost } from '@/utils/posts';
 import { apelidoValido, emailValido, normalizarApelido, senhaValida } from '@/utils/validacao';
 
 import type {
@@ -47,13 +53,22 @@ import type {
   DataService,
   EventoDaLive,
   NovaDenuncia,
+  NovaMidia,
+  NovoPalpite,
+  NovoPost,
   NovoRasante,
   NovoVideo,
+  ParametrosDaResenha,
   ParametrosDoFeed,
   ProgressoDeUpload,
 } from '../types';
-import { ArmazenamentoMock, type BancoMock, type ConversaPersistida } from './banco';
-import { RESPOSTAS_DE_DEMO, USUARIOS_SEED, gerarRasantesSeed } from './seed';
+import {
+  ArmazenamentoMock,
+  type BancoMock,
+  type ConversaPersistida,
+  type PostPersistido,
+} from './banco';
+import { RESPOSTAS_DE_DEMO, USUARIOS_SEED, gerarRasantesSeed, palpitesDeDemo } from './seed';
 import { SimuladorDeLive } from './simuladorLive';
 
 export interface OpcoesMock {
@@ -975,6 +990,248 @@ export class MockDataService implements DataService {
       n.lida = true;
     }
     this.persistir();
+  }
+
+  // ---------------------------------------------------------------- arquibancada: resenha
+
+  private montarPost(b: BancoMock, p: PostPersistido): Post {
+    const meuId = b.sessao?.usuarioId;
+    return {
+      ...p,
+      autor: this.resumoDe(b, p.autorId),
+      curtido: !!meuId && b.curtidasDePosts.some((c) => c.usuarioId === meuId && c.postId === p.id),
+    };
+  }
+
+  private postOuErro(b: BancoMock, id: Id): PostPersistido {
+    const post = b.posts.find((p) => p.id === id);
+    if (!post) throw new ErroDeAplicacao('Post não encontrado.', 'nao_encontrado');
+    return post;
+  }
+
+  async listPosts(params: ParametrosDaResenha): Promise<Pagina<Post>> {
+    const b = await this.banco();
+    const bloqueados = this.idsBloqueados(b, b.sessao?.usuarioId);
+    const limite = params.limite ?? LIMITE_PADRAO;
+    const inicio = params.cursor ? Number.parseInt(params.cursor, 10) || 0 : 0;
+
+    let posts = b.posts.filter((p) => !p.paiId && !bloqueados.has(p.autorId));
+    if (params.hashtag) {
+      const tag = normalizarHashtag(params.hashtag);
+      posts = posts.filter((p) => p.hashtags.some((h) => normalizarHashtag(h) === tag));
+    }
+    if (params.partidaId) posts = posts.filter((p) => p.partida?.id === params.partidaId);
+
+    const ordenados = this.ordenarPorData(posts);
+    const fim = inicio + limite;
+    return {
+      itens: ordenados.slice(inicio, fim).map((p) => this.montarPost(b, p)),
+      proximoCursor: fim < ordenados.length ? String(fim) : null,
+    };
+  }
+
+  async getPost(id: Id): Promise<Post> {
+    const b = await this.banco();
+    return this.montarPost(b, this.postOuErro(b, id));
+  }
+
+  async listRespostas(postId: Id): Promise<Post[]> {
+    const b = await this.banco();
+    const bloqueados = this.idsBloqueados(b, b.sessao?.usuarioId);
+    return b.posts
+      .filter((p) => p.paiId === postId && !bloqueados.has(p.autorId))
+      .sort((a, c) => a.criadoEm.localeCompare(c.criadoEm))
+      .map((p) => this.montarPost(b, p));
+  }
+
+  private async guardarMidias(
+    postId: string,
+    novas: NovaMidia[],
+    aoProgredir?: ProgressoDeUpload,
+  ): Promise<MidiaDoPost[]> {
+    const midias: MidiaDoPost[] = [];
+    for (const [i, m] of novas.entries()) {
+      aoProgredir?.(i / novas.length, `Enviando ${i + 1} de ${novas.length}`);
+      if (m.tipo === 'gif') {
+        midias.push({ ...m, thumbnailUrl: null, duracao: null });
+        continue;
+      }
+      const nome = `${postId}-${i}`;
+      const url = await salvarArquivoLocalmente(
+        m.uriLocal,
+        'posts',
+        nome,
+        m.tipo === 'video' ? 'mp4' : 'jpg',
+      );
+      if (m.tipo === 'imagem') {
+        midias.push({
+          tipo: 'imagem',
+          url,
+          thumbnailUrl: null,
+          largura: m.largura,
+          altura: m.altura,
+          duracao: null,
+        });
+      } else {
+        const miniatura = await gerarThumbnail(url);
+        midias.push({
+          tipo: 'video',
+          url,
+          thumbnailUrl: miniatura
+            ? await salvarArquivoLocalmente(miniatura, 'posts', `${nome}-thumb`, 'jpg')
+            : null,
+          largura: m.largura,
+          altura: m.altura,
+          duracao: Math.round(m.duracao),
+        });
+      }
+    }
+    aoProgredir?.(1, 'Publicado');
+    return midias;
+  }
+
+  async publicarPost(novo: NovoPost, aoProgredir?: ProgressoDeUpload): Promise<Post> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const novas = novo.midias ?? [];
+    validarMidiasDoPost(novas);
+    const texto = validarTextoDoPost(novo.texto, novas.length > 0);
+    let raiz: PostPersistido | null = null;
+    if (novo.paiId) {
+      const pai = this.postOuErro(b, novo.paiId);
+      raiz = pai.paiId ? this.postOuErro(b, pai.paiId) : pai;
+    }
+    const id = this.gerarId();
+    const post: PostPersistido = {
+      id,
+      autorId: eu.id,
+      texto,
+      hashtags: extrairHashtags(texto),
+      paiId: raiz?.id ?? null,
+      partida: novo.partida ?? null,
+      midias: await this.guardarMidias(id, novas, aoProgredir),
+      curtidas: 0,
+      respostas: 0,
+      criadoEm: agoraIso(),
+    };
+    b.posts.push(post);
+    if (raiz) {
+      raiz.respostas += 1;
+      this.notificar(b, raiz.autorId, {
+        tipo: 'comentario',
+        deId: eu.id,
+        de: { id: eu.id, apelido: eu.apelido, avatarUrl: eu.avatarUrl },
+        videoId: null,
+        liveId: null,
+        postId: raiz.id,
+        texto: texto
+          ? `respondeu seu post: "${texto.slice(0, 60)}"`
+          : 'respondeu seu post com uma mídia',
+      });
+    }
+    this.persistir();
+    return this.montarPost(b, post);
+  }
+
+  async excluirPost(id: Id): Promise<void> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const post = b.posts.find((p) => p.id === id);
+    if (!post) return;
+    if (post.autorId !== eu.id)
+      throw new ErroDeAplicacao('Você só pode excluir seus posts.', 'sem_permissao');
+    const removidos = new Set(
+      b.posts.filter((p) => p.id === id || p.paiId === id).map((p) => p.id),
+    );
+    for (const p of b.posts.filter((x) => removidos.has(x.id))) {
+      for (const m of p.midias) {
+        removerArquivoLocal(m.url);
+        removerArquivoLocal(m.thumbnailUrl);
+      }
+    }
+    b.posts = b.posts.filter((p) => !removidos.has(p.id));
+    b.curtidasDePosts = b.curtidasDePosts.filter((c) => !removidos.has(c.postId));
+    b.notificacoes = b.notificacoes.filter((n) => !n.postId || !removidos.has(n.postId));
+    if (post.paiId) {
+      const pai = b.posts.find((p) => p.id === post.paiId);
+      if (pai) pai.respostas = Math.max(0, pai.respostas - 1);
+    }
+    this.persistir();
+  }
+
+  async curtirPost(id: Id): Promise<void> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const post = this.postOuErro(b, id);
+    if (b.curtidasDePosts.some((c) => c.usuarioId === eu.id && c.postId === id)) return;
+    b.curtidasDePosts.push({ usuarioId: eu.id, postId: id, criadoEm: agoraIso() });
+    post.curtidas += 1;
+    this.notificar(b, post.autorId, {
+      tipo: 'curtida',
+      deId: eu.id,
+      de: { id: eu.id, apelido: eu.apelido, avatarUrl: eu.avatarUrl },
+      videoId: null,
+      liveId: null,
+      postId: post.paiId ?? post.id,
+      texto: 'curtiu seu post na Arquibancada',
+    });
+    this.persistir();
+  }
+
+  async descurtirPost(id: Id): Promise<void> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const post = this.postOuErro(b, id);
+    const antes = b.curtidasDePosts.length;
+    b.curtidasDePosts = b.curtidasDePosts.filter(
+      (c) => !(c.usuarioId === eu.id && c.postId === id),
+    );
+    if (b.curtidasDePosts.length === antes) return;
+    post.curtidas = Math.max(0, post.curtidas - 1);
+    this.persistir();
+  }
+
+  // ---------------------------------------------------------------- arquibancada: palpites
+
+  async listMeusPalpites(partidaIds: string[]): Promise<Palpite[]> {
+    const b = await this.banco();
+    const meuId = b.sessao?.usuarioId;
+    if (!meuId) return [];
+    const ids = new Set(partidaIds);
+    return b.palpites
+      .filter((p) => p.usuarioId === meuId && ids.has(p.partidaId))
+      .map(({ partidaId, golsMandante, golsVisitante, atualizadoEm }) => ({
+        partidaId,
+        golsMandante,
+        golsVisitante,
+        atualizadoEm,
+      }));
+  }
+
+  async salvarPalpite(novo: NovoPalpite): Promise<Palpite> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    validarPalpite(novo);
+    const palpite: Palpite = {
+      partidaId: novo.partidaId,
+      golsMandante: novo.golsMandante,
+      golsVisitante: novo.golsVisitante,
+      atualizadoEm: agoraIso(),
+    };
+    b.palpites = b.palpites.filter(
+      (p) => !(p.usuarioId === eu.id && p.partidaId === novo.partidaId),
+    );
+    b.palpites.push({ ...palpite, usuarioId: eu.id });
+    this.persistir();
+    return palpite;
+  }
+
+  async resumoDosPalpites(partidaId: string): Promise<ResumoDePalpites> {
+    const b = await this.banco();
+    return resumirPalpites([
+      ...palpitesDeDemo(partidaId),
+      ...b.palpites.filter((p) => p.partidaId === partidaId),
+    ]);
   }
 
   // ---------------------------------------------------------------- segurança

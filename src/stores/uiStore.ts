@@ -8,6 +8,8 @@ export interface AlvoParaDenuncia {
   /** id do autor do conteúdo, para oferecer "bloquear" */
   autorId?: string;
   autorApelido?: string;
+  /** a tela aberta é a do próprio conteúdo: ao excluir, volta */
+  voltarAoExcluir?: boolean;
 }
 
 export interface EstadoUi {

@@ -1,25 +1,40 @@
-import { driverDePartidas } from '@/utils/ambiente';
+import { driverDeDados, driverDePartidas } from '@/utils/ambiente';
 
 import { MatchServiceMock } from './MatchServiceMock';
-import { MatchServiceTheSportsDB } from './MatchServiceTheSportsDB';
-import type { MatchService } from './types';
+import { PartidasSupabase } from './PartidasSupabase';
+import type { CalendarioService, MatchService } from './types';
 
-let instancia: MatchService | null = null;
+let instancia: (MatchService & CalendarioService) | null = null;
+let substitutoDoCalendario: CalendarioService | null = null;
+let substitutoDoMatch: MatchService | null = null;
 
 /**
- * Fábrica do serviço de partidas. Por padrão traz os jogos reais do Flamengo
- * (TheSportsDB); EXPO_PUBLIC_MATCH_DRIVER=mock volta ao JSON local.
+ * Uma fonte só para a faixa do feed e para o calendário: a tabela public.partidas do
+ * Supabase (cache da Highlightly). Só o modo demonstração (driver mock) usa o JSON local.
  */
-export function matchService(): MatchService {
+function fonte(): MatchService & CalendarioService {
   if (!instancia) {
-    instancia =
-      driverDePartidas() === 'mock' ? new MatchServiceMock() : new MatchServiceTheSportsDB();
+    const real = driverDePartidas() === 'real' && driverDeDados() === 'supabase';
+    instancia = real ? new PartidasSupabase() : new MatchServiceMock();
   }
   return instancia;
 }
 
-export function definirMatchService(servico: MatchService | null): void {
-  instancia = servico;
+export function matchService(): MatchService {
+  return substitutoDoMatch ?? fonte();
 }
 
-export type { MatchService, Partida } from './types';
+export function calendarioService(): CalendarioService {
+  return substitutoDoCalendario ?? fonte();
+}
+
+/** Troca as fontes (usado em testes). */
+export function definirMatchService(servico: MatchService | null): void {
+  substitutoDoMatch = servico;
+}
+
+export function definirCalendarioService(servico: CalendarioService | null): void {
+  substitutoDoCalendario = servico;
+}
+
+export type { CalendarioService, MatchService, Partida } from './types';

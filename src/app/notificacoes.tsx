@@ -77,6 +77,8 @@ export default function TelaNotificacoes() {
 
   function abrir(n: Notificacao) {
     if (n.liveId) router.push({ pathname: '/live/[id]', params: { id: n.liveId } });
+    else if (n.postId)
+      router.push({ pathname: '/arquibancada/post/[id]', params: { id: n.postId } });
     else if (n.videoId) router.push({ pathname: '/video/[id]', params: { id: n.videoId } });
     else if (n.deId) router.push({ pathname: '/usuario/[id]', params: { id: n.deId } });
   }

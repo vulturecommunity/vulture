@@ -103,6 +103,44 @@ export function abreviarTime(nome: string): string {
   return base.slice(0, 3).toUpperCase();
 }
 
+const MESES = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
+const DIAS_DA_SEMANA = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+
+/** "Outubro 2026" a partir da chave "2026-10". */
+export function nomeDoMes(chave: string): string {
+  const [ano, mes] = chave.split('-').map(Number);
+  return `${MESES[mes - 1] ?? ''} ${ano}`;
+}
+
+/** Dia da semana abreviado: QUI */
+export function diaDaSemana(dataIso: string): string {
+  return DIAS_DA_SEMANA[new Date(dataIso).getDay()];
+}
+
+/** Contagem regressiva curta: "14d 03h", "3h 12min", "12 min", "já já". */
+export function formatarContagem(ms: number): string {
+  if (ms <= 60_000) return 'já já';
+  const minutos = Math.floor(ms / 60_000);
+  const horas = Math.floor(minutos / 60);
+  const dias = Math.floor(horas / 24);
+  if (dias > 0) return `${dias}d ${String(horas % 24).padStart(2, '0')}h`;
+  if (horas > 0) return `${horas}h ${String(minutos % 60).padStart(2, '0')}min`;
+  return `${minutos} min`;
+}
+
 /** Dia e mês, para a faixa de placar: 20/09 */
 export function formatarDiaEMes(dataIso: string): string {
   const d = new Date(dataIso);

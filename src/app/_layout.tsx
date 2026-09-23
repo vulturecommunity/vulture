@@ -78,6 +78,10 @@ export default function LayoutRaiz() {
                   options={{ presentation: 'fullScreenModal', animation: 'fade' }}
                 />
                 <Stack.Screen name="rasante/novo" options={{ animation: 'fade' }} />
+                <Stack.Screen
+                  name="arquibancada/novo"
+                  options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+                />
               </Stack>
               <SheetsGlobais />
             </PortaoDeAutenticacao>

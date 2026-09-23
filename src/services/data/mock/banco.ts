@@ -7,6 +7,8 @@ import type {
   Mensagem,
   MensagemLive,
   Notificacao,
+  Palpite,
+  Post,
   PreferenciasDeMensagens,
   Usuario,
   Video,
@@ -18,6 +20,7 @@ import {
   gerarLivesSeed,
   gerarMensagensDeLiveSeed,
   gerarNotificacoesSeed,
+  gerarPostsSeed,
   gerarRasantesSeed,
   gerarVideosSeed,
 } from './seed';
@@ -56,6 +59,9 @@ export interface RasantePersistido {
   expiraEm: string;
 }
 
+/** Post sem os campos derivados (autor e curtido), que dependem de quem está logado. */
+export type PostPersistido = Omit<Post, 'autor' | 'curtido'>;
+
 export interface BancoMock {
   versao: number;
   usuarios: Usuario[];
@@ -76,6 +82,9 @@ export interface BancoMock {
   preferenciasMensagens: Record<string, PreferenciasDeMensagens>;
   rasantes: RasantePersistido[];
   rasantesVistos: { usuarioId: string; rasanteId: string }[];
+  posts: PostPersistido[];
+  curtidasDePosts: { usuarioId: string; postId: string; criadoEm: string }[];
+  palpites: (Palpite & { usuarioId: string })[];
   sessao: SessaoPersistida | null;
 }
 
@@ -87,6 +96,11 @@ export function normalizarBanco(b: BancoMock): BancoMock {
   b.preferenciasMensagens ??= {};
   b.rasantes ??= [];
   b.rasantesVistos ??= [];
+  // quem já usava a demo ganha a resenha de exemplo na primeira abertura da Arquibancada
+  b.posts ??= gerarPostsSeed();
+  for (const post of b.posts) post.midias ??= [];
+  b.curtidasDePosts ??= [];
+  b.palpites ??= [];
   return b;
 }
 
@@ -128,6 +142,9 @@ export function criarBancoInicial(): BancoMock {
     preferenciasMensagens: {},
     rasantes: gerarRasantesSeed(),
     rasantesVistos: [],
+    posts: gerarPostsSeed(),
+    curtidasDePosts: [],
+    palpites: [],
     sessao: null,
   };
 }

@@ -40,4 +40,10 @@ export const chaves = {
   rasantesDoUsuario: (id: string) => ['rasantes-usuario', id] as const,
   bloqueados: ['bloqueados'] as const,
   partidas: ['partidas'] as const,
+  calendario: ['calendario'] as const,
+  posts: (filtro: string) => ['arquibancada', 'posts', filtro] as const,
+  post: (id: string) => ['arquibancada', 'post', id] as const,
+  respostas: (postId: string) => ['arquibancada', 'respostas', postId] as const,
+  meusPalpites: ['palpites', 'meus'] as const,
+  resumoDosPalpites: (partidaId: string) => ['palpites', 'resumo', partidaId] as const,
 };

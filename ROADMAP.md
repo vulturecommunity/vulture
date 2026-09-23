@@ -72,11 +72,9 @@ redes ruins; limite de 60 s já existe.
 
 ## Fase G — Camada temática (contínuo)
 
-- ~~**API de partidas**~~ **feito**: `MatchServiceTheSportsDB` traz o último resultado e o próximo
-  jogo do Flamengo da TheSportsDB (chave de teste pública, sem cadastro), com cache no aparelho
+- ~~**API de partidas**~~ **feito**: a Edge Function `atualizar-calendario` traz a temporada do
+  Flamengo da Highlightly para `public.partidas` (cache no Supabase + Realtime), com cache no aparelho
   para sobreviver a quedas de rede. `EXPO_PUBLIC_MATCH_DRIVER=mock` volta ao JSON local.
-  Próximo passo opcional: espelhar as partidas numa tabela do Supabase com `pg_cron` para não
-  depender do limite da API pública quando a base de torcedores crescer.
 - Placar ao vivo com "gol!" em push, enquetes de escalação, ranking mensal/anual com badges, "Torcedor do jogo".
 - Comunidades por região/embaixadas de torcida.
 

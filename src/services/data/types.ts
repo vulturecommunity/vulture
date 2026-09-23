@@ -8,17 +8,21 @@ import type {
   HashtagTrending,
   Id,
   Live,
+  MarcacaoDePartida,
   Mensagem,
   MensagemLive,
   MotivoDenuncia,
   Notificacao,
   NovoSeguidor,
   Pagina,
+  Palpite,
   Perfil,
   PermissaoDeConversa,
+  Post,
   PreferenciasDeMensagens,
   RankingTorcedor,
   Rasante,
+  ResumoDePalpites,
   Sessao,
   TipoDeMidia,
   TipoDeNotificacao,
@@ -87,6 +91,45 @@ export interface NovaDenuncia {
 }
 
 export type CancelarAssinatura = () => void;
+
+export interface ParametrosDaResenha {
+  cursor?: string | null;
+  limite?: number;
+  hashtag?: string;
+  /** só os posts marcados com esse jogo */
+  partidaId?: string;
+}
+
+/** Anexo escolhido no composer: imagem/vídeo ainda no aparelho, ou GIF já hospedado no GIPHY. */
+export type NovaMidia =
+  | { tipo: 'imagem'; uriLocal: string; largura: number; altura: number }
+  | {
+      tipo: 'video';
+      uriLocal: string;
+      largura: number | null;
+      altura: number | null;
+      /** segundos */
+      duracao: number;
+      tamanhoBytes: number;
+    }
+  | { tipo: 'gif'; url: string; largura: number; altura: number };
+
+export interface NovoPost {
+  /** pode ser vazio quando há mídia */
+  texto: string;
+  /** responder a um post (respostas de respostas caem no post raiz) */
+  paiId?: Id | null;
+  partida?: MarcacaoDePartida | null;
+  midias?: NovaMidia[];
+}
+
+export interface NovoPalpite {
+  partidaId: string;
+  /** horário do jogo (ISO): palpites fecham quando a bola rola */
+  inicioDaPartida: string;
+  golsMandante: number;
+  golsVisitante: number;
+}
 
 /**
  * Contrato único da camada de dados.
@@ -203,6 +246,24 @@ export interface DataService {
   publicarRasante(novo: NovoRasante, aoProgredir?: ProgressoDeUpload): Promise<Rasante>;
   marcarRasanteComoVisto(id: Id): Promise<void>;
   excluirRasante(id: Id): Promise<void>;
+
+  // ---- Arquibancada: resenha (posts de texto) ----
+  /** Posts raiz, do mais novo para o mais antigo; respostas ficam na thread. */
+  listPosts(params: ParametrosDaResenha): Promise<Pagina<Post>>;
+  getPost(id: Id): Promise<Post>;
+  /** Respostas de um post, da mais antiga para a mais nova. */
+  listRespostas(postId: Id): Promise<Post[]>;
+  /** Envia os anexos (se houver) e publica; `aoProgredir` acompanha o upload. */
+  publicarPost(novo: NovoPost, aoProgredir?: ProgressoDeUpload): Promise<Post>;
+  excluirPost(id: Id): Promise<void>;
+  curtirPost(id: Id): Promise<void>;
+  descurtirPost(id: Id): Promise<void>;
+
+  // ---- Arquibancada: palpites de placar ----
+  listMeusPalpites(partidaIds: string[]): Promise<Palpite[]>;
+  /** Cria ou troca o palpite; recusa depois que a partida começou. */
+  salvarPalpite(novo: NovoPalpite): Promise<Palpite>;
+  resumoDosPalpites(partidaId: string): Promise<ResumoDePalpites>;
 
   // ---- Segurança ----
   report(denuncia: NovaDenuncia): Promise<Denuncia>;

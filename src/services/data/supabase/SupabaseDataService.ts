@@ -17,14 +17,18 @@ import type {
   Live,
   Mensagem,
   MensagemLive,
+  MidiaDoPost,
   Notificacao,
   NovoSeguidor,
   Pagina,
+  Palpite,
   Perfil,
   PermissaoDeConversa,
+  Post,
   PreferenciasDeMensagens,
   RankingTorcedor,
   Rasante,
+  ResumoDePalpites,
   ResumoDeUsuario,
   Sessao,
   TipoDeNotificacao,
@@ -33,8 +37,10 @@ import type {
   Video,
 } from '@/types';
 import { ErroDeAplicacao } from '@/utils/erros';
-import { normalizarHashtag } from '@/utils/hashtags';
+import { extrairHashtags, normalizarHashtag } from '@/utils/hashtags';
 import { novoId } from '@/utils/ids';
+import { validarPalpite } from '@/utils/palpites';
+import { normalizarMidias, validarMidiasDoPost, validarTextoDoPost } from '@/utils/posts';
 import { apelidoValido, normalizarApelido } from '@/utils/validacao';
 
 import type {
@@ -44,8 +50,12 @@ import type {
   DataService,
   EventoDaLive,
   NovaDenuncia,
+  NovaMidia,
+  NovoPalpite,
+  NovoPost,
   NovoRasante,
   NovoVideo,
+  ParametrosDaResenha,
   ParametrosDoFeed,
   ProgressoDeUpload,
 } from '../types';
@@ -132,6 +142,7 @@ interface LinhaNotificacao {
   de_id: string | null;
   video_id: string | null;
   live_id: string | null;
+  post_id?: string | null;
   texto: string;
   lida: boolean;
   criado_em: string;
@@ -166,12 +177,71 @@ interface LinhaRasante {
   expira_em: string;
 }
 
+interface LinhaPost {
+  id: string;
+  autor_id: string;
+  texto: string;
+  hashtags: string[] | null;
+  pai_id: string | null;
+  partida_id: string | null;
+  partida_rotulo: string | null;
+  midias: unknown;
+  likes_count: number;
+  replies_count: number;
+  criado_em: string;
+  autor?: LinhaPerfilResumo | null;
+}
+
+interface LinhaPalpite {
+  partida_id: string;
+  gols_mandante: number;
+  gols_visitante: number;
+  atualizado_em: string;
+}
+
+interface LinhaResumoDePalpites {
+  total: number | string;
+  vitoria_mandante: number | string;
+  empate: number | string;
+  vitoria_visitante: number | string;
+  gols_mandante: number | null;
+  gols_visitante: number | null;
+  votos_placar: number | string | null;
+}
+
 // profiles tem privilégio por coluna no Postgres (email fica fora): nunca usar '*' nessa tabela.
 const COLUNAS_PERFIL =
   'id, apelido, nome, avatar_url, bio, interesses, seguidores_count, seguindo_count, curtidas_recebidas, videos_count, criado_em';
 const SELECAO_AUTOR = 'autor:profiles!videos_autor_id_fkey(id, apelido, nome, avatar_url)';
 const SELECAO_VIDEO = `*, ${SELECAO_AUTOR}`;
+const SELECAO_POST = '*, autor:profiles!posts_autor_id_fkey(id, apelido, nome, avatar_url)';
 const LIMITE_PADRAO = 10;
+
+function paraPost(p: LinhaPost, curtidos: Set<string>): Post {
+  return {
+    id: p.id,
+    autorId: p.autor_id,
+    autor: resumo(p.autor, p.autor_id),
+    texto: p.texto,
+    hashtags: p.hashtags ?? [],
+    paiId: p.pai_id,
+    partida: p.partida_id ? { id: p.partida_id, rotulo: p.partida_rotulo ?? '' } : null,
+    midias: normalizarMidias(p.midias),
+    curtidas: p.likes_count ?? 0,
+    respostas: p.replies_count ?? 0,
+    criadoEm: p.criado_em,
+    curtido: curtidos.has(p.id),
+  };
+}
+
+function paraPalpite(p: LinhaPalpite): Palpite {
+  return {
+    partidaId: p.partida_id,
+    golsMandante: p.gols_mandante,
+    golsVisitante: p.gols_visitante,
+    atualizadoEm: p.atualizado_em,
+  };
+}
 
 function resumo(p: LinhaPerfilResumo | null | undefined, idPadrao: string): Video['autor'] {
   if (!p) return { id: idPadrao, apelido: 'usuario', nome: 'Usuário', avatarUrl: null };
@@ -360,7 +430,7 @@ export class SupabaseDataService implements DataService {
   }
 
   private async enviarArquivo(
-    bucket: 'videos' | 'thumbnails' | 'avatars',
+    bucket: 'videos' | 'thumbnails' | 'avatars' | 'posts',
     caminho: string,
     uriLocal: string,
     tipoMime: string,
@@ -378,6 +448,7 @@ export class SupabaseDataService implements DataService {
         apikey: cfg.chave,
         'Content-Type': tipoMime,
         'x-upsert': 'true',
+        'cache-control': '31536000',
       },
       mimeType: tipoMime,
       onProgress: ({ bytesSent, totalBytes }) => {
@@ -1152,6 +1223,7 @@ export class SupabaseDataService implements DataService {
       de: n.de ? { id: n.de.id, apelido: n.de.apelido, avatarUrl: n.de.avatar_url } : null,
       videoId: n.video_id,
       liveId: n.live_id ?? null,
+      postId: n.post_id ?? null,
       texto: n.texto,
       lida: n.lida,
       criadoEm: n.criado_em,
@@ -1591,6 +1663,293 @@ export class SupabaseDataService implements DataService {
       this.db.storage.from('videos').remove([`${meuId}/rasantes/${id}.mp4`]),
       this.db.storage.from('thumbnails').remove([`${meuId}/rasantes/${id}.jpg`]),
     ]).catch(() => {});
+  }
+
+  // ---------------------------------------------------------------- arquibancada: resenha
+
+  private async decorarPosts(linhas: LinhaPost[]): Promise<Post[]> {
+    const meuId = await this.meuId();
+    const curtidos = new Set<string>();
+    if (meuId && linhas.length > 0) {
+      const { data } = await this.db
+        .from('post_likes')
+        .select('post_id')
+        .eq('usuario_id', meuId)
+        .in(
+          'post_id',
+          linhas.map((l) => l.id),
+        );
+      for (const l of (data ?? []) as { post_id: string }[]) curtidos.add(l.post_id);
+    }
+    return linhas.map((l) => paraPost(l, curtidos));
+  }
+
+  async listPosts(params: ParametrosDaResenha): Promise<Pagina<Post>> {
+    const limite = params.limite ?? LIMITE_PADRAO;
+    let consulta = this.db
+      .from('posts')
+      .select(SELECAO_POST)
+      .is('pai_id', null)
+      .order('criado_em', { ascending: false })
+      .limit(limite + 1);
+    if (params.cursor) consulta = consulta.lt('criado_em', params.cursor);
+    if (params.hashtag)
+      consulta = consulta.contains('hashtags_norm', [normalizarHashtag(params.hashtag)]);
+    if (params.partidaId) consulta = consulta.eq('partida_id', params.partidaId);
+    const bloqueados = await this.idsBloqueados();
+    if (bloqueados.length > 0)
+      consulta = consulta.not('autor_id', 'in', `(${bloqueados.join(',')})`);
+
+    const { data, error } = await consulta;
+    if (error) erroDoSupabase(error, 'Falha ao carregar a resenha');
+    const linhas = (data ?? []) as unknown as LinhaPost[];
+    const temMais = linhas.length > limite;
+    const pagina = temMais ? linhas.slice(0, limite) : linhas;
+    const itens = await this.decorarPosts(pagina);
+    return { itens, proximoCursor: temMais ? pagina[pagina.length - 1].criado_em : null };
+  }
+
+  async getPost(id: Id): Promise<Post> {
+    const { data, error } = await this.db.from('posts').select(SELECAO_POST).eq('id', id).single();
+    if (error || !data) erroDoSupabase(error, 'Post não encontrado');
+    const [post] = await this.decorarPosts([data as unknown as LinhaPost]);
+    return post;
+  }
+
+  async listRespostas(postId: Id): Promise<Post[]> {
+    const { data, error } = await this.db
+      .from('posts')
+      .select(SELECAO_POST)
+      .eq('pai_id', postId)
+      .order('criado_em', { ascending: true })
+      .limit(200);
+    if (error) erroDoSupabase(error, 'Falha ao carregar as respostas');
+    const bloqueados = new Set(await this.idsBloqueados());
+    const linhas = ((data ?? []) as unknown as LinhaPost[]).filter(
+      (l) => !bloqueados.has(l.autor_id),
+    );
+    return this.decorarPosts(linhas);
+  }
+
+  /** Caminho do arquivo no bucket "posts" a partir da URL pública (para apagar depois). */
+  private caminhoNoBucketDePosts(url: string | null): string | null {
+    const marca = '/storage/v1/object/public/posts/';
+    const i = url ? url.indexOf(marca) : -1;
+    return i >= 0 ? url!.slice(i + marca.length) : null;
+  }
+
+  /** Sobe imagens e vídeos para posts/<meu id>/; GIFs já estão hospedados no GIPHY. */
+  private async enviarMidias(
+    meuId: string,
+    novas: NovaMidia[],
+    enviados: string[],
+    aoProgredir?: ProgressoDeUpload,
+  ): Promise<MidiaDoPost[]> {
+    const midias: MidiaDoPost[] = [];
+    const total = novas.length;
+    for (const [i, m] of novas.entries()) {
+      const etapa = total > 1 ? `Enviando ${i + 1} de ${total}` : 'Enviando';
+      const progresso = (f: number) => aoProgredir?.((i + f) / total, etapa);
+      progresso(0);
+      if (m.tipo === 'gif') {
+        midias.push({ ...m, thumbnailUrl: null, duracao: null });
+        continue;
+      }
+      const base = `${meuId}/${novoId()}`;
+      if (m.tipo === 'imagem') {
+        const url = await this.enviarArquivo(
+          'posts',
+          `${base}.jpg`,
+          m.uriLocal,
+          'image/jpeg',
+          progresso,
+        );
+        enviados.push(`${base}.jpg`);
+        midias.push({
+          tipo: 'imagem',
+          url,
+          thumbnailUrl: null,
+          largura: m.largura,
+          altura: m.altura,
+          duracao: null,
+        });
+        continue;
+      }
+      const url = await this.enviarArquivo(
+        'posts',
+        `${base}.mp4`,
+        m.uriLocal,
+        tipoMimeDe(m.uriLocal, 'video'),
+        (f) => progresso(f * 0.9),
+      );
+      enviados.push(`${base}.mp4`);
+      const miniaturaLocal = await gerarThumbnail(m.uriLocal);
+      let thumbnailUrl: string | null = null;
+      if (miniaturaLocal) {
+        thumbnailUrl = await this.enviarArquivo(
+          'posts',
+          `${base}.jpg`,
+          miniaturaLocal,
+          'image/jpeg',
+        );
+        enviados.push(`${base}.jpg`);
+      }
+      midias.push({
+        tipo: 'video',
+        url,
+        thumbnailUrl,
+        largura: m.largura,
+        altura: m.altura,
+        duracao: Math.round(m.duracao),
+      });
+    }
+    return midias;
+  }
+
+  async publicarPost(novo: NovoPost, aoProgredir?: ProgressoDeUpload): Promise<Post> {
+    const meuId = await this.meuIdOuErro();
+    const novas = novo.midias ?? [];
+    validarMidiasDoPost(novas);
+    const texto = validarTextoDoPost(novo.texto, novas.length > 0);
+    let paiId: string | null = null;
+    if (novo.paiId) {
+      const { data: pai } = await this.db
+        .from('posts')
+        .select('id, pai_id')
+        .eq('id', novo.paiId)
+        .maybeSingle();
+      const p = pai as { id: string; pai_id: string | null } | null;
+      if (!p) throw new ErroDeAplicacao('Post não encontrado.', 'nao_encontrado');
+      paiId = p.pai_id ?? p.id;
+    }
+    const hashtags = extrairHashtags(texto);
+    const enviados: string[] = [];
+    try {
+      const midias = await this.enviarMidias(meuId, novas, enviados, aoProgredir);
+      aoProgredir?.(1, 'Publicando');
+      const { data, error } = await this.db
+        .from('posts')
+        .insert({
+          autor_id: meuId,
+          texto,
+          hashtags,
+          hashtags_norm: hashtags.map(normalizarHashtag),
+          pai_id: paiId,
+          partida_id: novo.partida?.id ?? null,
+          partida_rotulo: novo.partida?.rotulo ?? null,
+          midias,
+        })
+        .select(SELECAO_POST)
+        .single();
+      if (error || !data) erroDoSupabase(error, 'Falha ao publicar');
+      return paraPost(data as unknown as LinhaPost, new Set());
+    } catch (erro) {
+      // sem post, os arquivos já enviados só ocupariam espaço
+      if (enviados.length > 0) await this.db.storage.from('posts').remove(enviados);
+      throw erro;
+    }
+  }
+
+  async excluirPost(id: Id): Promise<void> {
+    const meuId = await this.meuIdOuErro();
+    const { data: linha } = await this.db
+      .from('posts')
+      .select('midias')
+      .eq('id', id)
+      .eq('autor_id', meuId)
+      .maybeSingle();
+    const { error } = await this.db.from('posts').delete().eq('id', id).eq('autor_id', meuId);
+    if (error) erroDoSupabase(error, 'Falha ao excluir o post');
+    const arquivos = normalizarMidias((linha as { midias?: unknown } | null)?.midias)
+      .flatMap((m) => [m.url, m.thumbnailUrl])
+      .map((url) => this.caminhoNoBucketDePosts(url))
+      .filter((c): c is string => !!c);
+    if (arquivos.length > 0) await this.db.storage.from('posts').remove(arquivos);
+  }
+
+  async curtirPost(id: Id): Promise<void> {
+    const meuId = await this.meuIdOuErro();
+    const { error } = await this.db
+      .from('post_likes')
+      .upsert(
+        { usuario_id: meuId, post_id: id },
+        { onConflict: 'usuario_id,post_id', ignoreDuplicates: true },
+      );
+    if (error) erroDoSupabase(error, 'Falha ao curtir');
+  }
+
+  async descurtirPost(id: Id): Promise<void> {
+    const meuId = await this.meuIdOuErro();
+    const { error } = await this.db
+      .from('post_likes')
+      .delete()
+      .eq('usuario_id', meuId)
+      .eq('post_id', id);
+    if (error) erroDoSupabase(error, 'Falha ao descurtir');
+  }
+
+  // ---------------------------------------------------------------- arquibancada: palpites
+
+  async listMeusPalpites(partidaIds: string[]): Promise<Palpite[]> {
+    const meuId = await this.meuId();
+    if (!meuId || partidaIds.length === 0) return [];
+    const { data, error } = await this.db
+      .from('palpites')
+      .select('partida_id, gols_mandante, gols_visitante, atualizado_em')
+      .eq('usuario_id', meuId)
+      .in('partida_id', partidaIds);
+    if (error) erroDoSupabase(error, 'Falha ao carregar seus palpites');
+    return ((data ?? []) as LinhaPalpite[]).map(paraPalpite);
+  }
+
+  async salvarPalpite(novo: NovoPalpite): Promise<Palpite> {
+    const meuId = await this.meuIdOuErro();
+    validarPalpite(novo);
+    const { data, error } = await this.db
+      .from('palpites')
+      .upsert(
+        {
+          usuario_id: meuId,
+          partida_id: novo.partidaId,
+          partida_inicio: novo.inicioDaPartida,
+          gols_mandante: novo.golsMandante,
+          gols_visitante: novo.golsVisitante,
+          atualizado_em: new Date().toISOString(),
+        },
+        { onConflict: 'usuario_id,partida_id' },
+      )
+      .select('partida_id, gols_mandante, gols_visitante, atualizado_em')
+      .single();
+    // a RLS recusa depois do apito inicial, mesmo que o relógio do aparelho esteja errado
+    if (error && /row-level security/i.test(error.message)) {
+      throw new ErroDeAplicacao('Palpites encerrados: a bola já rolou.', 'palpite_encerrado');
+    }
+    if (error || !data) erroDoSupabase(error, 'Falha ao salvar o palpite');
+    return paraPalpite(data as LinhaPalpite);
+  }
+
+  async resumoDosPalpites(partidaId: string): Promise<ResumoDePalpites> {
+    const { data, error } = await this.db.rpc('resumo_palpites', { p_partida_id: partidaId });
+    if (error) erroDoSupabase(error, 'Falha ao carregar os palpites da torcida');
+    const linha = ((data ?? []) as LinhaResumoDePalpites[])[0];
+    const n = (v: number | string | null | undefined) => Number(v ?? 0);
+    if (!linha) {
+      return { total: 0, vitoriaMandante: 0, empate: 0, vitoriaVisitante: 0, placarPopular: null };
+    }
+    return {
+      total: n(linha.total),
+      vitoriaMandante: n(linha.vitoria_mandante),
+      empate: n(linha.empate),
+      vitoriaVisitante: n(linha.vitoria_visitante),
+      placarPopular:
+        linha.gols_mandante !== null && linha.gols_visitante !== null
+          ? {
+              golsMandante: linha.gols_mandante,
+              golsVisitante: linha.gols_visitante,
+              votos: n(linha.votos_placar),
+            }
+          : null,
+    };
   }
 
   // ---------------------------------------------------------------- segurança

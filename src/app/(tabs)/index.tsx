@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedVertical } from '@/components/feed/FeedVertical';
 import { CardsDePartida } from '@/components/partidas/CardsDePartida';
-import { Erro, Icone, Listras, Texto } from '@/components/ui';
+import { Erro, Icone, Texto } from '@/components/ui';
 import { useFeed } from '@/hooks/useFeed';
 import { useTotalNaoLido } from '@/hooks/useMensagens';
 import type { AbaDoFeed } from '@/services/data/types';
@@ -19,7 +19,7 @@ const ABAS: { id: AbaDoFeed; rotulo: string }[] = [
 ];
 
 /**
- * Feed principal. O cabeçalho (marca, abas, mensagens e placar) fica em fluxo
+ * Feed principal. O cabeçalho (arquibancada, abas, mensagens e placar) fica em fluxo
  * normal e os posts começam logo abaixo dele — nada de controles por cima do vídeo.
  */
 export default function TelaFeed() {
@@ -50,9 +50,15 @@ export default function TelaFeed() {
     <View style={estilos.tela}>
       <View style={[estilos.cabecalho, { paddingTop: insets.top + espacos.xs }]}>
         <View style={estilos.linhaMarca}>
-          <View style={estilos.marca}>
-            <Listras altura={14} faixas={6} style={estilos.marcaListras} />
-            <Texto variante="marca">VULTURE</Texto>
+          <View style={estilos.ladoEsquerdo}>
+            <Pressable
+              onPress={() => router.push('/arquibancada')}
+              style={estilos.botaoRedondo}
+              hitSlop={8}
+              accessibilityLabel="Arquibancada: resenha e jogos"
+              testID="botao-arquibancada">
+              <Icone nome="estadio" tamanho={21} cor={cores.texto} />
+            </Pressable>
           </View>
           <View style={estilos.seletor}>
             {ABAS.map((item) => {
@@ -75,21 +81,23 @@ export default function TelaFeed() {
               );
             })}
           </View>
-          <Pressable
-            onPress={() => router.push('/mensagens')}
-            style={estilos.mensagens}
-            hitSlop={8}
-            accessibilityLabel="Mensagens"
-            testID="botao-mensagens">
-            <Icone nome="mensagens" tamanho={21} cor={cores.texto} />
-            {naoLidas > 0 ? (
-              <View style={estilos.badge}>
-                <Texto variante="legenda" style={estilos.badgeTexto}>
-                  {naoLidas > 9 ? '9+' : naoLidas}
-                </Texto>
-              </View>
-            ) : null}
-          </Pressable>
+          <View style={estilos.ladoDireito}>
+            <Pressable
+              onPress={() => router.push('/mensagens')}
+              style={estilos.botaoRedondo}
+              hitSlop={8}
+              accessibilityLabel="Mensagens"
+              testID="botao-mensagens">
+              <Icone nome="mensagens" tamanho={21} cor={cores.texto} />
+              {naoLidas > 0 ? (
+                <View style={estilos.badge}>
+                  <Texto variante="legenda" style={estilos.badgeTexto}>
+                    {naoLidas > 9 ? '9+' : naoLidas}
+                  </Texto>
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
         </View>
         <CardsDePartida />
       </View>
@@ -132,28 +140,23 @@ const estilos = StyleSheet.create({
   linhaMarca: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: espacos.sm,
     paddingHorizontal: espacos.md,
   },
-  marca: { flexDirection: 'row', alignItems: 'center', gap: espacos.xs + 2 },
-  marcaListras: { width: 18 },
+  ladoEsquerdo: { flex: 1, alignItems: 'flex-start' },
+  ladoDireito: { flex: 1, alignItems: 'flex-end' },
   seletor: {
-    flex: 1,
     flexDirection: 'row',
-    alignSelf: 'center',
-    marginLeft: espacos.xs,
+    width: 200,
     padding: 3,
     borderRadius: raios.redondo,
     backgroundColor: cores.fundoElevado,
     borderWidth: 1,
     borderColor: cores.borda,
-    maxWidth: 200,
   },
   opcao: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: raios.redondo },
   opcaoAtiva: { backgroundColor: cores.vermelho },
   opcaoTextoAtivo: { fontWeight: '700' },
-  mensagens: {
-    marginLeft: 'auto',
+  botaoRedondo: {
     width: 38,
     height: 38,
     borderRadius: 19,

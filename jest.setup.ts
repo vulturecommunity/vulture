@@ -105,6 +105,33 @@ jest.mock('expo-file-system', () => {
   };
 });
 
+// Compressão de imagem: devolve um JPEG "reduzido" fixo
+jest.mock('expo-image-manipulator', () => {
+  const contexto: { resize: jest.Mock; renderAsync: jest.Mock } = {
+    resize: jest.fn(() => contexto),
+    renderAsync: jest.fn(() =>
+      Promise.resolve({
+        saveAsync: jest.fn(() =>
+          Promise.resolve({ uri: 'file:///comprimida.jpg', width: 1080, height: 810 }),
+        ),
+      }),
+    ),
+  };
+  return {
+    ImageManipulator: { manipulate: jest.fn(() => contexto) },
+    SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+  };
+});
+
+// Galeria: cada teste diz o que a pessoa "escolheu"
+jest.mock('expo-image-picker', () => ({
+  requestMediaLibraryPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true })),
+  requestCameraPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true })),
+  launchImageLibraryAsync: jest.fn(() => Promise.resolve({ canceled: true, assets: [] })),
+  launchCameraAsync: jest.fn(() => Promise.resolve({ canceled: true, assets: [] })),
+  MediaTypeOptions: { All: 'All', Images: 'Images', Videos: 'Videos' },
+}));
+
 jest.mock('expo-crypto', () => ({
   randomUUID: () => `uuid-${Math.random().toString(36).slice(2, 10)}`,
 }));

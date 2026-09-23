@@ -636,7 +636,9 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values
   ('videos',     'videos',     true, 104857600, array['video/mp4', 'video/quicktime', 'video/webm']),
   ('thumbnails', 'thumbnails', true, 5242880,   array['image/jpeg', 'image/png', 'image/webp']),
-  ('avatars',    'avatars',    true, 5242880,   array['image/jpeg', 'image/png', 'image/webp'])
+  ('avatars',    'avatars',    true, 5242880,   array['image/jpeg', 'image/png', 'image/webp']),
+  -- anexos da resenha: fotos já comprimidas no aparelho e vídeos de até 30 s / 15 MB
+  ('posts',      'posts',      true, 15728640,  array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'])
 on conflict (id) do update
   set public = excluded.public,
       file_size_limit = excluded.file_size_limit,
@@ -644,26 +646,26 @@ on conflict (id) do update
 
 drop policy if exists "storage leitura publica" on storage.objects;
 create policy "storage leitura publica" on storage.objects
-  for select using (bucket_id in ('videos', 'thumbnails', 'avatars'));
+  for select using (bucket_id in ('videos', 'thumbnails', 'avatars', 'posts'));
 
 drop policy if exists "storage upload na propria pasta" on storage.objects;
 create policy "storage upload na propria pasta" on storage.objects
   for insert with check (
-    bucket_id in ('videos', 'thumbnails', 'avatars')
+    bucket_id in ('videos', 'thumbnails', 'avatars', 'posts')
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
 drop policy if exists "storage atualizar na propria pasta" on storage.objects;
 create policy "storage atualizar na propria pasta" on storage.objects
   for update using (
-    bucket_id in ('videos', 'thumbnails', 'avatars')
+    bucket_id in ('videos', 'thumbnails', 'avatars', 'posts')
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
 drop policy if exists "storage excluir na propria pasta" on storage.objects;
 create policy "storage excluir na propria pasta" on storage.objects
   for delete using (
-    bucket_id in ('videos', 'thumbnails', 'avatars')
+    bucket_id in ('videos', 'thumbnails', 'avatars', 'posts')
     and auth.uid()::text = (storage.foldername(name))[1]
   );
 
@@ -922,5 +924,289 @@ begin
     select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'messages'
   ) then
     alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;
+
+-- =====================================================================================
+-- ARQUIBANCADA — resenha (posts de texto, estilo X) e palpites de placar
+-- =====================================================================================
+
+create table if not exists public.posts (
+  id             uuid primary key default gen_random_uuid(),
+  autor_id       uuid not null references public.profiles (id) on delete cascade,
+  -- pode ser vazio quando o post é só mídia (ver posts_conteudo_check)
+  texto          text not null default '' constraint posts_texto_check check (char_length(texto) <= 280),
+  hashtags       text[] not null default '{}',
+  hashtags_norm  text[] not null default '{}',
+  -- resposta: sempre aponta para o post raiz (thread de 1 nível)
+  pai_id         uuid references public.posts (id) on delete cascade,
+  -- jogo marcado no post; o id vem do calendário (ex.: "espn-401912523")
+  partida_id     text check (partida_id is null or char_length(partida_id) <= 64),
+  partida_rotulo text check (partida_rotulo is null or char_length(partida_rotulo) <= 40),
+  -- anexos: [{tipo: imagem|video|gif, url, thumbnailUrl, largura, altura, duracao}]
+  midias         jsonb not null default '[]'::jsonb,
+  likes_count    integer not null default 0,
+  replies_count  integer not null default 0,
+  criado_em      timestamptz not null default now()
+);
+
+create table if not exists public.post_likes (
+  usuario_id uuid not null references public.profiles (id) on delete cascade,
+  post_id    uuid not null references public.posts (id) on delete cascade,
+  criado_em  timestamptz not null default now(),
+  primary key (usuario_id, post_id)
+);
+
+create table if not exists public.palpites (
+  usuario_id     uuid not null references public.profiles (id) on delete cascade,
+  partida_id     text not null check (char_length(partida_id) <= 64),
+  -- horário do jogo: depois dele o palpite não pode mais ser trocado (ver RLS)
+  partida_inicio timestamptz not null,
+  gols_mandante  smallint not null check (gols_mandante between 0 and 20),
+  gols_visitante smallint not null check (gols_visitante between 0 and 20),
+  atualizado_em  timestamptz not null default now(),
+  primary key (usuario_id, partida_id)
+);
+
+-- bancos criados antes dos anexos
+alter table public.posts add column if not exists midias jsonb not null default '[]'::jsonb;
+alter table public.posts alter column texto set default '';
+alter table public.posts drop constraint if exists posts_texto_check;
+alter table public.posts add constraint posts_texto_check check (char_length(texto) <= 280);
+alter table public.posts drop constraint if exists posts_conteudo_check;
+alter table public.posts add constraint posts_conteudo_check
+  check (char_length(btrim(texto)) > 0 or jsonb_array_length(midias) > 0);
+
+-- Anexos válidos: até 4 imagens, OU 1 vídeo (até 30 s), OU 1 GIF. Imagem e vídeo só da pasta
+-- do próprio autor no bucket "posts"; GIF só do GIPHY. Nada de link para qualquer site.
+create or replace function public.midias_do_post_validas(p_midias jsonb, p_autor uuid)
+returns boolean
+language sql
+immutable
+as $$
+  select case
+    when jsonb_typeof(p_midias) is distinct from 'array' then false
+    when jsonb_array_length(p_midias) > 4 then false
+    when jsonb_array_length(p_midias) > 1
+      and exists (select 1 from jsonb_array_elements(p_midias) m where m->>'tipo' <> 'imagem') then false
+    else not exists (
+      select 1
+      from jsonb_array_elements(p_midias) m,
+           lateral (select '^https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/posts/'
+                           || p_autor::text || '/' as pasta) as dono
+      where not case m->>'tipo'
+        when 'imagem' then coalesce(m->>'url', '') ~ dono.pasta
+        when 'video' then coalesce(m->>'url', '') ~ dono.pasta
+          and (m->>'thumbnailUrl' is null or (m->>'thumbnailUrl') ~ dono.pasta)
+          and coalesce((m->>'duracao')::numeric, 0) <= 31
+        when 'gif' then coalesce(m->>'url', '') ~ '^https://media[0-9]*\.giphy\.com/'
+        else false
+      end
+    )
+  end;
+$$;
+
+create index if not exists posts_raiz_idx on public.posts (criado_em desc) where pai_id is null;
+create index if not exists posts_pai_idx on public.posts (pai_id, criado_em);
+create index if not exists posts_partida_idx on public.posts (partida_id, criado_em desc);
+create index if not exists posts_hashtags_idx on public.posts using gin (hashtags_norm);
+create index if not exists palpites_partida_idx on public.palpites (partida_id);
+
+-- curtidas e respostas de post viram notificação; tocar abre a thread
+alter table public.notifications
+  add column if not exists post_id uuid references public.posts (id) on delete cascade;
+
+-- posts também podem ser denunciados
+alter table public.reports drop constraint if exists reports_tipo_alvo_check;
+alter table public.reports add constraint reports_tipo_alvo_check
+  check (tipo_alvo in ('video', 'usuario', 'comentario', 'live', 'post'));
+
+-- Contador de curtidas do post e notificação ao autor
+create or replace function public.tg_post_likes()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  autor uuid;
+  raiz  uuid;
+begin
+  if tg_op = 'INSERT' then
+    update public.posts set likes_count = likes_count + 1 where id = new.post_id
+      returning autor_id, coalesce(pai_id, id) into autor, raiz;
+    if autor is not null and autor <> new.usuario_id then
+      insert into public.notifications (para_id, tipo, de_id, post_id, texto)
+      values (autor, 'curtida', new.usuario_id, raiz, 'curtiu seu post na Arquibancada');
+    end if;
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.posts set likes_count = greatest(0, likes_count - 1) where id = old.post_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists post_likes_contadores on public.post_likes;
+create trigger post_likes_contadores
+  after insert or delete on public.post_likes
+  for each row execute function public.tg_post_likes();
+
+-- Contador de respostas do post raiz e notificação ao autor
+create or replace function public.tg_posts()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  autor uuid;
+begin
+  if tg_op = 'INSERT' and new.pai_id is not null then
+    update public.posts set replies_count = replies_count + 1 where id = new.pai_id
+      returning autor_id into autor;
+    if autor is not null and autor <> new.autor_id then
+      insert into public.notifications (para_id, tipo, de_id, post_id, texto)
+      values (autor, 'comentario', new.autor_id, new.pai_id,
+              case when btrim(new.texto) = '' then 'respondeu seu post com uma mídia'
+                   else 'respondeu seu post: "' || left(new.texto, 60) || '"' end);
+    end if;
+  elsif tg_op = 'DELETE' and old.pai_id is not null then
+    update public.posts set replies_count = greatest(0, replies_count - 1) where id = old.pai_id;
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+drop trigger if exists posts_contadores on public.posts;
+create trigger posts_contadores
+  after insert or delete on public.posts
+  for each row execute function public.tg_posts();
+
+-- O que a torcida aposta: só números agregados, nunca o palpite de cada pessoa
+create or replace function public.resumo_palpites(p_partida_id text)
+returns table (
+  total bigint,
+  vitoria_mandante bigint,
+  empate bigint,
+  vitoria_visitante bigint,
+  gols_mandante smallint,
+  gols_visitante smallint,
+  votos_placar bigint
+)
+language sql
+stable
+security definer set search_path = public
+as $$
+  with p as (
+    select gols_mandante, gols_visitante from public.palpites where partida_id = p_partida_id
+  ),
+  popular as (
+    select gols_mandante, gols_visitante, count(*) as votos
+    from p group by gols_mandante, gols_visitante
+    order by votos desc, gols_mandante desc, gols_visitante asc
+    limit 1
+  )
+  select
+    (select count(*) from p),
+    (select count(*) from p where gols_mandante > gols_visitante),
+    (select count(*) from p where gols_mandante = gols_visitante),
+    (select count(*) from p where gols_mandante < gols_visitante),
+    popular.gols_mandante,
+    popular.gols_visitante,
+    popular.votos
+  from (select 1) as um
+  left join popular on true;
+$$;
+
+revoke execute on function public.resumo_palpites(text) from public;
+grant execute on function public.resumo_palpites(text) to anon, authenticated;
+
+alter table public.posts      enable row level security;
+alter table public.post_likes enable row level security;
+alter table public.palpites   enable row level security;
+
+drop policy if exists "posts leitura publica" on public.posts;
+create policy "posts leitura publica" on public.posts for select using (true);
+drop policy if exists "posts inserir proprio" on public.posts;
+create policy "posts inserir proprio" on public.posts for insert
+  with check (auth.uid() = autor_id and public.midias_do_post_validas(midias, auth.uid()));
+drop policy if exists "posts excluir proprio" on public.posts;
+create policy "posts excluir proprio" on public.posts for delete using (auth.uid() = autor_id);
+
+-- contadores só mudam pelos triggers: o app não escreve likes_count/replies_count
+revoke insert, update on public.posts from anon, authenticated;
+grant insert (autor_id, texto, hashtags, hashtags_norm, pai_id, partida_id, partida_rotulo, midias)
+  on public.posts to authenticated;
+
+drop policy if exists "post_likes leitura propria" on public.post_likes;
+create policy "post_likes leitura propria" on public.post_likes for select using (auth.uid() = usuario_id);
+drop policy if exists "post_likes inserir" on public.post_likes;
+create policy "post_likes inserir" on public.post_likes for insert with check (auth.uid() = usuario_id);
+drop policy if exists "post_likes excluir" on public.post_likes;
+create policy "post_likes excluir" on public.post_likes for delete using (auth.uid() = usuario_id);
+
+-- palpites: cada um vê só os seus (o agregado vem de resumo_palpites);
+-- criar/trocar só antes do apito inicial registrado na linha
+drop policy if exists "palpites leitura propria" on public.palpites;
+create policy "palpites leitura propria" on public.palpites for select using (auth.uid() = usuario_id);
+drop policy if exists "palpites inserir antes do jogo" on public.palpites;
+create policy "palpites inserir antes do jogo" on public.palpites
+  for insert with check (auth.uid() = usuario_id and partida_inicio > now());
+drop policy if exists "palpites trocar antes do jogo" on public.palpites;
+create policy "palpites trocar antes do jogo" on public.palpites
+  for update using (auth.uid() = usuario_id and partida_inicio > now())
+  with check (auth.uid() = usuario_id and partida_inicio > now());
+
+-- -------------------------------------------------------------------------------------
+-- CALENDÁRIO DO FLAMENGO (cache da Highlightly, alimentado pela Edge Function
+-- atualizar-calendario). O app só lê daqui: a cota da API não depende de quantos usam.
+-- -------------------------------------------------------------------------------------
+
+create table if not exists public.partidas (
+  id              text primary key,                -- "hl-<id na Highlightly>"
+  temporada       integer not null,
+  competicao      text not null,
+  fase            text,
+  mandante        text not null,
+  visitante       text not null,
+  sigla_mandante  text not null,
+  sigla_visitante text not null,
+  data_hora       timestamptz not null,
+  estadio         text,
+  gols_mandante   smallint,
+  gols_visitante  smallint,
+  status          text not null check (status in ('agendada', 'ao_vivo', 'encerrada')),
+  minuto          smallint,
+  nota            text,
+  atualizado_em   timestamptz not null default now()
+);
+create index if not exists partidas_data_idx on public.partidas (data_hora);
+
+-- controle da cota diária da API (uma linha só)
+create table if not exists public.calendario_estado (
+  id              smallint primary key default 1 check (id = 1),
+  dia             text not null,
+  consultas       integer not null default 0,
+  ultima_completa timestamptz,
+  ultima_ao_vivo  timestamptz
+);
+
+alter table public.partidas          enable row level security;
+alter table public.calendario_estado enable row level security;
+
+-- todo mundo lê o calendário; só a Edge Function (service role, que ignora RLS) escreve
+drop policy if exists "partidas leitura publica" on public.partidas;
+create policy "partidas leitura publica" on public.partidas for select using (true);
+revoke insert, update, delete on public.partidas from anon, authenticated;
+-- o estado da cota é interno: nenhuma policy = ninguém do app lê nem escreve
+revoke all on public.calendario_estado from anon, authenticated;
+
+-- placar ao vivo chega no app na hora (Realtime)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'partidas'
+  ) then
+    alter publication supabase_realtime add table public.partidas;
   end if;
 end $$;

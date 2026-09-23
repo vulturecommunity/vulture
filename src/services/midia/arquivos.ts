@@ -14,7 +14,7 @@ function extensaoDe(uri: string, padrao: string): string {
  */
 export async function salvarArquivoLocalmente(
   uriOrigem: string,
-  subpasta: 'videos' | 'thumbnails' | 'avatars' | 'fotos' | 'rasantes',
+  subpasta: 'videos' | 'thumbnails' | 'avatars' | 'fotos' | 'rasantes' | 'posts',
   nomeBase: string,
   extensaoPadrao = 'mp4',
 ): Promise<string> {

@@ -7,12 +7,15 @@ import { dividirLegenda } from '@/utils/hashtags';
 export interface LegendaComHashtagsProps extends TextProps {
   texto: string;
   cor?: string;
+  /** por padrão abre a tela de vídeos da hashtag; a resenha filtra os próprios posts */
+  aoTocarHashtag?: (tag: string) => void;
 }
 
 /** Renderiza a legenda com hashtags clicáveis (abre a tela da hashtag). */
 export function LegendaComHashtags({
   texto,
   cor = cores.texto,
+  aoTocarHashtag,
   style,
   ...resto
 }: LegendaComHashtagsProps) {
@@ -27,7 +30,9 @@ export function LegendaComHashtags({
             style={{ fontWeight: '700', color: cores.vermelhoVivo }}
             accessibilityRole="link"
             onPress={() =>
-              router.push({ pathname: '/hashtag/[tag]', params: { tag: trecho.valor } })
+              aoTocarHashtag
+                ? aoTocarHashtag(trecho.valor)
+                : router.push({ pathname: '/hashtag/[tag]', params: { tag: trecho.valor } })
             }>
             #{trecho.valor}
           </Text>
