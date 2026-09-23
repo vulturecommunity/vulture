@@ -22,6 +22,30 @@ offline, sem cadastro em nenhum serviço. Toque em **"Entrar como visitante"** e
 Requisitos: Node 20+ (testado com 24), npm 10+, celular com o app **Expo Go** (mesma rede Wi-Fi
 do computador) — ou emulador Android / simulador iOS.
 
+> Se o QR code não conectar, a rede provavelmente isola os aparelhos (Wi-Fi "público" ou de
+> empresa). Use `npx expo start --tunnel`, que passa por fora da rede local.
+
+### Clonando em outro computador
+
+```bash
+git clone https://github.com/InacioWork/vulture.git
+cd vulture
+npm install
+npx expo start        # ou --tunnel, se o QR não conectar
+```
+
+Não precisa de Android Studio nem Xcode para o dia a dia: o app roda no Expo Go. Só o `npm install`
+e pronto — o repositório já traz `package-lock.json`, `google-services.json` e os ícones.
+
+**Um arquivo não vem no repositório: o `.env`** (fica de fora por higiene). Sem ele o app abre no
+modo demonstração, que funciona sozinho. Para ligar no Supabase de verdade, crie o `.env` a partir
+do `.env.example` — os valores reais do projeto estão no `eas.json`, no perfil `preview`:
+
+```bash
+cp .env.example .env     # no Windows: copy .env.example .env
+# troque EXPO_PUBLIC_DATA_DRIVER para "supabase" e cole a URL e a anon key do eas.json
+```
+
 ## O que está pronto
 
 | Área         | Funcionalidades                                                                                                                                                                                                                                                                                                                                     |
@@ -31,8 +55,10 @@ do computador) — ou emulador Android / simulador iOS.
 | Criação      | câmera com pressionar-e-segurar (até 60 s, contador e barra), frontal/traseira, flash/tocha, foto (post de 5 s), importar da galeria, preview com refazer, legenda + hashtags + categoria, upload com **progresso real**, thumbnail automática, opção de salvar na galeria                                                                          |
 | Social       | curtidas, comentários com respostas em 1 nível, seguir/deixar de seguir, perfil (grade, contadores, curtidos, salvos, editar), explorar (busca por usuário e hashtag, trending, hashtags em alta), notificações em tela, denunciar/bloquear (requisito das lojas)                                                                                   |
 | Lives        | lista de lives ativas com espectadores, assistir + chat em tempo real + reações 🔴⚫🦅🏆 flutuantes, iniciar/encerrar live com preview da câmera. **LiveKit de verdade** em development build; **modo simulado automático** no Expo Go                                                                                                              |
-| Temático     | barra de canais (#Maracanã #Bastidores #Golaço #Torcida #Base #Resenha), cards _Próximo jogo_ / _Último resultado_ (`MatchService`), ranking semanal de torcedores                                                                                                                                                                                  |
-| Qualidade    | TypeScript strict, ESLint, Prettier, 92 testes (Jest + Testing Library), roteiro de teste manual                                                                                                                                                                                                                                                    |
+| Temático     | barra de canais (#Maracanã #Bastidores #Golaço #Torcida #Base #Resenha), faixa com **último resultado e próximo jogo reais do Flamengo** (TheSportsDB, com AO VIVO quando a bola rola), ranking semanal de torcedores                                                                                                                               |
+| Mensagens    | caixa de entrada com conversas privadas, chat em tempo real com balões e separadores por dia, regra de quem pode te chamar (quem você segue / seus seguidores), novos seguidores com data, "adicionar torcedores" com sugestões por afinidade                                                                                                       |
+| Rasantes     | vídeo de até 15 s que some em 24 h, fileira no topo das mensagens, anel no avatar do perfil, visualizador em tela cheia                                                                                                                                                                                                                             |
+| Qualidade    | TypeScript strict, ESLint, Prettier, 154 testes (Jest + Testing Library), roteiro de teste manual                                                                                                                                                                                                                                                   |
 
 ## Arquitetura
 
@@ -154,9 +180,10 @@ nunca coloque segredos nelas (a API Secret do LiveKit fica só na Edge Function)
   precisa de internet para vê-los; os vídeos **que você grava** ficam no aparelho.
 - Sem transcodificação/CDN: os vídeos são reproduzidos no formato em que foram gravados.
 - Feed "Para Você" é cronológico (sem algoritmo de recomendação).
-- Notificações são **em tela** (sem push).
+- Push funciona no APK (Firebase/FCM configurado); no Expo Go do Android o push remoto não existe.
 - Lives no Expo Go são simuladas (limitação do Expo Go, não do app).
-- Dados do jogo (próximo/último) vêm de JSON local com datas relativas.
+- Dados do jogo vêm da TheSportsDB (chave de teste pública); `EXPO_PUBLIC_MATCH_DRIVER=mock` volta
+  ao JSON local.
 - Moderação de denúncias é manual (tabela `reports` no painel do Supabase).
 
 O que falta para virar produto está em [`ROADMAP.md`](ROADMAP.md); as decisões técnicas em
