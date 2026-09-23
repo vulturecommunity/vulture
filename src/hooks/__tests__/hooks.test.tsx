@@ -17,6 +17,26 @@ function envoltorio(queryClient: QueryClient) {
   };
 }
 
+/** Serviço mínimo para observar quem entra e sai da contagem de espectadores. */
+function servicoDeLiveFalso() {
+  const chamadas = { entrou: 0, saiu: 0, anfitriaoRecebido: undefined as boolean | undefined };
+  const servico = {
+    nome: 'mock' as const,
+    listMensagensDaLive: async () => [],
+    entrarNaLive: async () => {
+      chamadas.entrou += 1;
+    },
+    sairDaLive: async () => {
+      chamadas.saiu += 1;
+    },
+    assinarLive: (_id: string, _aoReceber: unknown, opcoes: { anfitriao?: boolean } = {}) => {
+      chamadas.anfitriaoRecebido = opcoes.anfitriao;
+      return () => {};
+    },
+  };
+  return { servico, chamadas };
+}
+
 describe('hooks', () => {
   let servico: MockDataService;
   let queryClient: QueryClient;
@@ -54,6 +74,27 @@ describe('hooks', () => {
     });
     await waitFor(() => expect(result.current.videos.length).toBe(20));
     expect(result.current.hasNextPage).toBe(true);
+  });
+
+  it('o anfitrião não entra na contagem de espectadores da própria live', async () => {
+    const { servico, chamadas } = servicoDeLiveFalso();
+    definirDataService(servico as unknown as MockDataService);
+    const { unmount } = await renderHook(() => useChatDaLive('l-1', 0, 'u-eu', true));
+    expect(chamadas.entrou).toBe(0);
+    expect(chamadas.anfitriaoRecebido).toBe(true);
+    unmount();
+    expect(chamadas.saiu).toBe(0);
+    definirDataService(servico as unknown as MockDataService);
+  });
+
+  it('quem assiste entra e sai da contagem', async () => {
+    const { servico, chamadas } = servicoDeLiveFalso();
+    definirDataService(servico as unknown as MockDataService);
+    const { unmount } = await renderHook(() => useChatDaLive('l-1', 0, 'u-outro', false));
+    await waitFor(() => expect(chamadas.entrou).toBe(1));
+    expect(chamadas.anfitriaoRecebido).toBe(false);
+    unmount();
+    await waitFor(() => expect(chamadas.saiu).toBe(1));
   });
 
   it('useCurtir atualiza o cache de forma otimista e persiste', async () => {

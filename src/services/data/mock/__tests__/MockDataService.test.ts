@@ -349,6 +349,12 @@ describe('MockDataService', () => {
       expect(eventos).toHaveLength(2);
     });
 
+    it('a live começa sem espectadores: o anfitrião não assiste a si mesmo', async () => {
+      await servico.entrarComoVisitante();
+      const live = await servico.createLive('Esquenta do clássico');
+      expect(live.espectadores).toBe(0);
+    });
+
     it('espectadores entram e saem', async () => {
       const antes = (await servico.getLive('l-seed-2')).espectadores;
       await servico.entrarNaLive('l-seed-2');

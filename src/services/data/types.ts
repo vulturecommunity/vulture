@@ -153,7 +153,15 @@ export interface DataService {
   listMensagensDaLive(liveId: Id): Promise<MensagemLive[]>;
   enviarMensagemNaLive(liveId: Id, texto: string): Promise<MensagemLive>;
   enviarReacaoNaLive(liveId: Id, reacao: Reacao): Promise<MensagemLive>;
-  assinarLive(liveId: Id, aoReceber: (evento: EventoDaLive) => void): CancelarAssinatura;
+  /**
+   * Assina os eventos de uma live. `anfitriao` evita contar quem transmite como
+   * espectador e é o que mantém o contador honesto.
+   */
+  assinarLive(
+    liveId: Id,
+    aoReceber: (evento: EventoDaLive) => void,
+    opcoes?: { anfitriao?: boolean },
+  ): CancelarAssinatura;
 
   // ---- Notificações ----
   listNotificacoes(): Promise<Notificacao[]>;

@@ -987,7 +987,8 @@ export class SupabaseDataService implements DataService {
         titulo: limpo,
         sala: `vulture-${novoId()}`,
         ativa: true,
-        espectadores: 1,
+        // ninguém assistindo ainda: o anfitrião transmite, não conta como espectador
+        espectadores: 0,
       })
       .select(this.selecaoLive)
       .single();
@@ -1065,7 +1066,15 @@ export class SupabaseDataService implements DataService {
     return this.criarMensagem(liveId, reacao, reacao);
   }
 
-  assinarLive(liveId: Id, aoReceber: (evento: EventoDaLive) => void): CancelarAssinatura {
+  assinarLive(
+    liveId: Id,
+    aoReceber: (evento: EventoDaLive) => void,
+    opcoes: { anfitriao?: boolean } = {},
+  ): CancelarAssinatura {
+    // Quem assiste marca presença no canal; o anfitrião só escuta. Assim o número é
+    // exatamente quem está com a sala aberta — e se alguém fechar o app no tapa, o
+    // Realtime derruba a presença sozinho, sem deixar o contador inflado.
+    let ultimoTotal = -1;
     const canal = this.db
       .channel(`live:${liveId}`)
       .on(
@@ -1096,11 +1105,29 @@ export class SupabaseDataService implements DataService {
         { event: 'UPDATE', schema: 'public', table: 'live_streams', filter: `id=eq.${liveId}` },
         (payload) => {
           const linha = payload.new as LinhaLive;
+          // o número de espectadores vem da presença, que é exata; daqui só interessa o fim
           if (!linha.ativa) aoReceber({ tipo: 'encerrada' });
-          else aoReceber({ tipo: 'espectadores', total: linha.espectadores ?? 0 });
         },
       )
-      .subscribe();
+      .on('presence', { event: 'sync' }, () => {
+        const total = Object.keys(canal.presenceState()).length;
+        if (total === ultimoTotal) return;
+        ultimoTotal = total;
+        aoReceber({ tipo: 'espectadores', total });
+        // o anfitrião publica o número para quem olha a lista de lives de fora
+        if (opcoes.anfitriao) {
+          this.db
+            .from('live_streams')
+            .update({ espectadores: total })
+            .eq('id', liveId)
+            .then(undefined, () => {});
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && !opcoes.anfitriao) {
+          canal.track({ entrouEm: Date.now() }).catch(() => {});
+        }
+      });
     return () => {
       this.db.removeChannel(canal).catch(() => {});
     };

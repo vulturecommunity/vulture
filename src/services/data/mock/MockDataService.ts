@@ -813,7 +813,8 @@ export class MockDataService implements DataService {
       titulo: limpo,
       thumbnailUrl: null,
       sala: `vulture-${this.gerarId()}`,
-      espectadores: 1,
+      // ninguém assistindo ainda: o anfitrião transmite, não conta como espectador
+      espectadores: 0,
       ativa: true,
       iniciadaEm: agoraIso(),
       encerradaEm: null,
@@ -907,7 +908,11 @@ export class MockDataService implements DataService {
     return this.criarMensagem(liveId, reacao, reacao);
   }
 
-  assinarLive(liveId: Id, aoReceber: (evento: EventoDaLive) => void): CancelarAssinatura {
+  assinarLive(
+    liveId: Id,
+    aoReceber: (evento: EventoDaLive) => void,
+    _opcoes: { anfitriao?: boolean } = {},
+  ): CancelarAssinatura {
     let cancelado = false;
     let cancelar: CancelarAssinatura = () => {};
     this.armazenamento.carregar().then((b) => {

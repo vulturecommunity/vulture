@@ -62,6 +62,7 @@ export function useChatDaLive(
   liveId: string | undefined,
   espectadoresIniciais = 0,
   meuId: string | null = null,
+  anfitriao = false,
 ) {
   const [mensagens, setMensagens] = useState<MensagemLive[]>([]);
   const [reacoes, setReacoes] = useState<ReacaoFlutuante[]>([]);
@@ -90,47 +91,56 @@ export function useChatDaLive(
         if (ativo) setCarregando(false);
       });
 
-    dataService()
-      .entrarNaLive(liveId)
-      .catch(() => {});
-    const cancelar = dataService().assinarLive(liveId, (evento) => {
-      if (!ativo) return;
-      switch (evento.tipo) {
-        case 'mensagem':
-          setMensagens((atual) =>
-            atual.some((m) => m.id === evento.mensagem.id)
-              ? atual
-              : [...atual, evento.mensagem].slice(-LIMITE_MENSAGENS),
-          );
-          break;
-        case 'reacao':
-          // as minhas reações já aparecem na hora (enviarReacao); evita duplicar ao voltar do servidor
-          if (evento.mensagem.autorId !== meuId) {
-            adicionarReacaoFlutuante(evento.mensagem.reacao ?? evento.mensagem.texto);
-          }
-          setMensagens((atual) =>
-            atual.some((m) => m.id === evento.mensagem.id)
-              ? atual
-              : [...atual, evento.mensagem].slice(-LIMITE_MENSAGENS),
-          );
-          break;
-        case 'espectadores':
-          setEspectadores(evento.total);
-          break;
-        case 'encerrada':
-          setEncerrada(true);
-          break;
-      }
-    });
+    // o anfitrião não entra na própria contagem: ele transmite, não assiste
+    if (!anfitriao) {
+      dataService()
+        .entrarNaLive(liveId)
+        .catch(() => {});
+    }
+    const cancelar = dataService().assinarLive(
+      liveId,
+      (evento) => {
+        if (!ativo) return;
+        switch (evento.tipo) {
+          case 'mensagem':
+            setMensagens((atual) =>
+              atual.some((m) => m.id === evento.mensagem.id)
+                ? atual
+                : [...atual, evento.mensagem].slice(-LIMITE_MENSAGENS),
+            );
+            break;
+          case 'reacao':
+            // as minhas reações já aparecem na hora (enviarReacao); evita duplicar ao voltar do servidor
+            if (evento.mensagem.autorId !== meuId) {
+              adicionarReacaoFlutuante(evento.mensagem.reacao ?? evento.mensagem.texto);
+            }
+            setMensagens((atual) =>
+              atual.some((m) => m.id === evento.mensagem.id)
+                ? atual
+                : [...atual, evento.mensagem].slice(-LIMITE_MENSAGENS),
+            );
+            break;
+          case 'espectadores':
+            setEspectadores(evento.total);
+            break;
+          case 'encerrada':
+            setEncerrada(true);
+            break;
+        }
+      },
+      { anfitriao },
+    );
 
     return () => {
       ativo = false;
       cancelar();
-      dataService()
-        .sairDaLive(liveId)
-        .catch(() => {});
+      if (!anfitriao) {
+        dataService()
+          .sairDaLive(liveId)
+          .catch(() => {});
+      }
     };
-  }, [liveId, meuId, adicionarReacaoFlutuante]);
+  }, [liveId, meuId, anfitriao, adicionarReacaoFlutuante]);
 
   const enviarMensagem = useCallback(
     async (texto: string) => {

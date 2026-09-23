@@ -31,7 +31,7 @@ export function SalaDaLive({ live, anfitriao, aoSair, aoEncerrar, encerrando }: 
   const usuario = useAuthStore((s) => s.sessao?.usuario);
   const mostrarAviso = useUiStore((s) => s.mostrarAviso);
   const modo = modoDeLive();
-  const chat = useChatDaLive(live.id, live.espectadores, usuario?.id ?? null);
+  const chat = useChatDaLive(live.id, live.espectadores, usuario?.id ?? null, anfitriao);
   const encerrada = chat.encerrada || !live.ativa;
 
   return (
