@@ -448,7 +448,7 @@ export class SupabaseDataService implements DataService {
         apikey: cfg.chave,
         'Content-Type': tipoMime,
         'x-upsert': 'true',
-        'cache-control': '31536000',
+        'cache-control': 'max-age=31536000',
       },
       mimeType: tipoMime,
       onProgress: ({ bytesSent, totalBytes }) => {
