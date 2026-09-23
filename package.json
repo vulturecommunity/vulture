@@ -68,5 +68,12 @@
     "jest-expo": "~57.0.5",
     "prettier": "^3.9.8",
     "typescript": "~6.0.3"
+  },
+  "expo": {
+    "autolinking": {
+      "buildFromSource": [
+        "expo-camera"
+      ]
+    }
   }
 }

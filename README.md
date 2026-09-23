@@ -99,8 +99,7 @@ iOS exige o Apple Developer Program (US$ 99/ano) e distribuição por TestFlight
 
 #### Tamanho do APK
 
-O primeiro APK saiu com **177 MB**, e 80% disso era biblioteca nativa. Duas correções no
-`eas.json`/`plugins/tamanho-do-android.js` cortaram a maior parte:
+O primeiro APK saiu com **177 MB**, e 80% disso era biblioteca nativa:
 
 | O que                      | Quanto pesava | Por quê                                               |
 | -------------------------- | ------------- | ----------------------------------------------------- |
@@ -108,12 +107,23 @@ O primeiro APK saiu com **177 MB**, e 80% disso era biblioteca nativa. Duas corr
 | `lib/armeabi-v7a`          | 24 MB         | ARM de 32 bits; a Play Store exige 64 bits desde 2019 |
 | ML Kit de código de barras | ~20 MB        | vem no `expo-camera`; o Vulture nunca lê códigos      |
 
-O perfil `preview` empacota só `arm64-v8a` (`VULTURE_ABIS`) e desliga o leitor de códigos
-(`-Pexpo.camera.barcode-scanner-enabled=false`) — **APK de ~65 MB**. O perfil `production` gera
-um `.aab` **com todas as arquiteturas**: quem fatia por aparelho é a Play Store, e cada pessoa
-baixa só a sua (~40 MB).
+Dois detalhes desta versão do Expo/RN fizeram a primeira tentativa não surtir efeito, e
+valem como aviso para quem for mexer aqui:
 
-> Emulador x86 precisa de um build próprio: `VULTURE_ABIS=x86_64 npx eas-cli build ...`.
+1. **Não adianta escrever `abiFilters` no `build.gradle`.** O plugin gradle do React Native
+   roda depois e faz `defaultConfig.ndk.abiFilters.addAll(reactNativeArchitectures)` — ou seja,
+   ele **soma** as arquiteturas de volta. A única chave que funciona é a propriedade
+   `-PreactNativeArchitectures`.
+2. **O `expo-camera` vem pré-compilado** do cache Maven do EAS, então o `build.gradle` dele
+   (onde a flag do leitor de códigos é lida) nunca era avaliado. Por isso o
+   `expo.autolinking.buildFromSource` no `package.json`: força esse módulo a compilar do
+   código-fonte para a flag valer.
+
+O perfil `preview` empacota só `arm64-v8a` e desliga o leitor de códigos; o perfil
+`production` gera um `.aab` **com todas as arquiteturas**, porque quem fatia por aparelho é a
+Play Store e cada pessoa baixa só a sua.
+
+> Emulador x86 precisa de um build próprio: troque `-PreactNativeArchitectures` para `x86_64`.
 
 O que ainda pesa, se precisar apertar mais: **WebRTC do LiveKit (11,5 MB)**, necessário para as
 lives reais, e o **código Java/Kotlin (~18 MB)**, que o R8 encolheria com

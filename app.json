@@ -95,8 +95,7 @@
           "color": "#C8102E",
           "defaultChannel": "lives"
         }
-      ],
-      "./plugins/tamanho-do-android"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
