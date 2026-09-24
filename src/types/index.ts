@@ -138,6 +138,8 @@ export interface Sessao {
   usuario: Usuario;
   visitante: boolean;
   onboardingConcluido: boolean;
+  /** e-mail do login; null no visitante */
+  email: string | null;
 }
 
 export interface RankingTorcedor {

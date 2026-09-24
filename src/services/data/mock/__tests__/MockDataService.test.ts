@@ -31,10 +31,29 @@ describe('MockDataService', () => {
       });
       expect(sessao.usuario.nome).toBe('Ana');
       expect(sessao.onboardingConcluido).toBe(false);
+      expect(sessao.email).toBe('ana@teste.com');
       expect(await servico.sessaoAtual()).not.toBeNull();
 
       await servico.sair();
       expect(await servico.sessaoAtual()).toBeNull();
+    });
+
+    it('troca a senha só com a atual correta', async () => {
+      await servico.cadastrar({ email: 'ana@teste.com', senha: '123456' });
+      await expect(servico.alterarSenha('errada', 'novaSenha1')).rejects.toThrow('não confere');
+      await expect(servico.alterarSenha('123456', '123')).rejects.toThrow('6 caracteres');
+
+      await servico.alterarSenha('123456', 'novaSenha1');
+      await servico.sair();
+      await expect(servico.entrar('ana@teste.com', '123456')).rejects.toThrow('incorretos');
+      expect((await servico.entrar('ana@teste.com', 'novaSenha1')).usuario.apelido).toBe('ana');
+    });
+
+    it('o visitante não tem e-mail nem senha para trocar', async () => {
+      await servico.entrarComoVisitante();
+      const sessao = await servico.sessaoAtual();
+      expect(sessao?.email).toBeNull();
+      await expect(servico.alterarSenha('x', 'novaSenha1')).rejects.toThrow('visitante');
     });
 
     it('rejeita e-mail inválido, senha curta e e-mail duplicado', async () => {

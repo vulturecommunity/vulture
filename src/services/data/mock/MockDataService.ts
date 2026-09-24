@@ -173,6 +173,7 @@ export class MockDataService implements DataService {
       usuario: { ...usuario },
       visitante: !!b.sessao?.visitante,
       onboardingConcluido: !!b.sessao?.onboardingConcluido,
+      email: b.contas.find((c) => c.usuarioId === usuario.id)?.email ?? null,
     };
   }
 
@@ -335,6 +336,37 @@ export class MockDataService implements DataService {
     if (b.sessao) b.sessao.onboardingConcluido = true;
     await this.armazenamento.salvarAgora(); // sessão: grava na hora
     return this.montarSessao(b);
+  }
+
+  async alterarSenha(senhaAtual: string, novaSenha: string): Promise<void> {
+    const b = await this.banco();
+    const usuario = this.usuarioLogado(b);
+    const conta = b.contas.find((c) => c.usuarioId === usuario.id);
+    if (!conta) {
+      throw new ErroDeAplicacao(
+        'O visitante não tem senha: crie uma conta para poder definir uma.',
+        'sem_conta',
+      );
+    }
+    if (conta.senha !== senhaAtual) {
+      throw new ErroDeAplicacao('A senha atual não confere.', 'senha_incorreta');
+    }
+    if (!senhaValida(novaSenha)) {
+      throw new ErroDeAplicacao('A nova senha precisa ter pelo menos 6 caracteres.', 'senha_curta');
+    }
+    conta.senha = novaSenha;
+    await this.armazenamento.salvarAgora();
+  }
+
+  async enviarRedefinicaoDeSenha(email: string): Promise<void> {
+    const b = await this.banco();
+    if (!b.contas.some((c) => c.email === email.trim().toLowerCase())) {
+      throw new ErroDeAplicacao('Não existe conta com esse e-mail.', 'conta_inexistente');
+    }
+    throw new ErroDeAplicacao(
+      'O modo demonstração não envia e-mail. Troque a senha aqui mesmo informando a atual.',
+      'sem_email_na_demo',
+    );
   }
 
   // ---------------------------------------------------------------- feed e vídeos

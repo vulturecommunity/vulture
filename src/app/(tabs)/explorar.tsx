@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,13 +14,17 @@ import {
   useTrending,
   useValorAtrasado,
 } from '@/hooks/useExplorar';
+import { useHistoricoStore } from '@/stores/historicoStore';
 import { cores, espacos, raios, tipografia } from '@/theme';
 
 /** Explorar: busca por usuário e hashtag, canais temáticos, ranking e grade de trending. */
 export default function TelaExplorar() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [termo, setTermo] = useState('');
+  // o histórico de pesquisa manda o termo de volta para cá ao ser tocado
+  const { termo: termoInicial } = useLocalSearchParams<{ termo?: string }>();
+  const registrarPesquisa = useHistoricoStore((s) => s.registrarPesquisa);
+  const [termo, setTermo] = useState(termoInicial ?? '');
   const [focado, setFocado] = useState(false);
   const termoAtrasado = useValorAtrasado(termo.trim(), 250);
   const buscando = termoAtrasado.length > 0;
@@ -52,6 +56,7 @@ export default function TelaExplorar() {
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
+          onSubmitEditing={() => registrarPesquisa(termo)}
           selectionColor={cores.vermelho}
           testID="campo-busca"
         />
@@ -80,7 +85,10 @@ export default function TelaExplorar() {
                 usuarios.data!.map((u) => (
                   <Pressable
                     key={u.id}
-                    onPress={() => router.push({ pathname: '/usuario/[id]', params: { id: u.id } })}
+                    onPress={() => {
+                      registrarPesquisa(termoAtrasado);
+                      router.push({ pathname: '/usuario/[id]', params: { id: u.id } });
+                    }}
                     style={estilos.linhaUsuario}
                     testID={`resultado-usuario-${u.apelido}`}>
                     <Avatar url={u.avatarUrl} nome={u.nome} tamanho={44} />
@@ -110,9 +118,10 @@ export default function TelaExplorar() {
                       key={h.tag}
                       tag={h.tag}
                       contagem={`${h.totalVideos} vídeo${h.totalVideos === 1 ? '' : 's'}`}
-                      aoPressionar={() =>
-                        router.push({ pathname: '/hashtag/[tag]', params: { tag: h.tag } })
-                      }
+                      aoPressionar={() => {
+                        registrarPesquisa(termoAtrasado);
+                        router.push({ pathname: '/hashtag/[tag]', params: { tag: h.tag } });
+                      }}
                       testID={`resultado-hashtag-${h.tag}`}
                     />
                   ))}

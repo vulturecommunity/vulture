@@ -4,6 +4,7 @@ import { dataService } from '@/services/data';
 import type { AtualizacaoDePerfil } from '@/services/data/types';
 import { chaves } from '@/services/queryClient';
 import { useAuthStore } from '@/stores/authStore';
+import { useHistoricoStore } from '@/stores/historicoStore';
 
 export function usePerfil(usuarioId: string | 'eu' | undefined) {
   return useQuery({
@@ -16,10 +17,12 @@ export function usePerfil(usuarioId: string | 'eu' | undefined) {
 export function useAtualizarPerfil() {
   const queryClient = useQueryClient();
   const atualizarUsuario = useAuthStore((s) => s.atualizarUsuario);
+  const registrarEvento = useHistoricoStore((s) => s.registrarEvento);
   return useMutation({
     mutationFn: (dados: AtualizacaoDePerfil) => dataService().updateProfile(dados),
     onSuccess: (usuario) => {
       atualizarUsuario(usuario);
+      registrarEvento('perfil', 'Perfil atualizado');
       queryClient.invalidateQueries({ queryKey: ['perfil'] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['videos-usuario', usuario.id] });

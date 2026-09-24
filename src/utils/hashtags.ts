@@ -20,6 +20,17 @@ export function normalizarHashtag(tag: string): string {
   return tag.trim().replace(/^#+/, '').toLowerCase();
 }
 
+/**
+ * O texto chama esse apelido? Compara sem diferenciar maiúsculas e exige que o
+ * apelido termine ali, para "@fla" não casar com "@flamengo".
+ */
+export function mencionaApelido(texto: string, apelido: string): boolean {
+  const limpo = apelido.trim().replace(/^@+/, '');
+  if (!limpo) return false;
+  const escapado = limpo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`@${escapado}(?![\\p{L}\\p{N}_.])`, 'iu').test(texto);
+}
+
 export type TrechoDeLegenda = { tipo: 'texto'; valor: string } | { tipo: 'hashtag'; valor: string };
 
 /** Divide uma legenda em trechos de texto e hashtags para renderização clicável. */

@@ -8,6 +8,7 @@ import { useSeguir } from '@/hooks/useInteracoes';
 import { useListaDeVideos, type OrigemDaLista } from '@/hooks/useListasDeVideos';
 import { useAbrirConversa } from '@/hooks/useMensagens';
 import { useRasantesDoUsuario } from '@/hooks/useRasantes';
+import { useAjustesStore } from '@/stores/ajustesStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos } from '@/theme';
 import type { Perfil } from '@/types';
@@ -55,7 +56,13 @@ export function ConteudoDePerfil({ perfil, atualizando, aoAtualizar }: ConteudoD
   const origem: OrigemDaLista = aba;
   const lista = useListaDeVideos(origem, perfil.id);
 
-  const abas = ABAS.filter((a) => !a.soEu || perfil.souEu);
+  // curtidas privadas (Configurações → Vídeos curtidos): o cadeado lembra que só você vê
+  const curtidosPrivados = useAjustesStore((s) => s.curtidosVisiveisPara) === 'somenteEu';
+  const abas = ABAS.filter((a) => !a.soEu || perfil.souEu).map((a) =>
+    a.id === 'curtidos' && curtidosPrivados && perfil.souEu
+      ? { ...a, icone: 'cadeado' as NomeDeIcone }
+      : a,
+  );
 
   return (
     <ScrollView

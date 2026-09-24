@@ -89,10 +89,12 @@ jest.mock('expo-file-system', () => {
   class Directory {
     uri: string;
     exists = true;
+    size = 2048;
     constructor(...parts: (string | { uri: string })[]) {
       this.uri = parts.map((p) => (typeof p === 'string' ? p : p.uri)).join('/');
     }
     create() {}
+    delete() {}
     list() {
       return [];
     }
@@ -100,7 +102,12 @@ jest.mock('expo-file-system', () => {
   return {
     File,
     Directory,
-    Paths: { document: new Directory('file:///documentos'), cache: new Directory('file:///cache') },
+    Paths: {
+      document: new Directory('file:///documentos'),
+      cache: new Directory('file:///cache'),
+      availableDiskSpace: 500 * 1024 * 1024,
+      totalDiskSpace: 1024 * 1024 * 1024,
+    },
     UploadType: { BINARY_CONTENT: 0, MULTIPART: 1 },
   };
 });

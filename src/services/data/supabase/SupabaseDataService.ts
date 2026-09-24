@@ -378,7 +378,11 @@ export class SupabaseDataService implements DataService {
     return data as LinhaPerfil;
   }
 
-  private async montarSessao(usuarioId: string, visitante: boolean): Promise<Sessao> {
+  private async montarSessao(
+    usuarioId: string,
+    visitante: boolean,
+    email: string | null = null,
+  ): Promise<Sessao> {
     // o perfil é criado por trigger no cadastro; se faltar (perfil apagado, trigger
     // antigo), a RPC garantir_perfil() recria antes de tentar de novo
     let linha: LinhaPerfil | null = null;
@@ -399,7 +403,12 @@ export class SupabaseDataService implements DataService {
     if (!linha)
       throw new ErroDeAplicacao('Perfil ainda não criado. Tente novamente.', 'perfil_ausente');
     const usuario = paraUsuario(linha);
-    return { usuario, visitante, onboardingConcluido: visitante || usuario.interesses.length > 0 };
+    return {
+      usuario,
+      visitante,
+      onboardingConcluido: visitante || usuario.interesses.length > 0,
+      email: email || null,
+    };
   }
 
   /** Conjunto de vídeos curtidos/salvos pelo usuário logado, entre os ids informados. */
@@ -470,7 +479,7 @@ export class SupabaseDataService implements DataService {
       password: senha,
     });
     if (error || !data.user) erroDoSupabase(error, 'Falha ao entrar');
-    return this.montarSessao(data.user.id, false);
+    return this.montarSessao(data.user.id, false, data.user.email ?? null);
   }
 
   async cadastrar(dados: DadosDeCadastro): Promise<Sessao> {
@@ -494,7 +503,7 @@ export class SupabaseDataService implements DataService {
         'confirmar_email',
       );
     }
-    return this.montarSessao(data.user.id, false);
+    return this.montarSessao(data.user.id, false, data.user.email ?? null);
   }
 
   async entrarComoVisitante(): Promise<Sessao> {
@@ -523,7 +532,7 @@ export class SupabaseDataService implements DataService {
     const usuario = data.session?.user;
     if (!usuario) return null;
     try {
-      return await this.montarSessao(usuario.id, !!usuario.is_anonymous);
+      return await this.montarSessao(usuario.id, !!usuario.is_anonymous, usuario.email ?? null);
     } catch {
       return null;
     }
@@ -554,7 +563,36 @@ export class SupabaseDataService implements DataService {
       .eq('id', meuId);
     if (error) erroDoSupabase(error, 'Falha ao salvar o perfil');
     const { data } = await this.db.auth.getSession();
-    return this.montarSessao(meuId, !!data.session?.user.is_anonymous);
+    return this.montarSessao(
+      meuId,
+      !!data.session?.user.is_anonymous,
+      data.session?.user.email ?? null,
+    );
+  }
+
+  async alterarSenha(senhaAtual: string, novaSenha: string): Promise<void> {
+    const { data } = await this.db.auth.getSession();
+    const email = data.session?.user.email;
+    if (!email) {
+      throw new ErroDeAplicacao(
+        'O visitante não tem senha: crie uma conta para poder definir uma.',
+        'sem_conta',
+      );
+    }
+    // o Supabase troca a senha sem pedir a atual; conferir antes evita que uma
+    // sessão esquecida aberta no aparelho consiga assumir a conta
+    const { error: erroConferencia } = await this.db.auth.signInWithPassword({
+      email,
+      password: senhaAtual,
+    });
+    if (erroConferencia) throw new ErroDeAplicacao('A senha atual não confere.', 'senha_incorreta');
+    const { error } = await this.db.auth.updateUser({ password: novaSenha });
+    if (error) erroDoSupabase(error, 'Falha ao trocar a senha');
+  }
+
+  async enviarRedefinicaoDeSenha(email: string): Promise<void> {
+    const { error } = await this.db.auth.resetPasswordForEmail(email.trim());
+    if (error) erroDoSupabase(error, 'Falha ao enviar o e-mail de redefinição');
   }
 
   // ---------------------------------------------------------------- feed e vídeos

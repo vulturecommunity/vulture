@@ -9,6 +9,8 @@ import { Avatar, Icone, Texto } from '@/components/ui';
 import { ICONE_INTERESSE } from '@/constants/interesses';
 import { useCompartilhar, useCurtir, useSalvar } from '@/hooks/useInteracoes';
 import { dataService } from '@/services/data';
+import { useAjustesStore } from '@/stores/ajustesStore';
+import { useHistoricoStore } from '@/stores/historicoStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos } from '@/theme';
@@ -51,33 +53,42 @@ function ItemDoFeedBase({
   const { alternar: alternarSalvo } = useSalvar();
   const compartilhar = useCompartilhar();
 
+  const economizarDados = useAjustesStore((s) => s.economizarDados);
+  const registrarAssistido = useHistoricoStore((s) => s.registrarAssistido);
+
   const [coracao, setCoracao] = useState({ disparo: 0, x: 0, y: 0 });
-  const [pausado, setPausado] = useState(false);
+  const [pausado, setPausado] = useState(economizarDados);
   const [ativoAnterior, setAtivoAnterior] = useState(ativo);
 
-  // ao sair da tela, esquece a pausa: o vídeo volta a tocar sozinho quando reaparecer
+  // ao sair da tela, esquece a pausa; ao chegar, o economizador de dados segura
+  // o vídeo na capa até a pessoa tocar
   if (ativo !== ativoAnterior) {
     setAtivoAnterior(ativo);
-    if (!ativo) setPausado(false);
+    setPausado(ativo ? economizarDados : false);
   }
 
   const tocando = ativo && feedEmFoco;
+  const assistindo = tocando && !pausado;
   // o nome só entra quando diz algo além do apelido
   const mostrarNome =
     video.autor.nome.trim().toLowerCase() !== video.autor.apelido.trim().toLowerCase();
 
-  // registra a visualização depois de 2s com o item ativo
+  // registra a visualização (e o histórico local) depois de 2s de vídeo rodando
   useEffect(() => {
-    if (!tocando) return;
-    const timer = setTimeout(
-      () =>
-        dataService()
-          .registrarVisualizacao(video.id)
-          .catch(() => {}),
-      2000,
-    );
+    if (!assistindo) return;
+    const timer = setTimeout(() => {
+      dataService()
+        .registrarVisualizacao(video.id)
+        .catch(() => {});
+      registrarAssistido({
+        videoId: video.id,
+        legenda: video.legenda,
+        apelido: video.autor.apelido,
+        thumbnailUrl: video.thumbnailUrl,
+      });
+    }, 2000);
     return () => clearTimeout(timer);
-  }, [tocando, video.id]);
+  }, [assistindo, registrarAssistido, video]);
 
   // toque simples = pausar / retomar (como no TikTok e no Kwai)
   const aoToqueSimples = useCallback(() => {

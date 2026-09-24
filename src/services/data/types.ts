@@ -150,6 +150,10 @@ export interface DataService {
     interesses: Interesse[];
     avatarUriLocal?: string | null;
   }): Promise<Sessao>;
+  /** Troca a senha do login; recusa quando a senha atual não bate. */
+  alterarSenha(senhaAtual: string, novaSenha: string): Promise<void>;
+  /** Dispara o e-mail de redefinição de senha. */
+  enviarRedefinicaoDeSenha(email: string): Promise<void>;
 
   // ---- Feed e vídeos ----
   listFeed(params: ParametrosDoFeed): Promise<Pagina<Video>>;

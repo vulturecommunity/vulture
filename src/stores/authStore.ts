@@ -5,6 +5,7 @@ import { dataService } from '@/services/data';
 import type { DadosDeCadastro } from '@/services/data/types';
 import { esquecerTokenPush } from '@/services/push/registro';
 import { queryClient } from '@/services/queryClient';
+import { useHistoricoStore } from '@/stores/historicoStore';
 import type { Sessao, Usuario } from '@/types';
 
 export interface EstadoAuth {
@@ -34,11 +35,15 @@ function mensagem(erro: unknown): string {
 
 /** Estado global de autenticação. A sessão em si é persistida pelo DataService. */
 export const useAuthStore = create<EstadoAuth>((set) => {
-  async function executar(acao: () => Promise<Sessao>) {
+  async function executar(acao: () => Promise<Sessao>, registro?: string) {
     set({ ocupado: true, erro: null });
     try {
       const sessao = await acao();
       set({ sessao, ocupado: false });
+      // troca de conta no mesmo aparelho descarta o Centro de atividade da anterior
+      const historico = useHistoricoStore.getState();
+      historico.definirDono(sessao.usuario.id);
+      if (registro) historico.registrarEvento('entrou', registro);
     } catch (erro) {
       set({ erro: mensagem(erro), ocupado: false });
       throw erro;
@@ -55,14 +60,17 @@ export const useAuthStore = create<EstadoAuth>((set) => {
       try {
         const sessao = await dataService().sessaoAtual();
         set({ sessao, carregado: true });
+        if (sessao) useHistoricoStore.getState().definirDono(sessao.usuario.id);
       } catch {
         set({ sessao: null, carregado: true });
       }
     },
 
-    entrar: (email, senha) => executar(() => dataService().entrar(email, senha)),
-    cadastrar: (dados) => executar(() => dataService().cadastrar(dados)),
-    entrarComoVisitante: () => executar(() => dataService().entrarComoVisitante()),
+    entrar: (email, senha) =>
+      executar(() => dataService().entrar(email, senha), 'Você entrou neste aparelho'),
+    cadastrar: (dados) => executar(() => dataService().cadastrar(dados), 'Conta criada'),
+    entrarComoVisitante: () =>
+      executar(() => dataService().entrarComoVisitante(), 'Entrou como visitante'),
     concluirOnboarding: (dados) => executar(() => dataService().concluirOnboarding(dados)),
 
     atualizarUsuario: (usuario) =>
