@@ -4,6 +4,7 @@ import {
   useMicrophonePermissions,
   type CameraType,
 } from 'expo-camera';
+import { File } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,12 +16,34 @@ import { Botao, Icone, Texto } from '@/components/ui';
 import { DURACAO_MAXIMA_VIDEO_SEGUNDOS } from '@/constants/interesses';
 import { DURACAO_MAXIMA_RASANTE_SEGUNDOS } from '@/constants/rasantes';
 import { useVoltar } from '@/hooks/useVoltar';
+import { LADO_DA_FOTO, comprimirImagem } from '@/services/midia/arquivos';
 import { useCriacaoStore } from '@/stores/criacaoStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios } from '@/theme';
 import { escolherTamanhoDeFoto } from '@/utils/camera';
 import { formatarDuracao } from '@/utils/formatadores';
+
+/**
+ * Teto para vídeo importado da galeria.
+ *
+ * O app grava em 720p com limite de duração, mas um arquivo escolhido da galeria pode ter
+ * qualquer tamanho — e vídeo é o item que mais consome tráfego, porque é rebaixado toda
+ * vez que reaparece no feed. 20 MB comporta um clipe de 60 s gravado no celular e barra
+ * o caso patológico.
+ */
+const LIMITE_DE_VIDEO_BYTES = 20 * 1024 * 1024;
+
+const megabytes = (bytes: number) => Math.round(bytes / (1024 * 1024));
+
+function tamanhoDoArquivo(asset: ImagePicker.ImagePickerAsset): number {
+  if (asset.fileSize) return asset.fileSize;
+  try {
+    return new File(asset.uri).size ?? 0;
+  } catch {
+    return 0;
+  }
+}
 
 type Modo = 'video' | 'foto';
 
@@ -168,12 +191,18 @@ export default function TelaCamera() {
         skipProcessing: false,
       });
       if (foto?.uri) {
-        definirMidia({
-          uri: foto.uri,
-          tipo: 'foto',
-          duracao: 5,
+        // comprime já aqui: o preview passa a mostrar exatamente o que vai subir, e o
+        // arquivo guardado no aparelho também fica pequeno
+        const menor = await comprimirImagem(foto.uri, LADO_DA_FOTO, 0.8, {
           largura: foto.width,
           altura: foto.height,
+        }).catch(() => null);
+        definirMidia({
+          uri: menor?.uri ?? foto.uri,
+          tipo: 'foto',
+          duracao: 5,
+          largura: menor?.largura ?? foto.width,
+          altura: menor?.altura ?? foto.height,
           origem: 'camera',
         });
         router.push('/criar/preview');
@@ -214,12 +243,32 @@ export default function TelaCamera() {
         mostrarAviso(`Vídeos de até ${limite} segundos. Escolha um trecho menor.`, 'erro');
         return;
       }
+      // Vídeo da galeria entra como está — não há como recomprimir no Expo Go. Um arquivo
+      // de 30 MB é rebaixado a cada passada no feed, então é o que mais pesa na conta de
+      // tráfego; melhor recusar na entrada e explicar do que descobrir na fatura.
+      if (ehVideo) {
+        const bytes = tamanhoDoArquivo(a);
+        if (bytes > LIMITE_DE_VIDEO_BYTES) {
+          mostrarAviso(
+            `Esse vídeo tem ${megabytes(bytes)} MB e o limite é ${megabytes(LIMITE_DE_VIDEO_BYTES)} MB. ` +
+              'Grave pelo app ou escolha um trecho mais curto.',
+            'erro',
+          );
+          return;
+        }
+      }
+      const foto = ehVideo
+        ? null
+        : await comprimirImagem(a.uri, LADO_DA_FOTO, 0.8, {
+            largura: a.width,
+            altura: a.height,
+          }).catch(() => null);
       definirMidia({
-        uri: a.uri,
+        uri: foto?.uri ?? a.uri,
         tipo: ehVideo ? 'video' : 'foto',
         duracao,
-        largura: a.width,
-        altura: a.height,
+        largura: foto?.largura ?? a.width,
+        altura: foto?.altura ?? a.height,
         origem: 'galeria',
       });
       router.push(telaSeguinte);

@@ -12,20 +12,22 @@
       },
       "env": {
         "EXPO_PUBLIC_DATA_DRIVER": "supabase",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://vcajpsizbjcblyufuclh.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjYWpwc2l6YmpjYmx5dWZ1Y2xoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MzgxMzMsImV4cCI6MjEwNTUxNDEzM30.AwiOMda5MAmm5A04toYsfy06P3HwZRyOBBm_sGGUgPc",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mlajeudfsjymgaxjofya.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_uJQak8ADQgR9yhxglvLyBQ_KO_r-rQO",
         "EXPO_PUBLIC_LIVEKIT_URL": "wss://vulture-i9dz6wb0.livekit.cloud",
-        "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://vcajpsizbjcblyufuclh.supabase.co/functions/v1/livekit-token"
+        "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://mlajeudfsjymgaxjofya.supabase.co/functions/v1/livekit-token",
+        "EXPO_PUBLIC_MIDIA_URL": "https://pub-3b0f41fd874d41e4a7003feeeb74bc5d.r2.dev"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_DATA_DRIVER": "supabase",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://vcajpsizbjcblyufuclh.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjYWpwc2l6YmpjYmx5dWZ1Y2xoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MzgxMzMsImV4cCI6MjEwNTUxNDEzM30.AwiOMda5MAmm5A04toYsfy06P3HwZRyOBBm_sGGUgPc",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mlajeudfsjymgaxjofya.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_uJQak8ADQgR9yhxglvLyBQ_KO_r-rQO",
         "EXPO_PUBLIC_LIVEKIT_URL": "wss://vulture-i9dz6wb0.livekit.cloud",
-        "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://vcajpsizbjcblyufuclh.supabase.co/functions/v1/livekit-token"
+        "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://mlajeudfsjymgaxjofya.supabase.co/functions/v1/livekit-token",
+        "EXPO_PUBLIC_MIDIA_URL": "https://pub-3b0f41fd874d41e4a7003feeeb74bc5d.r2.dev"
       },
       "android": {
         "gradleCommand": ":app:bundleRelease -Pexpo.camera.barcode-scanner-enabled=false"

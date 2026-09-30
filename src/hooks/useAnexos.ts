@@ -1,27 +1,24 @@
 import { File } from 'expo-file-system';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
 import type { NovaMidia } from '@/services/data/types';
 import type { Gif } from '@/services/gifs/giphy';
+import { comprimirImagem } from '@/services/midia/arquivos';
 import { LIMITES_DE_MIDIA } from '@/types';
 import { mensagemDeErro } from '@/utils/erros';
 import { validarMidiasDoPost, validarVideoDoPost } from '@/utils/posts';
 
 /** Reduz para no máximo 1080 px no lado maior e recomprime em JPEG (~200–400 KB). */
-async function comprimirImagem(
+async function comprimirAnexo(
   asset: ImagePicker.ImagePickerAsset,
 ): Promise<Extract<NovaMidia, { tipo: 'imagem' }>> {
-  const lado = LIMITES_DE_MIDIA.imagemLado;
-  const contexto = ImageManipulator.manipulate(asset.uri);
-  if (Math.max(asset.width, asset.height) > lado) {
-    contexto.resize(asset.width >= asset.height ? { width: lado } : { height: lado });
-  }
-  const imagem = await contexto.renderAsync();
-  const salva = await imagem.saveAsync({ compress: 0.72, format: SaveFormat.JPEG });
-  return { tipo: 'imagem', uriLocal: salva.uri, largura: salva.width, altura: salva.height };
+  const salva = await comprimirImagem(asset.uri, LIMITES_DE_MIDIA.imagemLado, 0.72, {
+    largura: asset.width,
+    altura: asset.height,
+  });
+  return { tipo: 'imagem', uriLocal: salva.uri, largura: salva.largura, altura: salva.altura };
 }
 
 function tamanhoDe(asset: ImagePicker.ImagePickerAsset): number {
@@ -79,7 +76,7 @@ export function useAnexos() {
             tamanhoBytes,
           });
         } else {
-          novos.push(await comprimirImagem(asset));
+          novos.push(await comprimirAnexo(asset));
         }
       }
       const todos = [...anexos, ...novos];
