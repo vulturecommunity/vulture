@@ -73,9 +73,19 @@ redes ruins; limite de 60 s já existe.
 ## Fase G — Camada temática (contínuo)
 
 - ~~**API de partidas**~~ **feito**: a Edge Function `atualizar-calendario` traz a temporada do
-  Flamengo da Highlightly para `public.partidas` (cache no Supabase + Realtime), com cache no aparelho
-  para sobreviver a quedas de rede. `EXPO_PUBLIC_MATCH_DRIVER=mock` volta ao JSON local.
-- Placar ao vivo com "gol!" em push, enquetes de escalação, ranking mensal/anual com badges, "Torcedor do jogo".
+  Flamengo da Highlightly para `public.partidas`, com cache no aparelho para sobreviver a quedas de
+  rede. `EXPO_PUBLIC_MATCH_DRIVER=mock` volta ao JSON local.
+- ~~**Ranking mensal/anual com badges**~~ **feito**: pódio de palpiteiros do jogo, do mês e da
+  temporada, apurado uma vez por partida (`apurar_partida`), com título do mês congelado no perfil
+  e ligas privadas por código de convite.
+- ~~**Push de lembrete e de resultado do palpite**~~ **feito**: `lembrar_palpites` (com o número
+  social — "87.412 já palpitaram") e `avisar_resultado_dos_palpites`, os dois pela fila.
+- Push de "gol!" durante o jogo, enquetes de escalação, "Torcedor do jogo".
+- Divisões estilo Duolingo (Série D → Libertadores) para quem não tem liga: subida e queda mensal
+  por grupos de ~30 pessoas de nível parecido, para todo mundo ter uma disputa possível de ganhar.
+- Card compartilhável do palpite e da posição (imagem para o X/WhatsApp/Instagram) — é o laço viral
+  mais barato que falta.
+- Retrospectiva anual ("você cravou 6 de 47, terminou em 3.211º").
 - Comunidades por região/embaixadas de torcida.
 
 ## Fase H — Monetização (depois de tração)
@@ -103,6 +113,29 @@ Observações:
 - A partir de ~100 k usuários vale a pena o pipeline próprio (R2 + FFmpeg): egress zero do R2 é o maior ganho.
 - Custos de loja: Apple Developer US$ 99/ano; Google Play US$ 25 uma vez.
 
+## Fase I — Escala do banco ✅ (feito)
+
+Os gargalos que estouravam no pico de um clássico foram fechados; o detalhe de cada escolha
+está em [`DECISOES.md`](DECISOES.md), seção **Escala**.
+
+| Gargalo | Como estava | Como ficou |
+| --- | --- | --- |
+| Placar ao vivo | 1 websocket Realtime por aparelho com o app aberto | Edge Function `placar` com `s-maxage=20`: ~3 consultas/min ao banco, com mil ou com um milhão |
+| Curtidas/seguidores | `update ... + 1` travando a mesma linha | fila append-only + `consolidar_contadores` no pg_cron |
+| Visualizações | 1 UPDATE por vídeo assistido (~3 M/dia a 100 k MAU) | lote no aparelho + `registrar_visualizacoes` |
+| Notificações de curtida | 1 linha por curtida | 1 linha agrupada com contador |
+| Explorar (trending, hashtags, ranking) | agregação da tabela inteira por request | matviews refrescadas a cada 5 min |
+| Busca de perfil | `ilike '%x%'` sem índice utilizável | índice GIN `pg_trgm` |
+| Feed "Seguindo" | todos os ids seguidos na querystring | RPC `feed_ids` com join no banco |
+| Fan-out de push | 2 mil chamadas HTTP em série na Edge Function | fila `push_pendente` + worker paralelo |
+| Retenção | nada era apagado | crons diários + limpeza de arquivos no Storage |
+
+**O que ainda falta para a próxima ordem de grandeza:** particionar `notifications` e
+`contador_pendente` por mês; réplica de leitura quando o Postgres passar de ~70% de CPU; e a
+Fase B (vídeo em CDN), que continua sendo o custo dominante a partir de 10 k MAU.
+
 ## Ordem sugerida
 
-1. Fase A (produção básica) → 2. Fase B (vídeo) → 3. Fase E (push, engajamento barato) → 4. Fase D (moderação, antes de crescer) → 5. Fase C (recomendação, quando houver dados) → 6. Fases F/G/H.
+1. ~~Fase I (escala do banco)~~ **feita** → 2. Fase A (produção básica) → 3. Fase B (vídeo) →
+4. Fase D (moderação, antes de crescer) → 5. Fase C (recomendação, quando houver dados) →
+6. Fases F/G/H.

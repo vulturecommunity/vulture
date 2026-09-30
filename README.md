@@ -50,7 +50,7 @@ cp .env.example .env     # no Windows: copy .env.example .env
 
 | Área         | Funcionalidades                                                                                                                                                                                                                                                                                                                                     |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Autenticação | login/cadastro por e-mail e senha, visitante (demo), onboarding (foto, apelido, 3 interesses), sessão persistida, rotas protegidas                                                                                                                                                                                                                  |
+| Autenticação | login/cadastro por e-mail e senha, **entrar com Google** (cria a conta na primeira vez, veja [`SETUP_GOOGLE.md`](SETUP_GOOGLE.md)), visitante (demo), onboarding (foto, apelido, 3 interesses), sessão persistida, rotas protegidas                                                                                                                                                                                                                  |
 | Feed         | scroll vertical com snap, autoplay do item visível, pré-carregamento do próximo, mute por toque, duplo toque = curtir animado, overlay (@usuário, legenda, hashtags clicáveis, áudio), painel de vidro com barra de ações (curtir, comentar, salvar, compartilhar nativo, mais), seletor _Para você_ / _Seguindo_, 120 vídeos de exemplo sem travar |
 | Criação      | câmera com pressionar-e-segurar (até 60 s, contador e barra), frontal/traseira, flash/tocha, foto (post de 5 s), importar da galeria, preview com refazer, legenda + hashtags + categoria, upload com **progresso real**, thumbnail automática, opção de salvar na galeria                                                                          |
 | Social       | curtidas, comentários com respostas em 1 nível, seguir/deixar de seguir, perfil (grade, contadores, curtidos, salvos, editar), explorar (busca por usuário e hashtag, trending, hashtags em alta), notificações em tela, denunciar/bloquear (requisito das lojas)                                                                                   |
@@ -58,6 +58,7 @@ cp .env.example .env     # no Windows: copy .env.example .env
 | Temático     | barra de canais (#Maracanã #Bastidores #Golaço #Torcida #Base #Resenha), faixa com **último resultado e próximo jogo reais do Flamengo** (Highlightly via cache no Supabase, com AO VIVO e minuto do jogo), ranking semanal de torcedores                                                                                                                               |
 | Mensagens    | caixa de entrada com conversas privadas, chat em tempo real com balões e separadores por dia, regra de quem pode te chamar (quem você segue / seus seguidores), novos seguidores com data, "adicionar torcedores" com sugestões por afinidade                                                                                                       |
 | Arquibancada | botão à esquerda do "Para você": **resenha** em texto estilo X (280 caracteres, hashtags, curtidas, respostas em thread, post marcado com o jogo, até 4 fotos ou 1 vídeo de 30 s/15 MB ou 1 GIF do GIPHY) e **jogos** do Flamengo mês a mês (Highlightly, todas as competições) com V-E-D, contagem regressiva e **palpites de placar** que fecham no apito inicial |
+| Ranking      | **pódio de palpiteiros** do mês, da temporada e de cada jogo: cravou 10 · saldo 5 · vencedor 3 (clássico e mata-mata em dobro), desempate por desvio de gols, a linha do próprio usuário sempre visível, título do mês congelado no perfil e **ligas privadas** com código de convite                                                              |
 | Rasantes     | vídeo de até 15 s que some em 24 h, fileira no topo das mensagens, anel no avatar do perfil, visualizador em tela cheia                                                                                                                                                                                                                             |
 | Qualidade    | TypeScript strict, ESLint, Prettier, 154 testes (Jest + Testing Library), roteiro de teste manual                                                                                                                                                                                                                                                   |
 
@@ -75,10 +76,33 @@ src/
     partidas/          jogos lidos da tabela public.partidas (Supabase) + JSON local do modo demo
     midia/             arquivos locais e thumbnails
   theme/ constants/ types/ utils/
-supabase/schema.sql    script idempotente: tabelas, índices, triggers, RLS, buckets (sem dados fictícios)
+supabase/schema.sql    schema base: tabelas, índices, triggers, RLS, buckets (sem dados fictícios)
+supabase/migrations/   mudanças versionadas aplicadas em cima do schema base (`supabase db push`)
 supabase/seed-demo.sql dados de demonstração opcionais (3 perfis, 6 vídeos, 1 live)
-supabase/functions/    Edge Function que gera tokens do LiveKit
+supabase/functions/    Edge Functions: tokens do LiveKit, calendário, placar com cache,
+                       worker da fila de push, limpeza de arquivos, assinatura de
+                       upload no R2, monitor de uso do bucket, página de
+                       compartilhamento com Open Graph
 ```
+
+### Mudanças de banco: migrations
+
+`schema.sql` cria o banco do zero; tudo que veio depois está em `supabase/migrations/`, um
+arquivo por mudança, aplicado em ordem e registrado no banco (nenhuma roda duas vezes).
+
+```bash
+npx supabase link --project-ref <ref>   # uma vez por máquina
+npx supabase db push                    # aplica o que falta
+npx supabase migration list             # o que já rodou
+```
+
+**Projeto novo:** rode `schema.sql` no SQL Editor e depois `npx supabase db push`.
+**Projeto existente:** só `npx supabase db push`.
+
+Algumas migrations trazem um autoteste no fim — criam dados falsos, conferem o resultado e
+desfazem tudo num subbloco que é revertido. Se a conta der errado a migration falha e nada
+é aplicado, que é o comportamento desejado: ranking com conta errada é pior que ranking
+nenhum.
 
 ### Dois drivers de dados, uma interface
 
@@ -170,7 +194,9 @@ porque o R8 pode remover código chamado por reflexão.
 
 ## Variáveis de ambiente
 
-Veja `.env.example`. Só `EXPO_PUBLIC_DATA_DRIVER` é lida no modo demo; as demais são necessárias
+Veja `.env.example`. `EXPO_PUBLIC_MIDIA_URL` liga o Cloudflare R2 para a mídia nova (veja
+[`SETUP_R2.md`](SETUP_R2.md)); sem ela o app usa o Storage da Supabase.
+Só `EXPO_PUBLIC_DATA_DRIVER` é lida no modo demo; as demais são necessárias
 apenas para `supabase` e para lives reais. Variáveis `EXPO_PUBLIC_*` são embutidas no bundle —
 nunca coloque segredos nelas (a API Secret do LiveKit fica só na Edge Function).
 
@@ -185,10 +211,52 @@ nunca coloque segredos nelas (a API Secret do LiveKit fica só na Edge Function)
 - Lives no Expo Go são simuladas (limitação do Expo Go, não do app).
 - Jogos do Flamengo vêm da **Highlightly** (plano gratuito, 100 consultas/dia). Quem consulta é a
   Edge Function `atualizar-calendario`, agendada pelo pg_cron, que grava em `public.partidas`; o app
-  só lê essa tabela (e recebe o placar ao vivo pelo Realtime). Por isso a cota não depende do
-  número de usuários. Placar ao vivo com até ~3 min de atraso (limite do plano gratuito).
-  `EXPO_PUBLIC_MATCH_DRIVER=mock` volta ao JSON local.
+  só lê essa tabela. Por isso a cota não depende do número de usuários. Placar ao vivo com até
+  ~3 min de atraso (limite do plano gratuito). `EXPO_PUBLIC_MATCH_DRIVER=mock` volta ao JSON local.
+- **Contadores (curtidas, views, seguidores) ficam até 30 s atrasados**: as somas são consolidadas
+  por `pg_cron` em vez de travarem a linha do vídeo a cada toque. A própria curtida aparece na hora
+  (atualização otimista); o número dos outros chega no ciclo seguinte.
+- **Trending, hashtags em alta e ranking semanal são materializados a cada 5 min**, não calculados
+  a cada abertura da tela.
+- **Palpites de builds antigos do app param de funcionar.** A regra "só antes do apito" era
+  conferida contra uma coluna que o cliente preenchia — bastava mandar uma data futura para
+  palpitar depois do jogo. O app agora usa a RPC `salvar_palpite` e perdeu privilégio de escrita
+  direta na tabela, então quem estiver com um APK anterior precisa atualizar para palpitar. O
+  resto do app continua funcionando nesses builds.
+- **Vídeo importado da galeria é limitado a 20 MB.** O Expo Go não tem como recomprimir vídeo;
+  o app grava em 720p com limite de duração, mas um arquivo escolhido da galeria pode ter
+  qualquer tamanho — e vídeo é o que mais consome tráfego, porque é rebaixado toda vez que
+  reaparece no feed. Miniaturas (540 px), fotos (1080 px) e avatares (512 px) são comprimidos
+  no aparelho antes do upload.
+- **Egress é o limite que aperta primeiro no plano Free** (5 GB/mês). O piloto já estourou uma
+  vez com 65 MB de arquivos e 18 usuários, só de repetição de download. Por isso a mídia nova
+  vai para o **Cloudflare R2**, que não cobra saída — passo a passo em
+  [`SETUP_R2.md`](SETUP_R2.md). Sem `EXPO_PUBLIC_MIDIA_URL` no `.env`, tudo continua no Storage
+  da Supabase; os arquivos antigos nunca são migrados e seguem funcionando.
+- **O R2 resolve o custo de saída, não o de repetição**: o `expo-video` ainda rebaixa o arquivo
+  toda vez que o item volta à tela. Cache no aparelho e HLS adaptativo continuam no
+  [`ROADMAP.md`](ROADMAP.md).
 - Moderação de denúncias é manual (tabela `reports` no painel do Supabase).
+
+## Compartilhamento
+
+Os links compartilhados são **https**, não `vulture://`. A diferença importa: um esquema
+próprio no WhatsApp ou no Gmail é texto morto — não vira link, não mostra prévia e não
+leva a lugar nenhum quem ainda não tem o app.
+
+A Edge Function `abrir` devolve uma página com Open Graph, então WhatsApp, Telegram, Gmail
+e X passam a mostrar **card com miniatura, título e descrição**. Quem tem o Vulture é
+levado direto ao conteúdo; quem não tem vê um convite decente.
+
+## Escala e custos
+
+- [`CUSTOS.md`](CUSTOS.md) — o que está ligado, o que **não** contratar ainda, quando cada
+  serviço começa a cobrar e como religar o que for desativado.
+- [`ESCALA.md`](ESCALA.md) — qual serviço usar em cada camada, quando trocar, e como o uso
+  do R2 é monitorado para não estourar cota de novo.
+
+Hoje o projeto inteiro roda por **US$ 0/mês**. O primeiro serviço a cobrar será a Supabase,
+por volta de 2.000 usuários ativos.
 
 O que falta para virar produto está em [`ROADMAP.md`](ROADMAP.md); as decisões técnicas em
 [`DECISOES.md`](DECISOES.md); o roteiro de validação no celular em [`TESTE_MANUAL.md`](TESTE_MANUAL.md).

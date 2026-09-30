@@ -81,6 +81,107 @@ Registro das escolhas feitas durante a construção do MVP, com o porquê e o qu
 | **Ranking semanal = soma de curtidas dos vídeos dos últimos 7 dias por autor**                  | Simples de explicar e de calcular nos dois drivers (RPC `ranking_semanal` no Supabase).                                                                                                                                                                                                                                                                                       |
 | **Reações 🔴⚫🦅🏆 só na live**                                                                 | Requisito: no feed permanece o coração.                                                                                                                                                                                                                                                                                                                                       |
 
+## Escala (preparar para muito usuário simultâneo)
+
+Tudo nesta seção parte da mesma pergunta: **o que quebra primeiro num Fla x Vasco com todo
+mundo com o app aberto ao mesmo tempo?** O gargalo de um app de torcida não é o volume
+médio, é o pico de 90 minutos.
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **Placar ao vivo por polling com cache de CDN**, não por Realtime | A tabela `partidas` estava publicada no Realtime e o app abria um canal por aparelho: um websocket por torcedor, no minuto de maior audiência. Com 200 mil pessoas online seriam 200 mil conexões simultâneas — a linha mais cara da fatura, justo quando o app não pode cair. A Edge Function `placar` responde com `s-maxage=20`, então a CDN atende todos e o banco recebe ~3 consultas por minuto com mil ou com um milhão de torcedores. **Trade-off:** até 20 s de atraso, irrelevante perto dos ~3 min da API de jogos. O Realtime continua no chat da live e nas mensagens, onde é insubstituível. |
+| **Contadores por fila append-only + consolidação no `pg_cron`** | `update videos set likes_count = likes_count + 1` serializa todas as curtidas na mesma linha: quanto mais viral o vídeo, maior a fila de espera. Pior era `profiles.curtidas_recebidas`, que serializava as curtidas de *todos* os vídeos do autor num ponto só. Agora cada evento é um INSERT (sem lock) e o cron soma de meio em meio minuto. **Trade-off:** número até 30 s atrasado — invisível, porque a própria curtida é otimista e o feed nunca é invalidado depois de curtir. |
+| **Visualizações em lote no aparelho** | Era um UPDATE por vídeo assistido: 100 mil usuários × 30 vídeos/dia = 3 milhões de escritas diárias, todas do vídeo em alta caindo na mesma linha. `services/data/visualizacoes.ts` junta os ids por 5 s (ou até 50) e manda de uma vez, com descarga quando o app vai para segundo plano. |
+| **Notificações de curtida agrupadas** (`quantidade` + índice único parcial) | Um vídeo com 100 mil curtidas gerava 100 mil linhas em `notifications`. Agora gera uma, com contador: "@fulano e outras 99.999 pessoas curtiram seu vídeo". |
+| **Descoberta em matview** (`mv_hashtags`, `mv_videos_em_alta`, `mv_ranking_semanal`) | `buscar_hashtags` fazia `unnest` de **todos** os vídeos com `like '%termo%'` a cada tecla; `hashtags_em_alta` e `ranking_semanal` agregavam janelas inteiras a cada abertura do Explorar. Viram leitura de matview refrescada a cada 5 min: o trabalho é feito uma vez por ciclo, não uma vez por pessoa. Busca de perfil ganhou índice GIN `pg_trgm`, porque `ilike '%x%'` não usa btree. |
+| **Ordem do feed vem de RPC (`feed_ids`/`resenha_ids`)**, não de `IN (...)` na querystring | O app baixava todos os ids de quem o usuário segue (e todos os bloqueados) para montar o filtro na URL. Quem segue milhares de perfis gerava uma URL de dezenas de KB, que o PostgREST recusa — o feed quebrava justamente para os usuários mais engajados. De quebra, o bloqueio passou a valer nos dois sentidos. |
+| **Fan-out de push numa fila** (`push_pendente` + worker `enviar-pushes`) | `notificar-live` inseria uma notificação por seguidor e disparava lotes de 100 em série dentro da requisição: 200 mil seguidores = 2 mil chamadas HTTP encadeadas e timeout garantido. Agora o fan-out inteiro são dois `INSERT ... SELECT` no Postgres e a entrega fica com um worker que manda 6 lotes em paralelo por execução. A Edge Function antiga virou invólucro da RPC para não quebrar APKs já instalados. |
+| **Retenção e limpeza agendadas** | Nada apagava nada: notificações de 2024 ficariam em 2030, rasantes "expirados" sumiam da tela mas mantinham linha **e arquivo** no Storage, e cada visitante criava uma conta permanente em `auth.users`. `limpar_dados_antigos` cuida das linhas; a Edge Function `limpar-arquivos` apaga os arquivos antes (o SQL sozinho deixa órfão no bucket). A limpeza de contas de visitante **não é agendada por padrão** — apagar conta é irreversível e a decisão é do dono do app. |
+| **Contador de não lidas denormalizado em `conversations`** | `listar_conversas()` fazia um `count(*)` por conversa, até 200 subconsultas por abertura da caixa de entrada. Agora é coluna, mantida por trigger, e marcar como lida virou RPC que zera tudo numa transação. |
+
+## Tráfego de mídia (o que estourou a cota)
+
+O projeto piloto foi bloqueado pela Supabase com **27 GB de cached egress contra 5 GB do
+plano Free — 541%** — tendo apenas **65 MB de arquivos guardados** e 18 usuários. Ou seja:
+o acervo inteiro foi baixado ~420 vezes. O custo de mídia não é o que você guarda, é
+**quantas vezes cada byte é reenviado**, e num app de vídeo esse multiplicador é alto.
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **Miniatura redimensionada para 540 px** antes do upload | `getThumbnailAsync` devolve o frame no tamanho do vídeo: num clipe 720p saía uma miniatura de **1,9 MB**, baixada em todo card do feed e em toda grade de perfil. A 540 px com compressão 0.6 fica em ~60 KB — ~30× menos — e a diferença é invisível, porque a miniatura só aparece como capa enquanto o vídeo carrega. |
+| **Foto do feed reduzida a 1080 px** na captura e na importação | A compressão acontece antes do preview, então a pessoa vê exatamente o que vai subir e o arquivo guardado no aparelho também encolhe. Os anexos da Arquibancada já faziam isso (por isso o bucket `posts` tem 43 KB); o feed não fazia. |
+| **Avatar reduzido a 512 px** | Nunca é exibido acima de ~100 px, e é a imagem mais baixada do app — aparece em toda lista, comentário e mensagem. |
+| **Vídeo importado da galeria limitado a 20 MB**, com aviso explicando | No Expo Go não há como recomprimir vídeo (precisa de módulo nativo). 20 MB comporta um clipe de 60 s gravado pelo app e barra o caso patológico — o arquivo de 29 MB que sozinho respondia por gigabytes de tráfego. Vídeo **gravado** no app não é barrado: recusar o que a pessoa acabou de gravar seria pior que o custo. |
+| **Uma função de compressão só** (`comprimirImagem` em `services/midia/arquivos.ts`) | Miniatura, foto, avatar e anexo de post usavam (ou deixavam de usar) caminhos diferentes. Com um único ponto, esquecer de comprimir vira exceção e não regra. Ela nunca amplia: imagem menor que o limite é apenas recomprimida. |
+
+**O que isto não resolve:** os vídeos já enviados continuam do tamanho que são, e o
+`expo-video` rebaixa o arquivo toda vez que o item volta à tela.
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **Mídia nova vai para o Cloudflare R2** (`EXPO_PUBLIC_MIDIA_URL`) | O R2 não cobra egress — nenhum, sem teto. Como saída de mídia é ~85% do custo de um app de vídeo e foi o único limite estourado, é a mudança de maior impacto possível. Banco, Auth, RLS e Realtime **ficam na Supabase**: estão em 10% dos limites e trocar a tecnologia jogaria fora as migrations, as policies e o ranking apurado em SQL, que são o ativo do projeto. |
+| **Nada é migrado; as duas origens convivem** | Arquivo antigo continua na Supabase e segue servido, porque a URL está no banco. Só o upload novo muda de destino. Num app de mídia, "o grande dia da migração" é o que tem mais chance de quebrar link — e o ganho seria zero, já que o custo está no tráfego futuro, não no acervo. Desligar a variável reverte na hora. |
+| **URL assinada por Edge Function, arquivo direto para o R2** | O R2 não tem o equivalente às policies do Storage da Supabase, então a autorização foi para a função `midia-assinar`: ela confere o usuário, a pasta, o tipo e o tamanho, e só então assina. O arquivo nunca passa pela função — o `UploadTask` sobe direto, o que preserva a barra de progresso real e não gasta tempo de execução com megabytes. A chave do R2 nunca entra no app. |
+| **Exclusão só pelo servidor** (`midia-apagar`) | URL assinada de DELETE na mão do cliente é uma chave para destruir arquivo alheio se vazar. A exclusão confere o dono no servidor. É melhor esforço: arquivo órfão custa armazenamento, não integridade, e nunca vale derrubar a exclusão do post. |
+| **Apagar tenta nos dois destinos** | Durante a transição o acervo fica dividido. Descobrir a origem de cada arquivo e errar deixa lixo pago no bucket; tentar nos dois é idempotente e barato. |
+| **Origens de mídia numa tabela** (`origens_de_midia`) | A RLS de anexo de post aceitava um endereço fixo — é o que impede colar no post o arquivo de outra pessoa. Virou lista, para as duas origens coexistirem sem afrouxar a regra. A função passou de `immutable` para `stable` (lê tabela), o que é permitido em policy, ao contrário de CHECK constraint. |
+
+O R2 resolve o custo de **saída**, não o de **repetição**. Os próximos passos continuam no
+roadmap: cache de vídeo no aparelho e HLS adaptativo.
+
+## Ranking de palpiteiros
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **Apuração na escrita, nunca na leitura** | Um `order by sum(pontos)` sobre um milhão de palpiteiros a cada abertura de tela derruba o banco. O ranking é calculado **uma vez por jogo** (a cada ~3 dias), quando o apito final chega: um UPDATE pontua os palpites, um UPSERT acumula e um `row_number()` congela a posição de todo mundo. A leitura vira `order by posicao limit 20` num índice. Ler "você está em 4.312º" é lookup de chave primária — e não `count(*) where pontos > os meus`, que varreria o índice inteiro a cada request. |
+| **Apuração pela fila + `pg_cron`**, não no trigger | O trigger em `partidas` só enfileira (barato). O trabalho pesado sai do caminho da Edge Function que atualiza o placar, que roda de 3 em 3 minutos e não pode segurar a tabela. A fila é processada em ordem cronológica, o que também mantém a sequência de acertos correta. |
+| **Régua de 4 faixas: 10 / 5 / 3 / 0** (antes 3 / 1 / 0) | Com ~6 jogos por mês, acertar "o Flamengo ganha" é quase de graça: milhares de pessoas terminariam empatadas e o Top 20 viraria sorteio. Separar "acertou o saldo" de "acertou o vencedor" espalha as pontuações. Consequência assumida: **empate acertado sempre cai na faixa do saldo** (todo empate tem saldo zero) — e tudo bem, empate é mais raro e mais difícil de prever. |
+| **Desempate por desvio de gols** (soma de `\|palpite − real\|`) | É contínuo, então empate triplo no topo fica improvável mesmo com 6 jogos: quem chutou 2x1 num 3x1 passa na frente de quem chutou 1x0. Ordem oficial: pontos ↓ · cravadas ↓ · desvio ↑. |
+| **Três horizontes: jogo, mês e temporada** | O mês é a disputa (a ideia original), mas premia 20 pessoas a cada 30 dias. O pódio de cada jogo premia gente a cada 3 dias pelo mesmo custo — os pontos por partida já são calculados de qualquer jeito. A temporada é o troféu. |
+| **Título do mês congelado em `titulos`** | O prêmio não é aparecer na lista hoje, é ter "Campeão de setembro" no perfil para sempre. É o que dá motivo para jogar o mês inteiro. Um cron fecha o mês anterior todo dia 1º. |
+| **Conta anônima não entra no ranking** | Visitante custa zero para criar: 50 contas anônimas cobrindo os placares plausíveis garantiriam uma cravada. Quem vira conta de verdade passa a pontuar a partir do jogo seguinte. |
+| **Ligas privadas** | Um Top 20 nacional é inalcançável para 99,998% das pessoas, e ranking inalcançável desengaja. Na liga do trabalho alguém sempre está em primeiro. É também o motor de aquisição mais barato do formato: cada liga vira um código circulando no WhatsApp. Custo técnico zero — a liga só filtra o ranking que a apuração já produziu, sobre no máximo 50 linhas. |
+| **`palpites` deixou de ser escrita pelo app** | A policy conferia `partida_inicio > now()`, mas essa coluna era preenchida pelo cliente: bastava mandar `2099-01-01` para registrar o palpite depois do apito final, com o placar na mão — o Top 10 seria uma lista de trapaça. Agora o horário vem de `public.partidas`, o app usa a RPC `salvar_palpite` e perdeu o privilégio de INSERT/UPDATE. **Trade-off:** APKs antigos não conseguem mais palpitar (o resto continua funcionando). |
+| **Resumo "o que a torcida acha" recalculado por cron, não por trigger** | Um contador incremental por partida criaria uma linha quente com todo palpite disputando o mesmo registro. O recálculo periódico deixa a escrita em `palpites` sem lock nenhum. Duas velocidades: jogos a menos de 48 h de minuto em minuto, o resto de 10 em 10 minutos. |
+
+## Migrations
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **`supabase/migrations/` em vez de só o `schema.sql` idempotente** | Reaplicar um script de 1.200 linhas e torcer não escala com mais de uma pessoa nem com mais de um ambiente. O `schema.sql` continua criando o banco do zero; tudo depois é versionado, aplicado em ordem e registrado no banco. |
+| **Autoteste dentro da migration**, com rollback por subbloco | Algumas migrations criam dados falsos, conferem a conta e desfazem tudo com um `raise` dentro de um `begin ... exception`, que reverte o subbloco sem cancelar a migration. Foi o que pegou duas funções ambíguas (`salvar_palpite` e `gerar_codigo_de_liga`) que o `create function` aceita calado e só estouram quando alguém chama. |
+
+## Compartilhamento, notificações e login social
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **Link https com Open Graph** (Edge Function `abrir`), no lugar de `vulture://` | Esquema próprio no WhatsApp e no Gmail é texto morto: não vira link clicável, não gera prévia e não abre nada para quem não tem o app. Agora cada conteúdo tem URL https que devolve HTML com Open Graph — o mesmo mecanismo que faz o link do TikTok mostrar card com miniatura — e tenta abrir o app assim que carrega. **Trade-off:** o link exibe o domínio da Supabase; com domínio próprio, bastaria trocar a base. |
+| **Texto do compartilhamento em três blocos** (gancho, conteúdo citado, link isolado) | O link sozinho na última linha não é estética: link no meio de parágrafo atrapalha a geração de prévia em vários aplicativos. A citação com atribuição (`"texto" — @apelido`) é o que dá contexto a quem recebe sem precisar abrir. |
+| **`url` e `message` preenchidos juntos** no `Share.share` | O iOS usa `url` para montar a prévia da folha nativa; o Android ignora esse campo. Sem os dois, um dos sistemas fica sem link. |
+| **Foto do anfitrião no push da live** (`richContent.image`) | Notificação de live era texto puro com "Toque para assistir" — que diz o óbvio e ocupa a linha mais valiosa. Agora o título é quem está ao vivo (o gancho, porque é alguém que a pessoa segue) e o corpo é o assunto da transmissão (o que decide se vale abrir agora), com a foto de quem transmite. |
+| **Login Google pela aba segura do sistema** (`openAuthSessionAsync`), não WebView | No navegador real o usuário tem as senhas salvas e a verificação em duas etapas funcionando; num WebView do app, não — e o Google recusa WebView em vários fluxos. A conta é criada pelo mesmo gatilho do cadastro por e-mail. |
+| **Mock recusa o login Google em vez de simular sucesso** | Fingir que entrou esconderia um erro de configuração do OAuth no modo real. A recusa vem com código (`google_indisponivel`) para a tela tratar sem depender do texto. |
+
+## Economia sem perder qualidade
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **`Cache-Control: max-age=31536000, immutable` nos uploads do R2** | Era uma regressão: o upload para o Storage da Supabase enviava esse cabeçalho e ele se perdeu na migração. Sem ele o CDN não guarda na borda e cada exibição vira leitura cobrada — além de o aparelho rebaixar tudo a cada rolagem. Mídia aqui é imutável (id único por arquivo), então um ano é seguro. Ganha a conta **e** o usuário, que gasta menos dado móvel. |
+| **"Economizar dados" impede o pré-carregamento do próximo vídeo** | Montar o player já dispara o download; não existe montar sem baixar. Antes, quem ligava a economia continuava baixando o vídeo seguinte — o oposto do que pediu. Vídeo pré-carregado e nunca assistido é desperdício integral. |
+| **LiveKit fica ligado, mesmo "para economizar"** | Com o uso atual ele custa zero, então desligar economizaria US$ 0 e custaria a feature. E o modo simulado **não transmite vídeo**: o espectador vê uma capa estática, não o anfitrião. Desligar o que não está custando é prejuízo puro. |
+| **Não assinar EAS Build nem Supabase Pro antes da hora** | Juntos são US$ 124/mês de assinatura que o projeto ainda não usa. O plano gratuito de builds atende um ritmo normal de publicação, e o Free da Supabase comporta ~2.000 usuários ativos agora que a mídia saiu de lá. É a maior economia disponível e não exige uma linha de código. |
+| **Não otimizar payload de API nem frequência de cron** | Medido: `hashtags_norm` é o único campo desperdiçado (~3% do JSON) e os crons usam 8% da cota gratuita de invocações. Mexer nos dois arriscaria feed e latência de push para economizar centavos. Documentado como "não fazer" para ninguém tentar de novo. |
+
+## Monitoramento de cota
+
+| Decisão | Motivo / trade-off |
+| --- | --- |
+| **Medir o bucket por listagem S3**, não por contabilidade própria | Somar cada arquivo na hora do upload erra sempre: upload que falha no meio conta como enviado, arquivo apagado fora do app não desconta, e o erro acumula. A listagem devolve a verdade, e custa 1 operação Classe B a cada 1.000 objetos, uma vez por dia. |
+| **Alerta deduplicado por (tipo, nível, mês)** | Atravessar 70% avisa uma vez; só volta a avisar se subir para 85%. Alerta que repete todo dia é alerta que ninguém lê. |
+| **Limiares em tabela** (`plano_de_midia`), não constantes no código | Quando o plano mudar, ajusta-se com um UPDATE em vez de uma migration. |
+| **Classe B (leitura) assumidamente não medida** | O download vai do celular direto para o R2, sem passar por nós. Para um app de vídeo o limite que aperta é o armazenamento — arquivos grandes fazem 10 M de leituras/mês ser muito mais folgado que 10 GB. Medir Classe B exigiria a API de Analytics da Cloudflare e um token novo; está documentado em ESCALA.md como fazer se um dia importar. |
+| **Cron do calendário virou migration** | Ele vivia num arquivo avulso para colar no SQL Editor. Ao migrar de projeto passou batido, e o resultado foi `public.partidas` vazia: sem jogos, sem placar, sem palpites — e sem erro em lugar nenhum, que é o pior tipo de falha. Em migration, `db push` num banco novo já deixa funcionando. |
+
 ## Identidade visual
 
 | Decisão                                                                                | Motivo / trade-off                                                                                                                                                                                  |
