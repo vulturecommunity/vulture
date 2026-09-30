@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -20,6 +20,7 @@ import { useSugestoesDeTorcedores } from '@/hooks/useSeguidores';
 import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
+import { abrirCompartilhamento, compartilharPerfil } from '@/utils/compartilhar';
 import { cores, espacos, raios, tipografia } from '@/theme';
 import type { Usuario } from '@/types';
 import { formatarContador } from '@/utils/formatadores';
@@ -52,14 +53,7 @@ export default function TelaEncontrarTorcedores() {
 
   async function convidar() {
     if (!eu) return;
-    try {
-      await Share.share({
-        message: `Cola comigo no Vulture, o app da nação: vulture://usuario/${eu.id} — sou @${eu.apelido} por lá 🔴⚫`,
-        title: 'Convidar para o Vulture',
-      });
-    } catch {
-      // usuário fechou a folha de compartilhamento
-    }
+    await abrirCompartilhamento(compartilharPerfil({ apelido: eu.apelido }));
   }
 
   const lista = termoAtrasado ? (busca.data ?? []) : (sugestoes.data ?? []);

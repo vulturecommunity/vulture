@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useCallback } from 'react';
-import { Share } from 'react-native';
 
 import { dataService } from '@/services/data';
 import { chaves } from '@/services/queryClient';
+import { abrirCompartilhamento, compartilharVideo } from '@/utils/compartilhar';
 import type { Video } from '@/types';
 
 import { useAtualizarVideoNoCache } from './useFeed';
@@ -93,20 +93,18 @@ export function useCompartilhar() {
 
   return useCallback(
     async (video: Video) => {
-      try {
-        const resultado = await Share.share({
-          message: `${video.legenda}\n\nVeja no Vulture: vulture://video/${video.id}`,
-          url: video.url,
-          title: `Vídeo de @${video.autor.apelido} no Vulture`,
-        });
-        if (resultado.action === Share.sharedAction) {
-          atualizar(video.id, (v) => ({ ...v, compartilhamentos: v.compartilhamentos + 1 }));
-          dataService()
-            .registrarCompartilhamento(video.id)
-            .catch(() => {});
-        }
-      } catch {
-        // usuário cancelou ou plataforma sem suporte
+      const compartilhou = await abrirCompartilhamento(
+        compartilharVideo({
+          id: video.id,
+          legenda: video.legenda,
+          apelido: video.autor.apelido,
+        }),
+      );
+      if (compartilhou) {
+        atualizar(video.id, (v) => ({ ...v, compartilhamentos: v.compartilhamentos + 1 }));
+        dataService()
+          .registrarCompartilhamento(video.id)
+          .catch(() => {});
       }
     },
     [atualizar],

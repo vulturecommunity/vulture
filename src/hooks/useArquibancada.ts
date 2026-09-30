@@ -7,12 +7,12 @@ import {
 } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useMemo } from 'react';
-import { Share } from 'react-native';
 
 import { dataService } from '@/services/data';
 import type { NovoPost, ProgressoDeUpload } from '@/services/data/types';
 import { chaves } from '@/services/queryClient';
 import type { Pagina, Post } from '@/types';
+import { abrirCompartilhamento, compartilharPost } from '@/utils/compartilhar';
 
 export type FiltroDaResenha =
   { tipo: 'hashtag'; tag: string } | { tipo: 'partida'; id: string; rotulo: string } | null;
@@ -148,12 +148,8 @@ export function usePublicarPost() {
 
 export function useCompartilharPost() {
   return useCallback(async (post: Post) => {
-    try {
-      await Share.share({
-        message: `"${post.texto}"\n— @${post.autor.apelido} na Arquibancada do Vulture\nvulture://arquibancada/post/${post.id}`,
-      });
-    } catch {
-      // usuário cancelou ou plataforma sem suporte
-    }
+    await abrirCompartilhamento(
+      compartilharPost({ id: post.id, texto: post.texto, apelido: post.autor.apelido }),
+    );
   }, []);
 }
