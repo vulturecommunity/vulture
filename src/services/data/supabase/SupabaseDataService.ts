@@ -1,4 +1,6 @@
 import { File } from 'expo-file-system';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 
 import { DURACAO_FOTO_SEGUNDOS, type Interesse, type Reacao } from '@/constants/interesses';
 import {
@@ -7,6 +9,13 @@ import {
   VALIDADE_RASANTE_HORAS,
 } from '@/constants/rasantes';
 import { gerarThumbnail, tipoMimeDe } from '@/services/midia/arquivos';
+import {
+  apagarNoR2,
+  chaveDoR2,
+  enviarParaR2,
+  usandoR2,
+  type PastaDeMidia,
+} from '@/services/midia/remoto';
 import type {
   Comentario,
   Conversa,
@@ -14,6 +23,7 @@ import type {
   GrupoDeRasantes,
   HashtagTrending,
   Id,
+  Liga,
   Live,
   Mensagem,
   MensagemLive,
@@ -22,16 +32,22 @@ import type {
   NovoSeguidor,
   Pagina,
   Palpite,
+  PalpiteiroDaPartida,
+  Palpiteiro,
+  PeriodoDoRanking,
   Perfil,
   PermissaoDeConversa,
   Post,
   PreferenciasDeMensagens,
+  RankingDePalpites,
   RankingTorcedor,
   Rasante,
+  ResultadoDoPalpite,
   ResumoDePalpites,
   ResumoDeUsuario,
   Sessao,
   TipoDeNotificacao,
+  Titulo,
   TokenPush,
   Usuario,
   Video,
@@ -197,6 +213,32 @@ interface LinhaPalpite {
   gols_mandante: number;
   gols_visitante: number;
   atualizado_em: string;
+  pontos?: number | null;
+  resultado?: ResultadoDoPalpite | null;
+}
+
+interface LinhaDoRanking {
+  posicao: number;
+  usuario_id: string;
+  apelido: string;
+  nome: string;
+  avatar_url: string | null;
+  pontos: number;
+  palpites: number;
+  cravadas: number;
+  sequencia: number;
+  variacao?: number;
+  sou_eu?: boolean;
+}
+
+interface LinhaDeLiga {
+  id: string;
+  nome: string;
+  codigo: string;
+  membros: number | string;
+  sou_dono: boolean;
+  minha_posicao?: number | null;
+  meus_pontos?: number | null;
 }
 
 interface LinhaResumoDePalpites {
@@ -240,6 +282,33 @@ function paraPalpite(p: LinhaPalpite): Palpite {
     golsMandante: p.gols_mandante,
     golsVisitante: p.gols_visitante,
     atualizadoEm: p.atualizado_em,
+    pontos: p.pontos ?? null,
+    resultado: p.resultado ?? null,
+  };
+}
+
+function paraPalpiteiro(r: LinhaDoRanking): Palpiteiro {
+  return {
+    posicao: Number(r.posicao),
+    usuario: { id: r.usuario_id, apelido: r.apelido, nome: r.nome, avatarUrl: r.avatar_url },
+    pontos: Number(r.pontos ?? 0),
+    palpites: Number(r.palpites ?? 0),
+    cravadas: Number(r.cravadas ?? 0),
+    sequencia: Number(r.sequencia ?? 0),
+    variacao: Number(r.variacao ?? 0),
+    souEu: r.sou_eu ?? false,
+  };
+}
+
+function paraLiga(l: LinhaDeLiga): Liga {
+  return {
+    id: l.id,
+    nome: l.nome,
+    codigo: l.codigo,
+    membros: Number(l.membros ?? 0),
+    souDono: !!l.sou_dono,
+    minhaPosicao: Number(l.minha_posicao ?? 0),
+    meusPontos: Number(l.meus_pontos ?? 0),
   };
 }
 
@@ -431,15 +500,85 @@ export class SupabaseDataService implements DataService {
     return linhas.map((l) => paraVideo(l, curtidos, salvos));
   }
 
+  /**
+   * A lista de bloqueados era relida do banco em quase toda listagem — uma ida extra por
+   * chamada, para um dado que muda uma vez por mês. Fica em memória por 60 s e é derrubada
+   * na hora quando o usuário bloqueia ou desbloqueia alguém.
+   */
+  private bloqueadosEmCache: { ids: string[]; ate: number; dono: string } | null = null;
+
   private async idsBloqueados(): Promise<string[]> {
     const meuId = await this.meuId();
     if (!meuId) return [];
+    const agora = Date.now();
+    const cache = this.bloqueadosEmCache;
+    if (cache && cache.dono === meuId && cache.ate > agora) return cache.ids;
     const { data } = await this.db.from('blocks').select('bloqueado_id').eq('usuario_id', meuId);
-    return ((data ?? []) as { bloqueado_id: string }[]).map((b) => b.bloqueado_id);
+    const ids = ((data ?? []) as { bloqueado_id: string }[]).map((b) => b.bloqueado_id);
+    this.bloqueadosEmCache = { ids, ate: agora + 60_000, dono: meuId };
+    return ids;
   }
 
+  private esquecerBloqueados() {
+    this.bloqueadosEmCache = null;
+  }
+
+  /** Invoca uma Edge Function com o JWT do usuário e devolve o corpo já tipado. */
+  private readonly funcoes = {
+    invocar: async <T>(nome: string, corpo: Record<string, unknown>): Promise<T> => {
+      const { data, error } = await this.db.functions.invoke(nome, { body: corpo });
+      if (error) {
+        // a função devolve {error: "..."} no corpo; essa mensagem é mais útil que a genérica
+        const detalhe = (data as { error?: string } | null)?.error;
+        throw new ErroDeAplicacao(detalhe ?? error.message, 'funcao_de_midia');
+      }
+      return data as T;
+    },
+  };
+
+  /**
+   * Único ponto de upload do app.
+   *
+   * Com `EXPO_PUBLIC_MIDIA_URL` no .env, o arquivo vai para o Cloudflare R2 (egress zero);
+   * sem ela, continua no Storage da Supabase exatamente como antes. Os arquivos já
+   * enviados não se movem: as URLs estão no banco e seguem funcionando dos dois lados.
+   */
   private async enviarArquivo(
-    bucket: 'videos' | 'thumbnails' | 'avatars' | 'posts',
+    bucket: PastaDeMidia,
+    caminho: string,
+    uriLocal: string,
+    tipoMime: string,
+    aoProgredir?: (fracao: number) => void,
+  ): Promise<string> {
+    if (usandoR2()) {
+      return enviarParaR2(this.funcoes, bucket, caminho, uriLocal, tipoMime, aoProgredir);
+    }
+    return this.enviarParaSupabase(bucket, caminho, uriLocal, tipoMime, aoProgredir);
+  }
+
+  /**
+   * Remove arquivos dos dois destinos, sem se importar com onde eles estão.
+   *
+   * Durante a transição o acervo fica dividido: o que foi enviado antes está na Supabase,
+   * o que vier depois está no R2. Tentar nos dois é idempotente e barato — bem melhor do
+   * que descobrir a origem de cada arquivo e errar, deixando lixo pago no bucket.
+   */
+  private async removerArquivos(bucket: PastaDeMidia, caminhos: string[]): Promise<void> {
+    if (caminhos.length === 0) return;
+    await Promise.all([
+      this.db.storage
+        .from(bucket)
+        .remove(caminhos)
+        .then(undefined, () => {}),
+      apagarNoR2(
+        this.funcoes,
+        caminhos.map((c) => `${bucket}/${c}`),
+      ),
+    ]);
+  }
+
+  private async enviarParaSupabase(
+    bucket: PastaDeMidia,
     caminho: string,
     uriLocal: string,
     tipoMime: string,
@@ -523,6 +662,55 @@ export class SupabaseDataService implements DataService {
     return this.montarSessao(data.user.id, true);
   }
 
+  /**
+   * Login com Google pelo fluxo de OAuth do Supabase.
+   *
+   * O caminho é: pedir a URL de autorização ao Supabase → abrir na aba segura do sistema
+   * (`openAuthSessionAsync`, que é o navegador real, com as senhas salvas do usuário, e
+   * não um WebView do app) → o Google devolve para `vulture://login-google` com um código
+   * → trocamos o código pela sessão.
+   *
+   * `skipBrowserRedirect` existe porque quem abre o navegador aqui somos nós: sem isso o
+   * supabase-js tentaria redirecionar sozinho, o que não faz sentido em app nativo.
+   *
+   * O perfil é criado pelo mesmo trigger do cadastro por e-mail (`handle_new_user`), então
+   * quem entra pela primeira vez já chega com apelido e perfil prontos.
+   */
+  async entrarComGoogle(): Promise<Sessao> {
+    const redirectTo = Linking.createURL('login-google');
+    const { data, error } = await this.db.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (error || !data?.url) {
+      if (error && /provider is not enabled/i.test(error.message)) {
+        throw new ErroDeAplicacao(
+          'Entrar com Google ainda não está ligado neste projeto.',
+          'google_indisponivel',
+        );
+      }
+      erroDoSupabase(error, 'Falha ao abrir o login do Google');
+    }
+
+    const resultado = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    if (resultado.type !== 'success') {
+      throw new ErroDeAplicacao('Login com Google cancelado.', 'login_cancelado');
+    }
+
+    const codigo = new URL(resultado.url).searchParams.get('code');
+    if (!codigo) {
+      // alguns fluxos devolvem a sessão direto no fragmento em vez de código
+      const sessaoAtual = await this.sessaoAtual();
+      if (sessaoAtual) return sessaoAtual;
+      throw new ErroDeAplicacao('O Google não devolveu o código de acesso.', 'google_sem_codigo');
+    }
+
+    const { data: troca, error: erroTroca } =
+      await this.db.auth.exchangeCodeForSession(codigo);
+    if (erroTroca || !troca.user) erroDoSupabase(erroTroca, 'Falha ao concluir o login');
+    return this.montarSessao(troca.user.id, false, troca.user.email ?? null);
+  }
+
   async sair(): Promise<void> {
     await this.db.auth.signOut();
   }
@@ -597,39 +785,42 @@ export class SupabaseDataService implements DataService {
 
   // ---------------------------------------------------------------- feed e vídeos
 
+  /**
+   * A ordem e os filtros vêm da RPC `feed_ids`; aqui só buscamos as linhas dos ids.
+   *
+   * Antes o app baixava todos os ids de quem o usuário segue (e todos os bloqueados) para
+   * montar um `.in(...)` na querystring. Quem segue alguns milhares de perfis gerava uma
+   * URL de dezenas de KB, que o PostgREST recusa — o feed simplesmente parava de carregar
+   * justamente para os usuários mais engajados.
+   */
   async listFeed(params: ParametrosDoFeed): Promise<Pagina<Video>> {
     const limite = params.limite ?? LIMITE_PADRAO;
-    let consulta = this.db
-      .from('videos')
-      .select(SELECAO_VIDEO)
-      .order('criado_em', { ascending: false })
-      .limit(limite + 1);
-    if (params.cursor) consulta = consulta.lt('criado_em', params.cursor);
-    if (params.hashtag)
-      consulta = consulta.contains('hashtags_norm', [normalizarHashtag(params.hashtag)]);
-    if (params.categoria) consulta = consulta.eq('categoria', params.categoria);
-    if (params.aba === 'seguindo') {
-      const meuId = await this.meuId();
-      if (!meuId) return { itens: [], proximoCursor: null };
-      const { data: seguindo } = await this.db
-        .from('follows')
-        .select('seguido_id')
-        .eq('seguidor_id', meuId);
-      const ids = ((seguindo ?? []) as { seguido_id: string }[]).map((s) => s.seguido_id);
-      if (ids.length === 0) return { itens: [], proximoCursor: null };
-      consulta = consulta.in('autor_id', ids);
-    }
-    const bloqueados = await this.idsBloqueados();
-    if (bloqueados.length > 0)
-      consulta = consulta.not('autor_id', 'in', `(${bloqueados.join(',')})`);
-
-    const { data, error } = await consulta;
+    const { data, error } = await this.db.rpc('feed_ids', {
+      p_aba: params.aba === 'seguindo' ? 'seguindo' : 'para-voce',
+      p_cursor: params.cursor ?? null,
+      p_limite: limite + 1,
+      p_categoria: params.categoria ?? null,
+      p_hashtag: params.hashtag ? normalizarHashtag(params.hashtag) : null,
+    });
     if (error) erroDoSupabase(error, 'Falha ao carregar o feed');
-    const linhas = (data ?? []) as unknown as LinhaVideo[];
-    const temMais = linhas.length > limite;
-    const pagina = temMais ? linhas.slice(0, limite) : linhas;
-    const itens = await this.decorarVideos(pagina);
+    const refs = (data ?? []) as { id: string; criado_em: string }[];
+    const temMais = refs.length > limite;
+    const pagina = temMais ? refs.slice(0, limite) : refs;
+    if (pagina.length === 0) return { itens: [], proximoCursor: null };
+
+    const itens = await this.videosPorId(pagina.map((r) => r.id));
     return { itens, proximoCursor: temMais ? pagina[pagina.length - 1].criado_em : null };
+  }
+
+  /** Busca os vídeos de uma lista de ids preservando a ordem pedida. */
+  private async videosPorId(ids: string[]): Promise<Video[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await this.db.from('videos').select(SELECAO_VIDEO).in('id', ids);
+    if (error) erroDoSupabase(error, 'Falha ao carregar os vídeos');
+    const linhas = (data ?? []) as unknown as LinhaVideo[];
+    const ordem = new Map(ids.map((id, i) => [id, i]));
+    linhas.sort((a, b) => (ordem.get(a.id) ?? 0) - (ordem.get(b.id) ?? 0));
+    return this.decorarVideos(linhas);
   }
 
   async getVideo(id: Id): Promise<Video> {
@@ -704,13 +895,24 @@ export class SupabaseDataService implements DataService {
     const { error } = await this.db.from('videos').delete().eq('id', id).eq('autor_id', meuId);
     if (error) erroDoSupabase(error, 'Falha ao excluir');
     await Promise.all([
-      this.db.storage.from('videos').remove([`${meuId}/${id}.mp4`]),
-      this.db.storage.from('thumbnails').remove([`${meuId}/${id}.jpg`]),
+      this.removerArquivos('videos', [`${meuId}/${id}.mp4`]),
+      this.removerArquivos('thumbnails', [`${meuId}/${id}.jpg`]),
     ]);
   }
 
   async registrarVisualizacao(id: Id): Promise<void> {
-    await this.db.rpc('incrementar_visualizacao', { p_video_id: id });
+    await this.registrarVisualizacoes([id]);
+  }
+
+  /**
+   * Um UPDATE por vídeo assistido era a maior fonte de escrita do app: 100 mil usuários
+   * vendo 30 vídeos por dia dão 3 milhões de gravações diárias, cada uma travando a linha
+   * do vídeo em alta. Agora o app junta os ids (`useFeed`) e manda de uma vez; no banco
+   * vira insert numa fila que o cron consolida.
+   */
+  async registrarVisualizacoes(ids: Id[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db.rpc('registrar_visualizacoes', { p_ids: ids });
   }
 
   async registrarCompartilhamento(id: Id): Promise<void> {
@@ -1103,13 +1305,18 @@ export class SupabaseDataService implements DataService {
       .single();
     if (error || !data) erroDoSupabase(error, 'Falha ao iniciar a live');
     const live = paraLive(data as unknown as LinhaLive);
-    // avisa os seguidores (notificação em tela + push) sem atrasar o início da live
-    this.db.functions
-      .invoke('notificar-live', { body: { liveId: live.id } })
-      .then(({ error: erroFn }) => {
-        if (erroFn) console.warn('notificar-live falhou:', erroFn.message);
-      })
-      .catch((e: unknown) => console.warn('notificar-live indisponível:', e));
+    // Avisa os seguidores sem atrasar o início da live. O fan-out inteiro (notificação em
+    // tela + push enfileirado) é feito em dois INSERT ... SELECT dentro do Postgres, então
+    // 200 mil seguidores custam uma varredura de índice — e não 2 mil chamadas HTTP em
+    // série dentro de uma Edge Function, que estourava o tempo limite.
+    void (async () => {
+      try {
+        const { error: erroRpc } = await this.db.rpc('notificar_live', { p_live_id: live.id });
+        if (erroRpc) console.warn('notificar_live falhou:', erroRpc.message);
+      } catch (e) {
+        console.warn('notificar_live indisponível:', e);
+      }
+    })();
     return live;
   }
 
@@ -1437,13 +1644,12 @@ export class SupabaseDataService implements DataService {
   }
 
   async marcarConversaComoLida(conversaId: Id): Promise<void> {
-    const meuId = await this.meuIdOuErro();
-    await this.db
-      .from('messages')
-      .update({ lida: true })
-      .eq('conversa_id', conversaId)
-      .eq('lida', false)
-      .neq('remetente_id', meuId);
+    await this.meuIdOuErro();
+    // RPC: marca as mensagens e zera o contador da conversa na mesma transação
+    const { error } = await this.db.rpc('marcar_conversa_como_lida', {
+      p_conversa_id: conversaId,
+    });
+    if (error) erroDoSupabase(error, 'Falha ao marcar a conversa como lida');
   }
 
   assinarConversa(conversaId: Id, aoReceber: (mensagem: Mensagem) => void): CancelarAssinatura {
@@ -1696,10 +1902,10 @@ export class SupabaseDataService implements DataService {
     const meuId = await this.meuIdOuErro();
     const { error } = await this.db.from('rasantes').delete().eq('id', id).eq('autor_id', meuId);
     if (error) erroDoSupabase(error, 'Falha ao apagar o rasante');
-    // best-effort: arquivos no storage
+    // best-effort: arquivos no storage (Supabase e/ou R2)
     await Promise.all([
-      this.db.storage.from('videos').remove([`${meuId}/rasantes/${id}.mp4`]),
-      this.db.storage.from('thumbnails').remove([`${meuId}/rasantes/${id}.jpg`]),
+      this.removerArquivos('videos', [`${meuId}/rasantes/${id}.mp4`]),
+      this.removerArquivos('thumbnails', [`${meuId}/rasantes/${id}.jpg`]),
     ]).catch(() => {});
   }
 
@@ -1722,28 +1928,31 @@ export class SupabaseDataService implements DataService {
     return linhas.map((l) => paraPost(l, curtidos));
   }
 
+  /** Mesmo desenho do feed: ordem e filtros na RPC, linhas buscadas pelos ids. */
   async listPosts(params: ParametrosDaResenha): Promise<Pagina<Post>> {
     const limite = params.limite ?? LIMITE_PADRAO;
-    let consulta = this.db
+    const { data, error } = await this.db.rpc('resenha_ids', {
+      p_cursor: params.cursor ?? null,
+      p_limite: limite + 1,
+      p_hashtag: params.hashtag ? normalizarHashtag(params.hashtag) : null,
+      p_partida_id: params.partidaId ?? null,
+    });
+    if (error) erroDoSupabase(error, 'Falha ao carregar a resenha');
+    const refs = (data ?? []) as { id: string; criado_em: string }[];
+    const temMais = refs.length > limite;
+    const pagina = temMais ? refs.slice(0, limite) : refs;
+    if (pagina.length === 0) return { itens: [], proximoCursor: null };
+
+    const ids = pagina.map((r) => r.id);
+    const { data: linhasBrutas, error: erroLinhas } = await this.db
       .from('posts')
       .select(SELECAO_POST)
-      .is('pai_id', null)
-      .order('criado_em', { ascending: false })
-      .limit(limite + 1);
-    if (params.cursor) consulta = consulta.lt('criado_em', params.cursor);
-    if (params.hashtag)
-      consulta = consulta.contains('hashtags_norm', [normalizarHashtag(params.hashtag)]);
-    if (params.partidaId) consulta = consulta.eq('partida_id', params.partidaId);
-    const bloqueados = await this.idsBloqueados();
-    if (bloqueados.length > 0)
-      consulta = consulta.not('autor_id', 'in', `(${bloqueados.join(',')})`);
-
-    const { data, error } = await consulta;
-    if (error) erroDoSupabase(error, 'Falha ao carregar a resenha');
-    const linhas = (data ?? []) as unknown as LinhaPost[];
-    const temMais = linhas.length > limite;
-    const pagina = temMais ? linhas.slice(0, limite) : linhas;
-    const itens = await this.decorarPosts(pagina);
+      .in('id', ids);
+    if (erroLinhas) erroDoSupabase(erroLinhas, 'Falha ao carregar a resenha');
+    const linhas = (linhasBrutas ?? []) as unknown as LinhaPost[];
+    const ordem = new Map(ids.map((id, i) => [id, i]));
+    linhas.sort((a, b) => (ordem.get(a.id) ?? 0) - (ordem.get(b.id) ?? 0));
+    const itens = await this.decorarPosts(linhas);
     return { itens, proximoCursor: temMais ? pagina[pagina.length - 1].criado_em : null };
   }
 
@@ -1770,7 +1979,14 @@ export class SupabaseDataService implements DataService {
   }
 
   /** Caminho do arquivo no bucket "posts" a partir da URL pública (para apagar depois). */
+  /**
+   * Caminho dentro da pasta "posts" a partir da URL pública, venha ela do Storage da
+   * Supabase ou do R2. Sem cobrir os dois, a mídia enviada depois da migração nunca seria
+   * apagada e ficaria ocupando bucket pago para sempre.
+   */
   private caminhoNoBucketDePosts(url: string | null): string | null {
+    const doR2 = chaveDoR2(url);
+    if (doR2?.startsWith('posts/')) return doR2.slice('posts/'.length);
     const marca = '/storage/v1/object/public/posts/';
     const i = url ? url.indexOf(marca) : -1;
     return i >= 0 ? url!.slice(i + marca.length) : null;
@@ -1883,7 +2099,7 @@ export class SupabaseDataService implements DataService {
       return paraPost(data as unknown as LinhaPost, new Set());
     } catch (erro) {
       // sem post, os arquivos já enviados só ocupariam espaço
-      if (enviados.length > 0) await this.db.storage.from('posts').remove(enviados);
+      if (enviados.length > 0) await this.removerArquivos('posts', enviados);
       throw erro;
     }
   }
@@ -1902,7 +2118,7 @@ export class SupabaseDataService implements DataService {
       .flatMap((m) => [m.url, m.thumbnailUrl])
       .map((url) => this.caminhoNoBucketDePosts(url))
       .filter((c): c is string => !!c);
-    if (arquivos.length > 0) await this.db.storage.from('posts').remove(arquivos);
+    if (arquivos.length > 0) await this.removerArquivos('posts', arquivos);
   }
 
   async curtirPost(id: Id): Promise<void> {
@@ -1933,37 +2149,39 @@ export class SupabaseDataService implements DataService {
     if (!meuId || partidaIds.length === 0) return [];
     const { data, error } = await this.db
       .from('palpites')
-      .select('partida_id, gols_mandante, gols_visitante, atualizado_em')
+      .select('partida_id, gols_mandante, gols_visitante, atualizado_em, pontos, resultado')
       .eq('usuario_id', meuId)
       .in('partida_id', partidaIds);
     if (error) erroDoSupabase(error, 'Falha ao carregar seus palpites');
     return ((data ?? []) as LinhaPalpite[]).map(paraPalpite);
   }
 
+  /**
+   * Passa pela RPC `salvar_palpite`, não por um insert direto.
+   *
+   * O motivo é de segurança, não de estilo: a regra "só antes do apito" era conferida
+   * contra uma coluna que o próprio cliente preenchia, então bastava mandar uma data
+   * futura para registrar o palpite depois do jogo, com o placar na mão. Na RPC o horário
+   * vem de public.partidas e o app não tem mais privilégio de escrita na tabela.
+   */
   async salvarPalpite(novo: NovoPalpite): Promise<Palpite> {
-    const meuId = await this.meuIdOuErro();
+    await this.meuIdOuErro();
+    // pré-validação local só para o erro aparecer na hora, sem ida ao servidor
     validarPalpite(novo);
-    const { data, error } = await this.db
-      .from('palpites')
-      .upsert(
-        {
-          usuario_id: meuId,
-          partida_id: novo.partidaId,
-          partida_inicio: novo.inicioDaPartida,
-          gols_mandante: novo.golsMandante,
-          gols_visitante: novo.golsVisitante,
-          atualizado_em: new Date().toISOString(),
-        },
-        { onConflict: 'usuario_id,partida_id' },
-      )
-      .select('partida_id, gols_mandante, gols_visitante, atualizado_em')
-      .single();
-    // a RLS recusa depois do apito inicial, mesmo que o relógio do aparelho esteja errado
-    if (error && /row-level security/i.test(error.message)) {
-      throw new ErroDeAplicacao('Palpites encerrados: a bola já rolou.', 'palpite_encerrado');
+    const { data, error } = await this.db.rpc('salvar_palpite', {
+      p_partida_id: novo.partidaId,
+      p_gols_mandante: novo.golsMandante,
+      p_gols_visitante: novo.golsVisitante,
+    });
+    if (error) {
+      if (/bola já rolou|encerrados/i.test(error.message)) {
+        throw new ErroDeAplicacao('Palpites encerrados: a bola já rolou.', 'palpite_encerrado');
+      }
+      erroDoSupabase(error, 'Falha ao salvar o palpite');
     }
-    if (error || !data) erroDoSupabase(error, 'Falha ao salvar o palpite');
-    return paraPalpite(data as LinhaPalpite);
+    const linha = ((data ?? []) as LinhaPalpite[])[0];
+    if (!linha) throw new ErroDeAplicacao('Falha ao salvar o palpite.', 'palpite_invalido');
+    return paraPalpite(linha);
   }
 
   async resumoDosPalpites(partidaId: string): Promise<ResumoDePalpites> {
@@ -1988,6 +2206,124 @@ export class SupabaseDataService implements DataService {
             }
           : null,
     };
+  }
+
+  // ---------------------------------------------------------------- arquibancada: ranking
+
+  async periodosDoRanking(): Promise<PeriodoDoRanking[]> {
+    const { data, error } = await this.db.rpc('periodos_do_ranking', { p_limite: 12 });
+    if (error) erroDoSupabase(error, 'Falha ao carregar os períodos do ranking');
+    return ((data ?? []) as { periodo: string; jogos: number; temporada: number }[]).map((p) => ({
+      periodo: p.periodo,
+      jogos: Number(p.jogos),
+      temporada: Number(p.temporada),
+    }));
+  }
+
+  /**
+   * Top N + a faixa em volta do usuário. As duas leituras são lookup de índice: a apuração
+   * já congelou a posição de cada um quando o jogo terminou, então aqui não há agregação
+   * nenhuma — é o que permite a tela abrir igual com dez ou com um milhão de palpiteiros.
+   */
+  async rankingDePalpites(periodo: string, limite = 20): Promise<RankingDePalpites> {
+    const meuId = await this.meuId();
+    const [topo, faixa] = await Promise.all([
+      this.db.rpc('top_palpiteiros', { p_periodo: periodo, p_limite: limite }),
+      meuId
+        ? this.db.rpc('minha_faixa_no_ranking', { p_periodo: periodo, p_vizinhos: 2 })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (topo.error) erroDoSupabase(topo.error, 'Falha ao carregar o ranking');
+    const linhasTopo = ((topo.data ?? []) as LinhaDoRanking[]).map(paraPalpiteiro);
+    const linhasFaixa = ((faixa.data ?? []) as LinhaDoRanking[]).map(paraPalpiteiro);
+    return {
+      periodo,
+      topo: linhasTopo.map((p) => ({ ...p, souEu: p.usuario.id === meuId })),
+      // quem já aparece no topo não precisa da faixa repetida embaixo
+      minhaFaixa: linhasFaixa.some((p) => p.souEu && p.posicao <= limite) ? [] : linhasFaixa,
+    };
+  }
+
+  async podioDaPartida(partidaId: string, limite = 10): Promise<PalpiteiroDaPartida[]> {
+    const { data, error } = await this.db.rpc('podio_da_partida', {
+      p_partida_id: partidaId,
+      p_limite: limite,
+    });
+    if (error) erroDoSupabase(error, 'Falha ao carregar o pódio do jogo');
+    return (
+      (data ?? []) as {
+        posicao: number;
+        usuario_id: string;
+        apelido: string;
+        nome: string;
+        avatar_url: string | null;
+        gols_mandante: number;
+        gols_visitante: number;
+        pontos: number;
+        resultado: ResultadoDoPalpite;
+      }[]
+    ).map((r) => ({
+      posicao: Number(r.posicao),
+      usuario: { id: r.usuario_id, apelido: r.apelido, nome: r.nome, avatarUrl: r.avatar_url },
+      golsMandante: r.gols_mandante,
+      golsVisitante: r.gols_visitante,
+      pontos: Number(r.pontos),
+      resultado: r.resultado,
+    }));
+  }
+
+  async titulosDoUsuario(usuarioId: Id): Promise<Titulo[]> {
+    const { data, error } = await this.db.rpc('titulos_do_usuario', { p_usuario_id: usuarioId });
+    if (error) erroDoSupabase(error, 'Falha ao carregar os títulos');
+    return ((data ?? []) as { periodo: string; posicao: number; pontos: number }[]).map((t) => ({
+      periodo: t.periodo,
+      posicao: Number(t.posicao),
+      pontos: Number(t.pontos),
+    }));
+  }
+
+  // ---------------------------------------------------------------- arquibancada: ligas
+
+  async minhasLigas(periodo?: string): Promise<Liga[]> {
+    await this.meuIdOuErro();
+    const { data, error } = await this.db.rpc('minhas_ligas', { p_periodo: periodo ?? null });
+    if (error) erroDoSupabase(error, 'Falha ao carregar suas ligas');
+    return ((data ?? []) as LinhaDeLiga[]).map(paraLiga);
+  }
+
+  async criarLiga(nome: string): Promise<Liga> {
+    await this.meuIdOuErro();
+    const { data, error } = await this.db.rpc('criar_liga', { p_nome: nome.trim() });
+    if (error) erroDoSupabase(error, 'Falha ao criar a liga');
+    const linha = ((data ?? []) as LinhaDeLiga[])[0];
+    if (!linha) throw new ErroDeAplicacao('Falha ao criar a liga.', 'liga_invalida');
+    return paraLiga(linha);
+  }
+
+  async entrarNaLiga(codigo: string): Promise<Liga> {
+    await this.meuIdOuErro();
+    const { data, error } = await this.db.rpc('entrar_na_liga', {
+      p_codigo: codigo.trim().toUpperCase(),
+    });
+    if (error) erroDoSupabase(error, 'Falha ao entrar na liga');
+    const linha = ((data ?? []) as LinhaDeLiga[])[0];
+    if (!linha) throw new ErroDeAplicacao('Não existe liga com esse código.', 'liga_invalida');
+    return paraLiga(linha);
+  }
+
+  async sairDaLiga(ligaId: Id): Promise<void> {
+    await this.meuIdOuErro();
+    const { error } = await this.db.rpc('sair_da_liga', { p_liga_id: ligaId });
+    if (error) erroDoSupabase(error, 'Falha ao sair da liga');
+  }
+
+  async rankingDaLiga(ligaId: Id, periodo?: string): Promise<Palpiteiro[]> {
+    const { data, error } = await this.db.rpc('ranking_da_liga', {
+      p_liga_id: ligaId,
+      p_periodo: periodo ?? null,
+    });
+    if (error) erroDoSupabase(error, 'Falha ao carregar o ranking da liga');
+    return ((data ?? []) as LinhaDoRanking[]).map(paraPalpiteiro);
   }
 
   // ---------------------------------------------------------------- segurança
@@ -2034,6 +2370,7 @@ export class SupabaseDataService implements DataService {
         { onConflict: 'usuario_id,bloqueado_id', ignoreDuplicates: true },
       );
     if (error) erroDoSupabase(error, 'Falha ao bloquear');
+    this.esquecerBloqueados();
     await Promise.all([
       this.db.from('follows').delete().eq('seguidor_id', meuId).eq('seguido_id', usuarioId),
       this.db.from('follows').delete().eq('seguidor_id', usuarioId).eq('seguido_id', meuId),
@@ -2043,6 +2380,7 @@ export class SupabaseDataService implements DataService {
   async desbloquear(usuarioId: Id): Promise<void> {
     const meuId = await this.meuIdOuErro();
     await this.db.from('blocks').delete().eq('usuario_id', meuId).eq('bloqueado_id', usuarioId);
+    this.esquecerBloqueados();
   }
 
   async listBloqueados(): Promise<Usuario[]> {

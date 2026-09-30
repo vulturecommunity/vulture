@@ -272,11 +272,71 @@ export interface Post {
   curtido: boolean;
 }
 
+export type ResultadoDoPalpite = 'cravou' | 'saldo' | 'vencedor' | 'errou';
+
 export interface Palpite {
   partidaId: string;
   golsMandante: number;
   golsVisitante: number;
   atualizadoEm: string;
+  /** preenchido pela apuração no servidor; null enquanto o jogo não terminou */
+  pontos: number | null;
+  resultado: ResultadoDoPalpite | null;
+}
+
+/** Uma linha do ranking de palpiteiros (nacional, de liga ou do pódio de um jogo). */
+export interface Palpiteiro {
+  posicao: number;
+  usuario: Pick<Usuario, 'id' | 'apelido' | 'nome' | 'avatarUrl'>;
+  pontos: number;
+  palpites: number;
+  cravadas: number;
+  sequencia: number;
+  /** quantas posições subiu (positivo) ou caiu (negativo) na última apuração */
+  variacao: number;
+  souEu: boolean;
+}
+
+/** Top N + a faixa em volta do próprio usuário, que é o que faz o 4.312º voltar. */
+export interface RankingDePalpites {
+  periodo: string;
+  topo: Palpiteiro[];
+  minhaFaixa: Palpiteiro[];
+}
+
+export interface PeriodoDoRanking {
+  /** "2026-09" */
+  periodo: string;
+  jogos: number;
+  temporada: number;
+}
+
+/** Quem mais pontuou num jogo específico. */
+export interface PalpiteiroDaPartida {
+  posicao: number;
+  usuario: Pick<Usuario, 'id' | 'apelido' | 'nome' | 'avatarUrl'>;
+  golsMandante: number;
+  golsVisitante: number;
+  pontos: number;
+  resultado: ResultadoDoPalpite;
+}
+
+/** Pódio do mês congelado: medalha permanente no perfil. */
+export interface Titulo {
+  periodo: string;
+  posicao: number;
+  pontos: number;
+}
+
+export interface Liga {
+  id: Id;
+  nome: string;
+  /** código de 6 caracteres para convidar */
+  codigo: string;
+  membros: number;
+  souDono: boolean;
+  minhaPosicao: number;
+  meusPontos: number;
 }
 
 /** O que a torcida está apostando numa partida. */

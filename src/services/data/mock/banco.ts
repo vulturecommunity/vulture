@@ -85,7 +85,17 @@ export interface BancoMock {
   posts: PostPersistido[];
   curtidasDePosts: { usuarioId: string; postId: string; criadoEm: string }[];
   palpites: (Palpite & { usuarioId: string })[];
+  ligas: LigaPersistida[];
+  ligaMembros: { ligaId: string; usuarioId: string; entrouEm: string }[];
   sessao: SessaoPersistida | null;
+}
+
+export interface LigaPersistida {
+  id: string;
+  nome: string;
+  codigo: string;
+  donoId: string;
+  criadoEm: string;
 }
 
 /** Bancos gravados por versões anteriores do app ganham as coleções novas sem perder nada. */
@@ -101,6 +111,8 @@ export function normalizarBanco(b: BancoMock): BancoMock {
   for (const post of b.posts) post.midias ??= [];
   b.curtidasDePosts ??= [];
   b.palpites ??= [];
+  b.ligas ??= [];
+  b.ligaMembros ??= [];
   return b;
 }
 
@@ -145,6 +157,8 @@ export function criarBancoInicial(): BancoMock {
     posts: gerarPostsSeed(),
     curtidasDePosts: [],
     palpites: [],
+    ligas: [],
+    ligaMembros: [],
     sessao: null,
   };
 }

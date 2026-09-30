@@ -7,6 +7,7 @@ import type {
   GrupoDeRasantes,
   HashtagTrending,
   Id,
+  Liga,
   Live,
   MarcacaoDePartida,
   Mensagem,
@@ -16,14 +17,19 @@ import type {
   NovoSeguidor,
   Pagina,
   Palpite,
+  PalpiteiroDaPartida,
+  Palpiteiro,
+  PeriodoDoRanking,
   Perfil,
   PermissaoDeConversa,
   Post,
   PreferenciasDeMensagens,
+  RankingDePalpites,
   RankingTorcedor,
   Rasante,
   ResumoDePalpites,
   Sessao,
+  Titulo,
   TipoDeMidia,
   TipoDeNotificacao,
   TokenPush,
@@ -143,6 +149,11 @@ export interface DataService {
   entrar(email: string, senha: string): Promise<Sessao>;
   cadastrar(dados: DadosDeCadastro): Promise<Sessao>;
   entrarComoVisitante(): Promise<Sessao>;
+  /**
+   * Entra com a conta Google. Cria o perfil na primeira vez, como no cadastro por e-mail.
+   * Recusa com 'google_indisponivel' quando o provedor não está configurado no projeto.
+   */
+  entrarComGoogle(): Promise<Sessao>;
   sair(): Promise<void>;
   sessaoAtual(): Promise<Sessao | null>;
   concluirOnboarding(dados: {
@@ -161,6 +172,8 @@ export interface DataService {
   uploadVideo(novo: NovoVideo, aoProgredir?: ProgressoDeUpload): Promise<Video>;
   excluirVideo(id: Id): Promise<void>;
   registrarVisualizacao(id: Id): Promise<void>;
+  /** Visualizações acumuladas no aparelho e enviadas de uma vez (ver `useFeed`). */
+  registrarVisualizacoes(ids: Id[]): Promise<void>;
   registrarCompartilhamento(id: Id): Promise<void>;
 
   // ---- Interações ----
@@ -268,6 +281,23 @@ export interface DataService {
   /** Cria ou troca o palpite; recusa depois que a partida começou. */
   salvarPalpite(novo: NovoPalpite): Promise<Palpite>;
   resumoDosPalpites(partidaId: string): Promise<ResumoDePalpites>;
+
+  // ---- Arquibancada: ranking de palpiteiros ----
+  /** Meses que já têm jogo apurado (o mais recente primeiro) + a temporada. */
+  periodosDoRanking(): Promise<PeriodoDoRanking[]>;
+  /** Top N do período e a faixa em volta do usuário logado. */
+  rankingDePalpites(periodo: string, limite?: number): Promise<RankingDePalpites>;
+  /** Quem mais pontuou num jogo. */
+  podioDaPartida(partidaId: string, limite?: number): Promise<PalpiteiroDaPartida[]>;
+  /** Medalhas de pódio mensal de um perfil. */
+  titulosDoUsuario(usuarioId: Id): Promise<Titulo[]>;
+
+  // ---- Arquibancada: ligas privadas ----
+  minhasLigas(periodo?: string): Promise<Liga[]>;
+  criarLiga(nome: string): Promise<Liga>;
+  entrarNaLiga(codigo: string): Promise<Liga>;
+  sairDaLiga(ligaId: Id): Promise<void>;
+  rankingDaLiga(ligaId: Id, periodo?: string): Promise<Palpiteiro[]>;
 
   // ---- Segurança ----
   report(denuncia: NovaDenuncia): Promise<Denuncia>;

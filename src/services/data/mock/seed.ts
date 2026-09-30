@@ -633,14 +633,20 @@ export function gerarPostsSeed(agora: number = Date.now()): PostPersistido[] {
  * Palpites dos perfis de demonstração numa partida: determinísticos pelo id do jogo,
  * para o "o que a torcida aposta" não abrir vazio e não mudar a cada abertura.
  */
+/** Palpite fixo (sempre o mesmo) de um perfil de demonstração para uma partida. */
+export function palpiteDeDemoDe(
+  partidaId: string,
+  usuarioId: string,
+): { golsMandante: number; golsVisitante: number } {
+  let h = 0;
+  for (const ch of `${partidaId}:${usuarioId}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return { golsMandante: h % 4, golsVisitante: (h >>> 3) % 3 };
+}
+
 export function palpitesDeDemo(
   partidaId: string,
 ): { golsMandante: number; golsVisitante: number }[] {
-  return USUARIOS_SEED.map((u) => {
-    let h = 0;
-    for (const ch of `${partidaId}:${u.id}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    return { golsMandante: h % 4, golsVisitante: (h >>> 3) % 3 };
-  });
+  return USUARIOS_SEED.map((u) => palpiteDeDemoDe(partidaId, u.id));
 }
 
 /** Respostas automáticas dos perfis de demonstração no chat privado. */

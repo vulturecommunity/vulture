@@ -9,6 +9,8 @@ import {
   removerArquivoLocal,
   salvarArquivoLocalmente,
 } from '@/services/midia/arquivos';
+import { MatchServiceMock } from '@/services/partidas/MatchServiceMock';
+import type { Partida } from '@/services/partidas/types';
 import type {
   Comentario,
   Conversa,
@@ -16,6 +18,7 @@ import type {
   GrupoDeRasantes,
   HashtagTrending,
   Id,
+  Liga,
   Live,
   Mensagem,
   MensagemLive,
@@ -24,16 +27,21 @@ import type {
   NovoSeguidor,
   Pagina,
   Palpite,
+  PalpiteiroDaPartida,
+  Palpiteiro,
+  PeriodoDoRanking,
   Perfil,
   PermissaoDeConversa,
   Post,
   PreferenciasDeMensagens,
+  RankingDePalpites,
   RankingTorcedor,
   Rasante,
   ResumoDePalpites,
   ResumoDeUsuario,
   Sessao,
   TipoDeNotificacao,
+  Titulo,
   TokenPush,
   Usuario,
   Video,
@@ -42,7 +50,14 @@ import { ErroDeAplicacao } from '@/utils/erros';
 import { esperar } from '@/utils/espera';
 import { extrairHashtags, normalizarHashtag } from '@/utils/hashtags';
 import { agoraIso, novoId } from '@/utils/ids';
-import { resumirPalpites, validarPalpite } from '@/utils/palpites';
+import {
+  PONTOS_DO_PALPITE,
+  avaliarPalpite,
+  chaveDoMes,
+  desvioDoPalpite,
+  resumirPalpites,
+  validarPalpite,
+} from '@/utils/palpites';
 import { validarMidiasDoPost, validarTextoDoPost } from '@/utils/posts';
 import { apelidoValido, emailValido, normalizarApelido, senhaValida } from '@/utils/validacao';
 
@@ -66,9 +81,16 @@ import {
   ArmazenamentoMock,
   type BancoMock,
   type ConversaPersistida,
+  type LigaPersistida,
   type PostPersistido,
 } from './banco';
-import { RESPOSTAS_DE_DEMO, USUARIOS_SEED, gerarRasantesSeed, palpitesDeDemo } from './seed';
+import {
+  RESPOSTAS_DE_DEMO,
+  USUARIOS_SEED,
+  gerarRasantesSeed,
+  palpiteDeDemoDe,
+  palpitesDeDemo,
+} from './seed';
 import { SimuladorDeLive } from './simuladorLive';
 
 export interface OpcoesMock {
@@ -249,6 +271,19 @@ export class MockDataService implements DataService {
     b.sessao = { usuarioId: usuario.id, visitante: false, onboardingConcluido: false };
     await this.armazenamento.salvarAgora(); // sessão: grava na hora
     return this.montarSessao(b);
+  }
+
+  /**
+   * No modo demonstração não existe OAuth de verdade — abrir o navegador pediria uma
+   * conta Google real e um projeto configurado. Em vez de fingir que deu certo (o que
+   * esconderia um erro de configuração no modo real), recusa com uma mensagem clara.
+   */
+  async entrarComGoogle(): Promise<Sessao> {
+    if (this.latenciaMs > 0) await esperar(this.latenciaMs);
+    throw new ErroDeAplicacao(
+      'Entrar com Google só funciona com o backend real. No modo demonstração, use "Entrar como visitante".',
+      'google_indisponivel',
+    );
   }
 
   async entrarComoVisitante(): Promise<Sessao> {
@@ -483,6 +518,16 @@ export class MockDataService implements DataService {
       video.visualizacoes += 1;
       this.persistir();
     }
+  }
+
+  async registrarVisualizacoes(ids: Id[]): Promise<void> {
+    if (ids.length === 0) return;
+    const b = await this.armazenamento.carregar();
+    for (const id of ids) {
+      const video = b.videos.find((v) => v.id === id);
+      if (video) video.visualizacoes += 1;
+    }
+    this.persistir();
   }
 
   async registrarCompartilhamento(id: Id): Promise<void> {
@@ -1230,14 +1275,15 @@ export class MockDataService implements DataService {
     const meuId = b.sessao?.usuarioId;
     if (!meuId) return [];
     const ids = new Set(partidaIds);
+    const partidas = await this.partidasPorId();
     return b.palpites
       .filter((p) => p.usuarioId === meuId && ids.has(p.partidaId))
-      .map(({ partidaId, golsMandante, golsVisitante, atualizadoEm }) => ({
-        partidaId,
-        golsMandante,
-        golsVisitante,
-        atualizadoEm,
-      }));
+      .map(({ partidaId, golsMandante, golsVisitante, atualizadoEm }) =>
+        this.apurar(
+          { partidaId, golsMandante, golsVisitante, atualizadoEm, pontos: null, resultado: null },
+          partidas,
+        ),
+      );
   }
 
   async salvarPalpite(novo: NovoPalpite): Promise<Palpite> {
@@ -1249,6 +1295,8 @@ export class MockDataService implements DataService {
       golsMandante: novo.golsMandante,
       golsVisitante: novo.golsVisitante,
       atualizadoEm: agoraIso(),
+      pontos: null,
+      resultado: null,
     };
     b.palpites = b.palpites.filter(
       (p) => !(p.usuarioId === eu.id && p.partidaId === novo.partidaId),
@@ -1264,6 +1312,268 @@ export class MockDataService implements DataService {
       ...palpitesDeDemo(partidaId),
       ...b.palpites.filter((p) => p.partidaId === partidaId),
     ]);
+  }
+
+  // ---------------------------------------------------------------- arquibancada: ranking
+
+  /**
+   * No Supabase o ranking é apurado uma vez por jogo e só lido. Aqui, como o "banco" é um
+   * JSON no aparelho e a demo tem 8 perfis e uma dúzia de jogos, calcular na hora é mais
+   * simples e igualmente instantâneo — o resultado é o mesmo, com a mesma régua de pontos.
+   */
+  private async partidasPorId(): Promise<Map<string, Partida>> {
+    const partidas = await new MatchServiceMock().listarTemporada();
+    return new Map(partidas.map((p) => [p.id, p]));
+  }
+
+  private apurar(palpite: Palpite, partidas: Map<string, Partida>): Palpite {
+    const partida = partidas.get(palpite.partidaId);
+    if (!partida || partida.status !== 'encerrada' || !partida.placar) return palpite;
+    const resultado = avaliarPalpite(palpite, partida.placar);
+    return { ...palpite, resultado, pontos: PONTOS_DO_PALPITE[resultado] };
+  }
+
+  /** Pontos de todo mundo (perfis de demonstração + usuário logado) no período. */
+  private async pontuacoesDoPeriodo(periodo: string) {
+    const b = await this.banco();
+    const partidas = (await new MatchServiceMock().listarTemporada()).filter(
+      (p) =>
+        p.status === 'encerrada' && p.placar && chaveDoMes(new Date(p.dataHora)) === periodo,
+    );
+    const meuId = b.sessao?.usuarioId ?? null;
+    const pessoas = [...USUARIOS_SEED.map((u) => u.id), ...(meuId ? [meuId] : [])];
+    const meus = new Map(
+      b.palpites.filter((p) => p.usuarioId === meuId).map((p) => [p.partidaId, p]),
+    );
+
+    return pessoas
+      .filter((id, i) => pessoas.indexOf(id) === i)
+      .map((id) => {
+        let pontos = 0;
+        let cravadas = 0;
+        let palpites = 0;
+        let desvio = 0;
+        for (const partida of partidas) {
+          const palpite =
+            id === meuId ? meus.get(partida.id) : palpiteDeDemoDe(partida.id, id);
+          if (!palpite) continue;
+          palpites += 1;
+          const resultado = avaliarPalpite(palpite, partida.placar!);
+          pontos += PONTOS_DO_PALPITE[resultado];
+          if (resultado === 'cravou') cravadas += 1;
+          desvio += desvioDoPalpite(palpite, partida.placar!);
+        }
+        const usuario =
+          USUARIOS_SEED.find((u) => u.id === id) ??
+          b.usuarios.find((u) => u.id === id) ??
+          USUARIOS_SEED[0];
+        return { id, usuario, pontos, cravadas, palpites, desvio, souEu: id === meuId };
+      })
+      .filter((p) => p.palpites > 0)
+      .sort((a, c) => c.pontos - a.pontos || c.cravadas - a.cravadas || a.desvio - c.desvio)
+      .map((p, i) => ({
+        posicao: i + 1,
+        usuario: {
+          id: p.usuario.id,
+          apelido: p.usuario.apelido,
+          nome: p.usuario.nome,
+          avatarUrl: p.usuario.avatarUrl,
+        },
+        pontos: p.pontos,
+        palpites: p.palpites,
+        cravadas: p.cravadas,
+        sequencia: 0,
+        variacao: 0,
+        souEu: p.souEu,
+      }));
+  }
+
+  async periodosDoRanking(): Promise<PeriodoDoRanking[]> {
+    const partidas = await new MatchServiceMock().listarTemporada();
+    const meses = new Map<string, number>();
+    for (const p of partidas) {
+      if (p.status !== 'encerrada' || !p.placar) continue;
+      const mes = chaveDoMes(new Date(p.dataHora));
+      meses.set(mes, (meses.get(mes) ?? 0) + 1);
+    }
+    return [...meses.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([periodo, jogos]) => ({
+        periodo,
+        jogos,
+        temporada: Number(periodo.slice(0, 4)),
+      }));
+  }
+
+  async rankingDePalpites(periodo: string, limite = 20): Promise<RankingDePalpites> {
+    const todos = await this.pontuacoesDoPeriodo(periodo);
+    const topo = todos.slice(0, limite);
+    const eu = todos.find((p) => p.souEu);
+    const minhaFaixa =
+      !eu || eu.posicao <= limite
+        ? []
+        : todos.filter((p) => Math.abs(p.posicao - eu.posicao) <= 2);
+    return { periodo, topo, minhaFaixa };
+  }
+
+  async podioDaPartida(partidaId: string, limite = 10): Promise<PalpiteiroDaPartida[]> {
+    const partida = (await this.partidasPorId()).get(partidaId);
+    if (!partida?.placar || partida.status !== 'encerrada') return [];
+    const b = await this.banco();
+    const meuId = b.sessao?.usuarioId ?? null;
+    const meu = b.palpites.find((p) => p.usuarioId === meuId && p.partidaId === partidaId);
+
+    return [
+      ...USUARIOS_SEED.map((u) => ({ usuario: u, ...palpiteDeDemoDe(partidaId, u.id) })),
+      ...(meu && !USUARIOS_SEED.some((u) => u.id === meuId)
+        ? [
+            {
+              usuario: b.usuarios.find((u) => u.id === meuId) ?? USUARIOS_SEED[0],
+              golsMandante: meu.golsMandante,
+              golsVisitante: meu.golsVisitante,
+            },
+          ]
+        : []),
+    ]
+      .map((entrada) => ({
+        usuario: {
+          id: entrada.usuario.id,
+          apelido: entrada.usuario.apelido,
+          nome: entrada.usuario.nome,
+          avatarUrl: entrada.usuario.avatarUrl,
+        },
+        golsMandante: entrada.golsMandante,
+        golsVisitante: entrada.golsVisitante,
+        resultado: avaliarPalpite(entrada, partida.placar!),
+        desvio: desvioDoPalpite(entrada, partida.placar!),
+      }))
+      .map((e) => ({ ...e, pontos: PONTOS_DO_PALPITE[e.resultado] }))
+      .filter((e) => e.pontos > 0)
+      .sort((a, b2) => b2.pontos - a.pontos || a.desvio - b2.desvio)
+      .slice(0, limite)
+      .map((e, i) => ({
+        posicao: i + 1,
+        usuario: e.usuario,
+        golsMandante: e.golsMandante,
+        golsVisitante: e.golsVisitante,
+        pontos: e.pontos,
+        resultado: e.resultado,
+      }));
+  }
+
+  async titulosDoUsuario(usuarioId: Id): Promise<Titulo[]> {
+    // na demo o mês corrente ainda não fechou: só vira título quando o período acaba
+    const periodos = await this.periodosDoRanking();
+    const mesAtual = chaveDoMes(new Date());
+    const titulos: Titulo[] = [];
+    for (const { periodo } of periodos) {
+      if (periodo >= mesAtual) continue;
+      const ranking = await this.pontuacoesDoPeriodo(periodo);
+      const linha = ranking.find((r) => r.usuario.id === usuarioId);
+      if (linha && linha.posicao <= 3 && linha.pontos > 0) {
+        titulos.push({ periodo, posicao: linha.posicao, pontos: linha.pontos });
+      }
+    }
+    return titulos;
+  }
+
+  // ---------------------------------------------------------------- arquibancada: ligas
+
+  private async montarLiga(liga: LigaPersistida, periodo?: string): Promise<Liga> {
+    const b = await this.banco();
+    const meuId = b.sessao?.usuarioId ?? null;
+    const membros = b.ligaMembros.filter((m) => m.ligaId === liga.id);
+    const ranking = await this.rankingDaLiga(liga.id, periodo);
+    const eu = ranking.find((r) => r.souEu);
+    return {
+      id: liga.id,
+      nome: liga.nome,
+      codigo: liga.codigo,
+      membros: membros.length,
+      souDono: liga.donoId === meuId,
+      minhaPosicao: eu?.posicao ?? 0,
+      meusPontos: eu?.pontos ?? 0,
+    };
+  }
+
+  async minhasLigas(periodo?: string): Promise<Liga[]> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const minhas = b.ligaMembros
+      .filter((m) => m.usuarioId === eu.id)
+      .map((m) => b.ligas.find((l) => l.id === m.ligaId))
+      .filter((l): l is LigaPersistida => !!l);
+    return Promise.all(minhas.map((l) => this.montarLiga(l, periodo)));
+  }
+
+  async criarLiga(nome: string): Promise<Liga> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const limpo = nome.trim();
+    if (limpo.length < 3 || limpo.length > 40) {
+      throw new ErroDeAplicacao('O nome da liga precisa ter de 3 a 40 caracteres.', 'liga_invalida');
+    }
+    const liga: LigaPersistida = {
+      id: this.gerarId(),
+      nome: limpo,
+      codigo: this.gerarCodigoDeLiga(b),
+      donoId: eu.id,
+      criadoEm: agoraIso(),
+    };
+    b.ligas.push(liga);
+    b.ligaMembros.push({ ligaId: liga.id, usuarioId: eu.id, entrouEm: agoraIso() });
+    this.persistir();
+    return this.montarLiga(liga);
+  }
+
+  private gerarCodigoDeLiga(b: BancoMock): string {
+    const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let tentativa = 0; tentativa < 50; tentativa++) {
+      let codigo = '';
+      for (let i = 0; i < 6; i++) {
+        codigo += alfabeto[Math.floor(Math.random() * alfabeto.length)];
+      }
+      if (!b.ligas.some((l) => l.codigo === codigo)) return codigo;
+    }
+    throw new ErroDeAplicacao('Não consegui gerar um código de liga.', 'liga_invalida');
+  }
+
+  async entrarNaLiga(codigo: string): Promise<Liga> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    const liga = b.ligas.find((l) => l.codigo === codigo.trim().toUpperCase());
+    if (!liga) throw new ErroDeAplicacao('Não existe liga com esse código.', 'liga_invalida');
+    if (!b.ligaMembros.some((m) => m.ligaId === liga.id && m.usuarioId === eu.id)) {
+      b.ligaMembros.push({ ligaId: liga.id, usuarioId: eu.id, entrouEm: agoraIso() });
+      this.persistir();
+    }
+    return this.montarLiga(liga);
+  }
+
+  async sairDaLiga(ligaId: Id): Promise<void> {
+    const b = await this.banco();
+    const eu = this.usuarioLogado(b);
+    b.ligaMembros = b.ligaMembros.filter(
+      (m) => !(m.ligaId === ligaId && m.usuarioId === eu.id),
+    );
+    const liga = b.ligas.find((l) => l.id === ligaId);
+    if (liga?.donoId === eu.id) {
+      const herdeiro = b.ligaMembros.find((m) => m.ligaId === ligaId);
+      if (herdeiro) liga.donoId = herdeiro.usuarioId;
+      else b.ligas = b.ligas.filter((l) => l.id !== ligaId);
+    }
+    this.persistir();
+  }
+
+  async rankingDaLiga(ligaId: Id, periodo?: string): Promise<Palpiteiro[]> {
+    const b = await this.banco();
+    const membros = new Set(
+      b.ligaMembros.filter((m) => m.ligaId === ligaId).map((m) => m.usuarioId),
+    );
+    const todos = await this.pontuacoesDoPeriodo(periodo ?? chaveDoMes(new Date()));
+    return todos
+      .filter((p) => membros.has(p.usuario.id))
+      .map((p, i) => ({ ...p, posicao: i + 1 }));
   }
 
   // ---------------------------------------------------------------- segurança
