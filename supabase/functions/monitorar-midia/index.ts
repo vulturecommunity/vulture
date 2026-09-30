@@ -113,11 +113,20 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+    // banco e contas entram no mesmo snapshot: assim o painel tem as três curvas
+    // alinhadas no tempo, em vez de medir cada coisa num momento diferente
+    const { data: painel } = await admin.rpc('painel_de_uso');
+    const metricas = (painel?.metricas ?? []) as { chave: string; usado: number }[];
+    const bancoBytes = metricas.find((m) => m.chave === 'banco')?.usado ?? null;
+    const contas = metricas.find((m) => m.chave === 'contas')?.usado ?? null;
+
     const { error } = await admin.from('uso_do_bucket').insert({
       objetos: totais.objetos,
       bytes: totais.bytes,
       novos_no_mes: totais.novosNoMes,
       por_pasta: porPasta,
+      banco_bytes: bancoBytes,
+      contas,
     });
     if (error) return responder({ error: error.message }, 500);
 

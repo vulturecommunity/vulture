@@ -138,6 +138,41 @@ esse número.
 
 ---
 
+## Painel de uso
+
+Página externa (fora do app) que mostra quanto de cada plano gratuito já foi consumido:
+
+**https://claude.ai/artifact/RthsVzGmRpQDSaYdcmkbFp**
+
+Pede um token na primeira abertura — o `PAINEL_TOKEN`, que fica salvo no navegador. Não é
+a anon key de propósito: a anon key está embutida no APK, e quem tivesse o APK veria a
+telemetria de infraestrutura do projeto. Também não é a service role, porque a página roda
+no navegador. Este token só lê números agregados.
+
+| Onde | O quê |
+| --- | --- |
+| `painel_de_uso()` | função SQL que junta tudo numa chamada |
+| Edge Function `painel` | expõe o JSON, autenticada pelo `PAINEL_TOKEN` |
+| `monitorar-midia` | grava o snapshot diário (R2 + banco + contas juntos) |
+
+O painel mede **armazenamento no R2, escritas no R2, tamanho do banco e contas**, e marca
+70%/85%/95% em cada trilho — os mesmos limiares que disparam push de alerta.
+
+O que ele **não** mede, e diz isso na tela em vez de inventar número: egress da Supabase e
+leituras Classe B do R2. Os dois passam longe do banco (um sai pelo gateway, o outro vai do
+celular direto para a Cloudflare), então só existem no painel de cada provedor. Métrica
+errada é pior que métrica ausente — dá confiança falsa justamente onde a conta chega.
+
+A curva de crescimento e a projeção de "quando o limite seria atingido" só aparecem depois
+de alguns dias, porque o levantamento roda uma vez por dia (04:20).
+
+```bash
+# trocar o token
+npx supabase secrets set PAINEL_TOKEN=<novo>
+```
+
+---
+
 ## Alertas — configure uma vez
 
 ### Já automatizado
