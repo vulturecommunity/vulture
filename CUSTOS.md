@@ -201,6 +201,35 @@ Verificado e descartado, para você não perder tempo:
 
 ---
 
+## Zerar o app sem perder as contas
+
+Durante o piloto é comum querer recomeçar os testes do zero — sem gastar cota de
+armazenamento com conteúdo de teste e sem fazer ninguém criar conta de novo.
+
+```bash
+export SUPABASE_SERVICE_ROLE_KEY='...'   # painel → Settings → API → service_role
+./scripts/limpar-tudo.sh
+```
+
+O script mostra a situação atual, **exige que você digite `APAGAR CONTEUDO`** e só então
+executa, devolvendo um relatório do que saiu.
+
+| Apaga | Mantém |
+| --- | --- |
+| vídeo, foto, post, comentário, curtida | **contas** (auth.users + profiles) |
+| palpite, ranking, títulos, ligas | tokens de push dos aparelhos |
+| conversa, mensagem, rasante, live | administradores que recebem alerta |
+| notificação, denúncia, filas | configuração do R2 e limites de custo |
+| **os arquivos no Cloudflare R2** | calendário do Flamengo |
+
+**A ordem importa e é proposital:** primeiro os arquivos no R2, depois as linhas no banco.
+Ao contrário, uma falha no meio apagaria as URLs do banco e deixaria os arquivos órfãos no
+bucket — ocupando cota para sempre, sem ninguém saber que estão lá.
+
+Três travas independentes impedem execução acidental: a função SQL exige a frase exata, a
+Edge Function exige a service role key (que nunca está no app nem no repositório), e o
+script pede confirmação digitada. Nenhuma sozinha é suficiente.
+
 ## A regra de fundo
 
 A distinção que importa não é "caro ou barato", é **custo fixo versus custo que multiplica
