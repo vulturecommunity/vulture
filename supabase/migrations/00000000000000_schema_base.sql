@@ -1,0 +1,1212 @@
+-- =====================================================================================
+-- VULTURE — schema do Supabase (Postgres + Auth + Storage + Realtime)
+-- Script único e idempotente: pode ser executado várias vezes no SQL Editor sem quebrar.
+-- =====================================================================================
+
+create extension if not exists "pgcrypto";
+
+-- -------------------------------------------------------------------------------------
+-- TABELAS
+-- -------------------------------------------------------------------------------------
+
+create table if not exists public.profiles (
+  id                 uuid primary key references auth.users (id) on delete cascade,
+  apelido            text not null unique check (apelido ~ '^[a-z0-9._]{3,20}$'),
+  nome               text not null default '',
+  avatar_url         text,
+  bio                text not null default '' check (char_length(bio) <= 160),
+  interesses         text[] not null default '{}',
+  seguidores_count   integer not null default 0,
+  seguindo_count     integer not null default 0,
+  curtidas_recebidas integer not null default 0,
+  videos_count       integer not null default 0,
+  criado_em          timestamptz not null default now(),
+  -- e-mail copiado de auth.users para rastreio no painel; nunca exposto ao app (ver PRIVILÉGIOS)
+  email              text
+);
+alter table public.profiles add column if not exists email text;
+
+create table if not exists public.videos (
+  id             uuid primary key default gen_random_uuid(),
+  autor_id       uuid not null references public.profiles (id) on delete cascade,
+  tipo           text not null default 'video' check (tipo in ('video', 'foto')),
+  url            text not null,
+  thumbnail_url  text,
+  legenda        text not null default '' check (char_length(legenda) <= 300),
+  hashtags       text[] not null default '{}',
+  hashtags_norm  text[] not null default '{}',
+  categoria      text not null default 'Torcida',
+  audio          text,
+  duracao        integer not null default 0,
+  largura        integer,
+  altura         integer,
+  likes_count    integer not null default 0,
+  comments_count integer not null default 0,
+  saves_count    integer not null default 0,
+  shares_count   integer not null default 0,
+  views_count    integer not null default 0,
+  criado_em      timestamptz not null default now()
+);
+
+create table if not exists public.likes (
+  usuario_id uuid not null references public.profiles (id) on delete cascade,
+  video_id   uuid not null references public.videos (id) on delete cascade,
+  criado_em  timestamptz not null default now(),
+  primary key (usuario_id, video_id)
+);
+
+create table if not exists public.comments (
+  id          uuid primary key default gen_random_uuid(),
+  video_id    uuid not null references public.videos (id) on delete cascade,
+  autor_id    uuid not null references public.profiles (id) on delete cascade,
+  texto       text not null check (char_length(texto) between 1 and 300),
+  pai_id      uuid references public.comments (id) on delete cascade,
+  likes_count integer not null default 0,
+  criado_em   timestamptz not null default now()
+);
+
+create table if not exists public.follows (
+  seguidor_id uuid not null references public.profiles (id) on delete cascade,
+  seguido_id  uuid not null references public.profiles (id) on delete cascade,
+  criado_em   timestamptz not null default now(),
+  primary key (seguidor_id, seguido_id),
+  check (seguidor_id <> seguido_id)
+);
+
+create table if not exists public.saves (
+  usuario_id uuid not null references public.profiles (id) on delete cascade,
+  video_id   uuid not null references public.videos (id) on delete cascade,
+  criado_em  timestamptz not null default now(),
+  primary key (usuario_id, video_id)
+);
+
+create table if not exists public.live_streams (
+  id            uuid primary key default gen_random_uuid(),
+  anfitriao_id  uuid not null references public.profiles (id) on delete cascade,
+  titulo        text not null check (char_length(titulo) between 1 and 80),
+  thumbnail_url text,
+  sala          text not null unique,
+  espectadores  integer not null default 0,
+  ativa         boolean not null default true,
+  iniciada_em   timestamptz not null default now(),
+  encerrada_em  timestamptz
+);
+
+create table if not exists public.live_messages (
+  id        uuid primary key default gen_random_uuid(),
+  live_id   uuid not null references public.live_streams (id) on delete cascade,
+  autor_id  uuid not null references public.profiles (id) on delete cascade,
+  tipo      text not null default 'texto' check (tipo in ('texto', 'reacao', 'sistema')),
+  texto     text not null check (char_length(texto) between 1 and 200),
+  reacao    text,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists public.reports (
+  id             uuid primary key default gen_random_uuid(),
+  denunciante_id uuid not null references public.profiles (id) on delete cascade,
+  tipo_alvo      text not null check (tipo_alvo in ('video', 'usuario', 'comentario', 'live')),
+  alvo_id        text not null,
+  motivo         text not null,
+  detalhes       text not null default '',
+  status         text not null default 'pendente' check (status in ('pendente', 'analisada', 'descartada')),
+  criado_em      timestamptz not null default now()
+);
+
+create table if not exists public.blocks (
+  usuario_id   uuid not null references public.profiles (id) on delete cascade,
+  bloqueado_id uuid not null references public.profiles (id) on delete cascade,
+  criado_em    timestamptz not null default now(),
+  primary key (usuario_id, bloqueado_id)
+);
+
+create table if not exists public.notifications (
+  id        uuid primary key default gen_random_uuid(),
+  para_id   uuid not null references public.profiles (id) on delete cascade,
+  tipo      text not null check (tipo in ('curtida', 'comentario', 'seguiu', 'live', 'sistema')),
+  de_id     uuid references public.profiles (id) on delete cascade,
+  video_id  uuid references public.videos (id) on delete cascade,
+  live_id   uuid references public.live_streams (id) on delete cascade,
+  texto     text not null,
+  lida      boolean not null default false,
+  criado_em timestamptz not null default now()
+);
+
+-- Bancos criados antes das notificações de live: adiciona a coluna e amplia o check
+alter table public.notifications add column if not exists live_id uuid references public.live_streams (id) on delete cascade;
+alter table public.notifications drop constraint if exists notifications_tipo_check;
+alter table public.notifications add constraint notifications_tipo_check
+  check (tipo in ('curtida', 'comentario', 'seguiu', 'live', 'sistema'));
+
+-- Tokens de push (Expo Push Service): um token = um aparelho; troca de dono se outro usuário logar nele
+create table if not exists public.push_tokens (
+  token         text primary key,
+  usuario_id    uuid not null references public.profiles (id) on delete cascade,
+  plataforma    text not null default 'android' check (plataforma in ('android', 'ios', 'web')),
+  atualizado_em timestamptz not null default now()
+);
+
+-- -------------------------------------------------------------------------------------
+-- ÍNDICES (ordenação e busca)
+-- -------------------------------------------------------------------------------------
+
+create index if not exists videos_criado_em_idx        on public.videos (criado_em desc);
+create index if not exists videos_autor_idx            on public.videos (autor_id, criado_em desc);
+create index if not exists videos_categoria_idx        on public.videos (categoria, criado_em desc);
+create index if not exists videos_hashtags_norm_idx    on public.videos using gin (hashtags_norm);
+create index if not exists videos_likes_idx            on public.videos (likes_count desc);
+create index if not exists likes_video_idx             on public.likes (video_id);
+create index if not exists likes_usuario_idx           on public.likes (usuario_id, criado_em desc);
+create index if not exists saves_usuario_idx           on public.saves (usuario_id, criado_em desc);
+create index if not exists comments_video_idx          on public.comments (video_id, criado_em);
+create index if not exists comments_pai_idx            on public.comments (pai_id);
+create index if not exists follows_seguido_idx         on public.follows (seguido_id);
+create index if not exists live_streams_ativa_idx      on public.live_streams (ativa, espectadores desc);
+create index if not exists live_messages_live_idx      on public.live_messages (live_id, criado_em desc);
+create index if not exists notifications_para_idx      on public.notifications (para_id, criado_em desc);
+create index if not exists push_tokens_usuario_idx     on public.push_tokens (usuario_id);
+create index if not exists profiles_apelido_busca_idx  on public.profiles (lower(apelido));
+create index if not exists profiles_nome_busca_idx     on public.profiles (lower(nome));
+
+-- -------------------------------------------------------------------------------------
+-- FUNÇÕES E TRIGGERS
+-- -------------------------------------------------------------------------------------
+
+-- Cria o perfil de um usuário do Auth se ele ainda não existir (apelido único derivado dos
+-- metadados ou do e-mail). Usada pelo trigger de cadastro e pela RPC garantir_perfil().
+create or replace function public.criar_perfil_se_faltar(uid uuid, email_usuario text, meta jsonb)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  apelido_base text;
+  apelido_final text;
+  tentativa integer := 0;
+begin
+  if exists (select 1 from public.profiles where id = uid) then
+    update public.profiles set email = email_usuario
+    where id = uid and email is distinct from email_usuario;
+    return;
+  end if;
+
+  apelido_base := coalesce(meta ->> 'apelido', split_part(coalesce(email_usuario, 'torcedor'), '@', 1));
+  apelido_base := lower(regexp_replace(apelido_base, '[^a-z0-9._]', '', 'g'));
+  if char_length(apelido_base) < 3 then
+    apelido_base := 'torcedor' || floor(random() * 9000 + 1000)::text;
+  end if;
+  apelido_final := left(apelido_base, 20);
+  while exists (select 1 from public.profiles where apelido = apelido_final) loop
+    tentativa := tentativa + 1;
+    apelido_final := left(apelido_base, 16) || floor(random() * 9000 + 1000)::text;
+    exit when tentativa > 20;
+  end loop;
+
+  insert into public.profiles (id, apelido, nome, email)
+  values (uid, apelido_final, coalesce(meta ->> 'nome', apelido_final), email_usuario)
+  on conflict (id) do nothing;
+end;
+$$;
+
+-- Trigger: cria o perfil automaticamente quando um usuário se cadastra (inclusive anônimo/visitante)
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  perform public.criar_perfil_se_faltar(new.id, new.email, new.raw_user_meta_data);
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- RPC chamada pelo app quando o perfil do usuário logado não é encontrado: recria e segue.
+create or replace function public.garantir_perfil()
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  u record;
+begin
+  if auth.uid() is null then
+    raise exception 'não autenticado';
+  end if;
+  select id, email, raw_user_meta_data into u from auth.users where id = auth.uid();
+  perform public.criar_perfil_se_faltar(u.id, u.email, u.raw_user_meta_data);
+end;
+$$;
+revoke execute on function public.garantir_perfil() from public, anon;
+grant execute on function public.garantir_perfil() to authenticated;
+
+-- Repara usuários existentes sem perfil
+select public.criar_perfil_se_faltar(u.id, u.email, u.raw_user_meta_data)
+from auth.users u
+left join public.profiles p on p.id = u.id
+where p.id is null;
+
+-- Mantém profiles.email igual ao do Auth (troca de e-mail, visitante que vira conta)
+create or replace function public.handle_user_email_updated()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.profiles set email = new.email where id = new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_email_updated on auth.users;
+create trigger on_auth_user_email_updated
+  after update of email on auth.users
+  for each row execute function public.handle_user_email_updated();
+
+-- Preenche o e-mail de perfis já existentes
+update public.profiles p
+set email = u.email
+from auth.users u
+where u.id = p.id and p.email is distinct from u.email;
+
+-- Contadores de curtidas (+ curtidas recebidas do autor) e notificação
+create or replace function public.tg_likes()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  autor uuid;
+begin
+  if tg_op = 'INSERT' then
+    update public.videos set likes_count = likes_count + 1 where id = new.video_id returning autor_id into autor;
+    update public.profiles set curtidas_recebidas = curtidas_recebidas + 1 where id = autor;
+    if autor is not null and autor <> new.usuario_id then
+      insert into public.notifications (para_id, tipo, de_id, video_id, texto)
+      values (autor, 'curtida', new.usuario_id, new.video_id, 'curtiu seu vídeo');
+    end if;
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.videos set likes_count = greatest(0, likes_count - 1) where id = old.video_id returning autor_id into autor;
+    update public.profiles set curtidas_recebidas = greatest(0, curtidas_recebidas - 1) where id = autor;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists likes_contadores on public.likes;
+create trigger likes_contadores
+  after insert or delete on public.likes
+  for each row execute function public.tg_likes();
+
+-- Contador de comentários e notificação
+create or replace function public.tg_comments()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  autor uuid;
+begin
+  if tg_op = 'INSERT' then
+    update public.videos set comments_count = comments_count + 1 where id = new.video_id returning autor_id into autor;
+    if autor is not null and autor <> new.autor_id then
+      insert into public.notifications (para_id, tipo, de_id, video_id, texto)
+      values (autor, 'comentario', new.autor_id, new.video_id, 'comentou: "' || left(new.texto, 60) || '"');
+    end if;
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.videos set comments_count = greatest(0, comments_count - 1) where id = old.video_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists comments_contadores on public.comments;
+create trigger comments_contadores
+  after insert or delete on public.comments
+  for each row execute function public.tg_comments();
+
+-- Contadores de seguidores/seguindo e notificação
+create or replace function public.tg_follows()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.profiles set seguidores_count = seguidores_count + 1 where id = new.seguido_id;
+    update public.profiles set seguindo_count = seguindo_count + 1 where id = new.seguidor_id;
+    insert into public.notifications (para_id, tipo, de_id, texto)
+    values (new.seguido_id, 'seguiu', new.seguidor_id, 'começou a seguir você');
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.profiles set seguidores_count = greatest(0, seguidores_count - 1) where id = old.seguido_id;
+    update public.profiles set seguindo_count = greatest(0, seguindo_count - 1) where id = old.seguidor_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists follows_contadores on public.follows;
+create trigger follows_contadores
+  after insert or delete on public.follows
+  for each row execute function public.tg_follows();
+
+-- Contador de salvos
+create or replace function public.tg_saves()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.videos set saves_count = saves_count + 1 where id = new.video_id;
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.videos set saves_count = greatest(0, saves_count - 1) where id = old.video_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists saves_contadores on public.saves;
+create trigger saves_contadores
+  after insert or delete on public.saves
+  for each row execute function public.tg_saves();
+
+-- Contador de vídeos do perfil + normalização de hashtags
+create or replace function public.tg_videos()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.hashtags_norm := (select coalesce(array_agg(lower(h)), '{}') from unnest(new.hashtags) as h);
+    update public.profiles set videos_count = videos_count + 1 where id = new.autor_id;
+    return new;
+  elsif tg_op = 'UPDATE' then
+    new.hashtags_norm := (select coalesce(array_agg(lower(h)), '{}') from unnest(new.hashtags) as h);
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.profiles set videos_count = greatest(0, videos_count - 1) where id = old.autor_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists videos_contadores on public.videos;
+create trigger videos_contadores
+  before insert or update or delete on public.videos
+  for each row execute function public.tg_videos();
+
+-- -------------------------------------------------------------------------------------
+-- RPCs usadas pelo app
+-- -------------------------------------------------------------------------------------
+
+create or replace function public.incrementar_visualizacao(p_video_id uuid)
+returns void language sql security definer set search_path = public as $$
+  update public.videos set views_count = views_count + 1 where id = p_video_id;
+$$;
+
+create or replace function public.incrementar_compartilhamento(p_video_id uuid)
+returns void language sql security definer set search_path = public as $$
+  update public.videos set shares_count = shares_count + 1 where id = p_video_id;
+$$;
+
+create or replace function public.ajustar_espectadores(p_live_id uuid, p_delta integer)
+returns void language sql security definer set search_path = public as $$
+  update public.live_streams
+     set espectadores = greatest(0, espectadores + p_delta)
+   where id = p_live_id and ativa;
+$$;
+
+-- Registra o token deste aparelho para o usuário logado. Se o token já era de outra conta
+-- (troca de usuário no mesmo celular), passa a ser do usuário atual.
+create or replace function public.registrar_token_push(p_token text, p_plataforma text default 'android')
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then
+    raise exception 'não autenticado';
+  end if;
+  delete from public.push_tokens where token = p_token and usuario_id <> auth.uid();
+  insert into public.push_tokens (token, usuario_id, plataforma, atualizado_em)
+  values (p_token, auth.uid(), p_plataforma, now())
+  on conflict (token) do update
+    set usuario_id = excluded.usuario_id, plataforma = excluded.plataforma, atualizado_em = now();
+end;
+$$;
+
+create or replace function public.buscar_hashtags(p_termo text)
+returns table (tag text, total bigint)
+language sql stable security definer set search_path = public as $$
+  select min(h) as tag, count(*) as total
+    from public.videos v, unnest(v.hashtags) as h
+   where lower(h) like '%' || lower(p_termo) || '%'
+   group by lower(h)
+   order by total desc
+   limit 20;
+$$;
+
+create or replace function public.hashtags_em_alta(p_limite integer default 12)
+returns table (tag text, total bigint)
+language sql stable security definer set search_path = public as $$
+  select min(h) as tag, count(*) as total
+    from public.videos v, unnest(v.hashtags) as h
+   where v.criado_em > now() - interval '30 days'
+   group by lower(h)
+   order by total desc
+   limit p_limite;
+$$;
+
+create or replace function public.videos_em_alta(p_limite integer default 30)
+returns table (id uuid)
+language sql stable security definer set search_path = public as $$
+  select v.id
+    from public.videos v
+   where v.criado_em > now() - interval '7 days'
+   order by (v.likes_count + v.views_count / 10.0) desc
+   limit p_limite;
+$$;
+
+create or replace function public.ranking_semanal(p_limite integer default 10)
+returns table (id uuid, apelido text, nome text, avatar_url text, curtidas bigint, videos bigint)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.apelido, p.nome, p.avatar_url,
+         coalesce(sum(v.likes_count), 0) as curtidas,
+         count(v.id) as videos
+    from public.videos v
+    join public.profiles p on p.id = v.autor_id
+   where v.criado_em > now() - interval '7 days'
+   group by p.id
+   order by curtidas desc
+   limit p_limite;
+$$;
+
+-- -------------------------------------------------------------------------------------
+-- RLS — ativado em TODAS as tabelas
+-- -------------------------------------------------------------------------------------
+
+alter table public.profiles      enable row level security;
+alter table public.videos        enable row level security;
+alter table public.likes         enable row level security;
+alter table public.comments      enable row level security;
+alter table public.follows       enable row level security;
+alter table public.saves         enable row level security;
+alter table public.live_streams  enable row level security;
+alter table public.live_messages enable row level security;
+alter table public.reports       enable row level security;
+alter table public.blocks        enable row level security;
+alter table public.notifications enable row level security;
+alter table public.push_tokens   enable row level security;
+
+-- profiles: leitura pública, escrita só do dono
+drop policy if exists "profiles leitura publica" on public.profiles;
+create policy "profiles leitura publica" on public.profiles for select using (true);
+drop policy if exists "profiles atualizar proprio" on public.profiles;
+create policy "profiles atualizar proprio" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+drop policy if exists "profiles inserir proprio" on public.profiles;
+create policy "profiles inserir proprio" on public.profiles for insert with check (auth.uid() = id);
+
+-- Privilégios por coluna: o app (anon/authenticated) nunca lê nem escreve profiles.email.
+-- RLS filtra linhas, não colunas — por isso o grant de tabela é trocado por grants por coluna.
+revoke select, insert, update on public.profiles from anon, authenticated;
+grant select (id, apelido, nome, avatar_url, bio, interesses, seguidores_count, seguindo_count,
+              curtidas_recebidas, videos_count, criado_em)
+  on public.profiles to anon, authenticated;
+grant insert (id, apelido, nome, avatar_url, bio, interesses) on public.profiles to authenticated;
+grant update (apelido, nome, avatar_url, bio, interesses) on public.profiles to authenticated;
+
+-- videos: feed público, escrita só do autor
+drop policy if exists "videos leitura publica" on public.videos;
+create policy "videos leitura publica" on public.videos for select using (true);
+drop policy if exists "videos inserir proprio" on public.videos;
+create policy "videos inserir proprio" on public.videos for insert with check (auth.uid() = autor_id);
+drop policy if exists "videos atualizar proprio" on public.videos;
+create policy "videos atualizar proprio" on public.videos for update using (auth.uid() = autor_id);
+drop policy if exists "videos excluir proprio" on public.videos;
+create policy "videos excluir proprio" on public.videos for delete using (auth.uid() = autor_id);
+
+-- likes / saves / follows: leitura pública (contadores), escrita só do próprio usuário
+drop policy if exists "likes leitura" on public.likes;
+create policy "likes leitura" on public.likes for select using (true);
+drop policy if exists "likes inserir" on public.likes;
+create policy "likes inserir" on public.likes for insert with check (auth.uid() = usuario_id);
+drop policy if exists "likes excluir" on public.likes;
+create policy "likes excluir" on public.likes for delete using (auth.uid() = usuario_id);
+
+drop policy if exists "saves leitura propria" on public.saves;
+create policy "saves leitura propria" on public.saves for select using (auth.uid() = usuario_id);
+drop policy if exists "saves inserir" on public.saves;
+create policy "saves inserir" on public.saves for insert with check (auth.uid() = usuario_id);
+drop policy if exists "saves excluir" on public.saves;
+create policy "saves excluir" on public.saves for delete using (auth.uid() = usuario_id);
+
+drop policy if exists "follows leitura" on public.follows;
+create policy "follows leitura" on public.follows for select using (true);
+drop policy if exists "follows inserir" on public.follows;
+create policy "follows inserir" on public.follows for insert with check (auth.uid() = seguidor_id);
+drop policy if exists "follows excluir" on public.follows;
+create policy "follows excluir" on public.follows for delete using (auth.uid() = seguidor_id);
+
+-- comments: leitura pública, escrever/excluir só o autor
+drop policy if exists "comments leitura" on public.comments;
+create policy "comments leitura" on public.comments for select using (true);
+drop policy if exists "comments inserir" on public.comments;
+create policy "comments inserir" on public.comments for insert with check (auth.uid() = autor_id);
+drop policy if exists "comments excluir" on public.comments;
+create policy "comments excluir" on public.comments for delete using (auth.uid() = autor_id);
+
+-- lives: leitura pública, só o anfitrião cria/atualiza
+drop policy if exists "lives leitura" on public.live_streams;
+create policy "lives leitura" on public.live_streams for select using (true);
+drop policy if exists "lives inserir" on public.live_streams;
+create policy "lives inserir" on public.live_streams for insert with check (auth.uid() = anfitriao_id);
+drop policy if exists "lives atualizar" on public.live_streams;
+create policy "lives atualizar" on public.live_streams for update using (auth.uid() = anfitriao_id);
+
+drop policy if exists "live_messages leitura" on public.live_messages;
+create policy "live_messages leitura" on public.live_messages for select using (true);
+drop policy if exists "live_messages inserir" on public.live_messages;
+create policy "live_messages inserir" on public.live_messages for insert with check (auth.uid() = autor_id);
+
+-- reports: quem denuncia vê só as próprias; moderação lê pelo painel (service role)
+drop policy if exists "reports inserir" on public.reports;
+create policy "reports inserir" on public.reports for insert with check (auth.uid() = denunciante_id);
+drop policy if exists "reports leitura propria" on public.reports;
+create policy "reports leitura propria" on public.reports for select using (auth.uid() = denunciante_id);
+
+-- blocks: só o próprio usuário
+drop policy if exists "blocks leitura propria" on public.blocks;
+create policy "blocks leitura propria" on public.blocks for select using (auth.uid() = usuario_id);
+drop policy if exists "blocks inserir" on public.blocks;
+create policy "blocks inserir" on public.blocks for insert with check (auth.uid() = usuario_id);
+drop policy if exists "blocks excluir" on public.blocks;
+create policy "blocks excluir" on public.blocks for delete using (auth.uid() = usuario_id);
+
+-- push_tokens: cada usuário só vê/edita os tokens dos próprios aparelhos
+drop policy if exists "push_tokens leitura propria" on public.push_tokens;
+create policy "push_tokens leitura propria" on public.push_tokens for select using (auth.uid() = usuario_id);
+drop policy if exists "push_tokens inserir" on public.push_tokens;
+create policy "push_tokens inserir" on public.push_tokens for insert with check (auth.uid() = usuario_id);
+drop policy if exists "push_tokens atualizar" on public.push_tokens;
+create policy "push_tokens atualizar" on public.push_tokens for update using (auth.uid() = usuario_id) with check (auth.uid() = usuario_id);
+drop policy if exists "push_tokens excluir" on public.push_tokens;
+create policy "push_tokens excluir" on public.push_tokens for delete using (auth.uid() = usuario_id);
+
+-- notifications: só o destinatário lê/marca como lida (inserção é feita por triggers)
+drop policy if exists "notifications leitura propria" on public.notifications;
+create policy "notifications leitura propria" on public.notifications for select using (auth.uid() = para_id);
+drop policy if exists "notifications atualizar propria" on public.notifications;
+create policy "notifications atualizar propria" on public.notifications for update using (auth.uid() = para_id);
+
+-- -------------------------------------------------------------------------------------
+-- REALTIME (chat e contador da live)
+-- -------------------------------------------------------------------------------------
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'live_messages'
+  ) then
+    alter publication supabase_realtime add table public.live_messages;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'live_streams'
+  ) then
+    alter publication supabase_realtime add table public.live_streams;
+  end if;
+end $$;
+
+-- -------------------------------------------------------------------------------------
+-- STORAGE — buckets públicos para leitura; cada usuário escreve só na própria pasta
+-- -------------------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values
+  ('videos',     'videos',     true, 104857600, array['video/mp4', 'video/quicktime', 'video/webm']),
+  ('thumbnails', 'thumbnails', true, 5242880,   array['image/jpeg', 'image/png', 'image/webp']),
+  ('avatars',    'avatars',    true, 5242880,   array['image/jpeg', 'image/png', 'image/webp']),
+  -- anexos da resenha: fotos já comprimidas no aparelho e vídeos de até 30 s / 15 MB
+  ('posts',      'posts',      true, 15728640,  array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'])
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "storage leitura publica" on storage.objects;
+create policy "storage leitura publica" on storage.objects
+  for select using (bucket_id in ('videos', 'thumbnails', 'avatars', 'posts'));
+
+drop policy if exists "storage upload na propria pasta" on storage.objects;
+create policy "storage upload na propria pasta" on storage.objects
+  for insert with check (
+    bucket_id in ('videos', 'thumbnails', 'avatars', 'posts')
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "storage atualizar na propria pasta" on storage.objects;
+create policy "storage atualizar na propria pasta" on storage.objects
+  for update using (
+    bucket_id in ('videos', 'thumbnails', 'avatars', 'posts')
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "storage excluir na propria pasta" on storage.objects;
+create policy "storage excluir na propria pasta" on storage.objects
+  for delete using (
+    bucket_id in ('videos', 'thumbnails', 'avatars', 'posts')
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+
+-- =====================================================================================
+-- MENSAGENS DIRETAS, PREFERÊNCIAS E RASANTES (vídeos de 24 h)
+-- =====================================================================================
+
+-- -------------------------------------------------------------------------------------
+-- PREFERÊNCIAS DE MENSAGENS (quem pode puxar papo comigo)
+-- -------------------------------------------------------------------------------------
+
+alter table public.profiles add column if not exists msg_de_quem_sigo   boolean not null default true;
+alter table public.profiles add column if not exists msg_de_seguidores  boolean not null default true;
+
+-- profiles usa privilégios por coluna (ver schema.sql): libera as colunas novas
+grant select (msg_de_quem_sigo, msg_de_seguidores) on public.profiles to anon, authenticated;
+grant update (msg_de_quem_sigo, msg_de_seguidores) on public.profiles to authenticated;
+
+-- -------------------------------------------------------------------------------------
+-- CONVERSAS E MENSAGENS
+-- -------------------------------------------------------------------------------------
+
+create table if not exists public.conversations (
+  id                  uuid primary key default gen_random_uuid(),
+  usuario_a           uuid not null references public.profiles (id) on delete cascade,
+  usuario_b           uuid not null references public.profiles (id) on delete cascade,
+  ultima_mensagem     text,
+  ultima_remetente_id uuid references public.profiles (id) on delete set null,
+  atualizado_em       timestamptz not null default now(),
+  criado_em           timestamptz not null default now(),
+  -- par ordenado: garante uma única conversa por dupla
+  check (usuario_a < usuario_b),
+  unique (usuario_a, usuario_b)
+);
+
+create table if not exists public.messages (
+  id           uuid primary key default gen_random_uuid(),
+  conversa_id  uuid not null references public.conversations (id) on delete cascade,
+  remetente_id uuid not null references public.profiles (id) on delete cascade,
+  texto        text not null check (char_length(texto) between 1 and 1000),
+  lida         boolean not null default false,
+  criado_em    timestamptz not null default now()
+);
+
+create index if not exists conversations_a_idx      on public.conversations (usuario_a, atualizado_em desc);
+create index if not exists conversations_b_idx      on public.conversations (usuario_b, atualizado_em desc);
+create index if not exists messages_conversa_idx    on public.messages (conversa_id, criado_em);
+create index if not exists messages_nao_lidas_idx   on public.messages (conversa_id, lida) where lida = false;
+
+-- Regra única de quem pode falar com quem (bloqueios + preferências de quem RECEBE):
+--   * quem recebe me segue e aceita mensagens "de quem eu sigo"; ou
+--   * eu sigo quem recebe e essa pessoa aceita mensagens "dos meus seguidores".
+create or replace function public.pode_conversar(p_de uuid, p_para uuid)
+returns boolean
+language sql
+stable
+security definer set search_path = public
+as $$
+  select p_de is not null
+    and p_para is not null
+    and p_de <> p_para
+    and not exists (
+      select 1 from public.blocks b
+      where (b.usuario_id = p_de and b.bloqueado_id = p_para)
+         or (b.usuario_id = p_para and b.bloqueado_id = p_de)
+    )
+    and exists (
+      select 1 from public.profiles p
+      where p.id = p_para
+        and (
+          (p.msg_de_quem_sigo and exists (
+            select 1 from public.follows f where f.seguidor_id = p_para and f.seguido_id = p_de))
+          or
+          (p.msg_de_seguidores and exists (
+            select 1 from public.follows f where f.seguidor_id = p_de and f.seguido_id = p_para))
+        )
+    );
+$$;
+
+-- Abre (ou reaproveita) a conversa com alguém. Só cria se a regra acima permitir.
+create or replace function public.abrir_conversa(p_outro uuid)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  eu uuid := auth.uid();
+  a uuid;
+  b uuid;
+  id_conversa uuid;
+begin
+  if eu is null then raise exception 'Não autenticado' using errcode = '28000'; end if;
+  if p_outro = eu then raise exception 'Você não pode conversar consigo mesmo.'; end if;
+  a := least(eu, p_outro);
+  b := greatest(eu, p_outro);
+  select c.id into id_conversa from public.conversations c where c.usuario_a = a and c.usuario_b = b;
+  if id_conversa is not null then return id_conversa; end if;
+  if not public.pode_conversar(eu, p_outro) then
+    raise exception 'Essa pessoa não está recebendo suas mensagens.' using errcode = '42501';
+  end if;
+  insert into public.conversations (usuario_a, usuario_b) values (a, b) returning id into id_conversa;
+  return id_conversa;
+end;
+$$;
+
+-- Minhas conversas com a contagem de não lidas (uma consulta só).
+-- security definer para enxergar bloqueios nos dois sentidos (a RLS de blocks só mostra os meus).
+create or replace function public.listar_conversas()
+returns table (
+  id uuid,
+  outro_id uuid,
+  ultima_mensagem text,
+  ultima_remetente_id uuid,
+  atualizado_em timestamptz,
+  nao_lidas bigint
+)
+language sql
+stable
+security definer set search_path = public
+as $$
+  select c.id,
+         case when c.usuario_a = auth.uid() then c.usuario_b else c.usuario_a end as outro_id,
+         c.ultima_mensagem,
+         c.ultima_remetente_id,
+         c.atualizado_em,
+         (select count(*) from public.messages m
+           where m.conversa_id = c.id and m.lida = false and m.remetente_id <> auth.uid()) as nao_lidas
+  from public.conversations c
+  where auth.uid() in (c.usuario_a, c.usuario_b)
+    and not exists (
+      select 1 from public.blocks bl
+      where (bl.usuario_id = auth.uid() and bl.bloqueado_id in (c.usuario_a, c.usuario_b))
+         or (bl.bloqueado_id = auth.uid() and bl.usuario_id in (c.usuario_a, c.usuario_b))
+    )
+  order by c.atualizado_em desc
+  limit 200;
+$$;
+
+-- Ao chegar mensagem: atualiza o resumo da conversa
+create or replace function public.tg_messages()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.conversations
+     set ultima_mensagem = left(new.texto, 200),
+         ultima_remetente_id = new.remetente_id,
+         atualizado_em = new.criado_em
+   where id = new.conversa_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists messages_resumo on public.messages;
+create trigger messages_resumo
+  after insert on public.messages
+  for each row execute function public.tg_messages();
+
+-- -------------------------------------------------------------------------------------
+-- RASANTES (vídeos curtos que somem em 24 h)
+-- -------------------------------------------------------------------------------------
+
+create table if not exists public.rasantes (
+  id            uuid primary key default gen_random_uuid(),
+  autor_id      uuid not null references public.profiles (id) on delete cascade,
+  url           text not null,
+  thumbnail_url text,
+  duracao       integer not null default 0 check (duracao between 0 and 20),
+  criado_em     timestamptz not null default now(),
+  expira_em     timestamptz not null default now() + interval '24 hours'
+);
+
+create table if not exists public.rasante_views (
+  rasante_id uuid not null references public.rasantes (id) on delete cascade,
+  usuario_id uuid not null references public.profiles (id) on delete cascade,
+  visto_em   timestamptz not null default now(),
+  primary key (rasante_id, usuario_id)
+);
+
+create index if not exists rasantes_ativos_idx on public.rasantes (autor_id, criado_em);
+create index if not exists rasantes_expira_idx on public.rasantes (expira_em);
+
+-- -------------------------------------------------------------------------------------
+-- RLS
+-- -------------------------------------------------------------------------------------
+
+alter table public.conversations enable row level security;
+alter table public.messages      enable row level security;
+alter table public.rasantes      enable row level security;
+alter table public.rasante_views enable row level security;
+
+-- conversas: só os participantes leem; criação sempre pela RPC abrir_conversa (security definer)
+drop policy if exists "conversas leitura participantes" on public.conversations;
+create policy "conversas leitura participantes" on public.conversations
+  for select using (auth.uid() in (usuario_a, usuario_b));
+
+-- mensagens: participantes leem; só envia quem participa E tem permissão de conversar
+drop policy if exists "mensagens leitura participantes" on public.messages;
+create policy "mensagens leitura participantes" on public.messages
+  for select using (
+    exists (select 1 from public.conversations c
+             where c.id = conversa_id and auth.uid() in (c.usuario_a, c.usuario_b))
+  );
+
+drop policy if exists "mensagens enviar" on public.messages;
+create policy "mensagens enviar" on public.messages
+  for insert with check (
+    auth.uid() = remetente_id
+    and exists (
+      select 1 from public.conversations c
+      where c.id = conversa_id
+        and auth.uid() in (c.usuario_a, c.usuario_b)
+        and public.pode_conversar(
+              auth.uid(),
+              case when c.usuario_a = auth.uid() then c.usuario_b else c.usuario_a end)
+    )
+  );
+
+-- marcar como lida: só o destinatário (mensagens que não são minhas)
+drop policy if exists "mensagens marcar lida" on public.messages;
+create policy "mensagens marcar lida" on public.messages
+  for update using (
+    remetente_id <> auth.uid()
+    and exists (select 1 from public.conversations c
+                 where c.id = conversa_id and auth.uid() in (c.usuario_a, c.usuario_b))
+  )
+  with check (remetente_id <> auth.uid());
+
+-- rasantes: enquanto não expiram, todo mundo vê; escreve/apaga só o autor
+drop policy if exists "rasantes leitura ativos" on public.rasantes;
+create policy "rasantes leitura ativos" on public.rasantes
+  for select using (expira_em > now() or auth.uid() = autor_id);
+drop policy if exists "rasantes inserir proprio" on public.rasantes;
+create policy "rasantes inserir proprio" on public.rasantes
+  for insert with check (auth.uid() = autor_id);
+drop policy if exists "rasantes excluir proprio" on public.rasantes;
+create policy "rasantes excluir proprio" on public.rasantes
+  for delete using (auth.uid() = autor_id);
+
+drop policy if exists "rasante_views proprias" on public.rasante_views;
+create policy "rasante_views proprias" on public.rasante_views
+  for select using (auth.uid() = usuario_id);
+drop policy if exists "rasante_views inserir" on public.rasante_views;
+create policy "rasante_views inserir" on public.rasante_views
+  for insert with check (auth.uid() = usuario_id);
+
+-- -------------------------------------------------------------------------------------
+-- REALTIME (mensagens chegam na hora no chat)
+-- -------------------------------------------------------------------------------------
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;
+
+-- =====================================================================================
+-- ARQUIBANCADA — resenha (posts de texto, estilo X) e palpites de placar
+-- =====================================================================================
+
+create table if not exists public.posts (
+  id             uuid primary key default gen_random_uuid(),
+  autor_id       uuid not null references public.profiles (id) on delete cascade,
+  -- pode ser vazio quando o post é só mídia (ver posts_conteudo_check)
+  texto          text not null default '' constraint posts_texto_check check (char_length(texto) <= 280),
+  hashtags       text[] not null default '{}',
+  hashtags_norm  text[] not null default '{}',
+  -- resposta: sempre aponta para o post raiz (thread de 1 nível)
+  pai_id         uuid references public.posts (id) on delete cascade,
+  -- jogo marcado no post; o id vem do calendário (ex.: "espn-401912523")
+  partida_id     text check (partida_id is null or char_length(partida_id) <= 64),
+  partida_rotulo text check (partida_rotulo is null or char_length(partida_rotulo) <= 40),
+  -- anexos: [{tipo: imagem|video|gif, url, thumbnailUrl, largura, altura, duracao}]
+  midias         jsonb not null default '[]'::jsonb,
+  likes_count    integer not null default 0,
+  replies_count  integer not null default 0,
+  criado_em      timestamptz not null default now()
+);
+
+create table if not exists public.post_likes (
+  usuario_id uuid not null references public.profiles (id) on delete cascade,
+  post_id    uuid not null references public.posts (id) on delete cascade,
+  criado_em  timestamptz not null default now(),
+  primary key (usuario_id, post_id)
+);
+
+create table if not exists public.palpites (
+  usuario_id     uuid not null references public.profiles (id) on delete cascade,
+  partida_id     text not null check (char_length(partida_id) <= 64),
+  -- horário do jogo: depois dele o palpite não pode mais ser trocado (ver RLS)
+  partida_inicio timestamptz not null,
+  gols_mandante  smallint not null check (gols_mandante between 0 and 20),
+  gols_visitante smallint not null check (gols_visitante between 0 and 20),
+  atualizado_em  timestamptz not null default now(),
+  primary key (usuario_id, partida_id)
+);
+
+-- bancos criados antes dos anexos
+alter table public.posts add column if not exists midias jsonb not null default '[]'::jsonb;
+alter table public.posts alter column texto set default '';
+alter table public.posts drop constraint if exists posts_texto_check;
+alter table public.posts add constraint posts_texto_check check (char_length(texto) <= 280);
+alter table public.posts drop constraint if exists posts_conteudo_check;
+alter table public.posts add constraint posts_conteudo_check
+  check (char_length(btrim(texto)) > 0 or jsonb_array_length(midias) > 0);
+
+-- Anexos válidos: até 4 imagens, OU 1 vídeo (até 30 s), OU 1 GIF. Imagem e vídeo só da pasta
+-- do próprio autor no bucket "posts"; GIF só do GIPHY. Nada de link para qualquer site.
+create or replace function public.midias_do_post_validas(p_midias jsonb, p_autor uuid)
+returns boolean
+language sql
+immutable
+as $$
+  select case
+    when jsonb_typeof(p_midias) is distinct from 'array' then false
+    when jsonb_array_length(p_midias) > 4 then false
+    when jsonb_array_length(p_midias) > 1
+      and exists (select 1 from jsonb_array_elements(p_midias) m where m->>'tipo' <> 'imagem') then false
+    else not exists (
+      select 1
+      from jsonb_array_elements(p_midias) m,
+           lateral (select '^https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/posts/'
+                           || p_autor::text || '/' as pasta) as dono
+      where not case m->>'tipo'
+        when 'imagem' then coalesce(m->>'url', '') ~ dono.pasta
+        when 'video' then coalesce(m->>'url', '') ~ dono.pasta
+          and (m->>'thumbnailUrl' is null or (m->>'thumbnailUrl') ~ dono.pasta)
+          and coalesce((m->>'duracao')::numeric, 0) <= 31
+        when 'gif' then coalesce(m->>'url', '') ~ '^https://media[0-9]*\.giphy\.com/'
+        else false
+      end
+    )
+  end;
+$$;
+
+create index if not exists posts_raiz_idx on public.posts (criado_em desc) where pai_id is null;
+create index if not exists posts_pai_idx on public.posts (pai_id, criado_em);
+create index if not exists posts_partida_idx on public.posts (partida_id, criado_em desc);
+create index if not exists posts_hashtags_idx on public.posts using gin (hashtags_norm);
+create index if not exists palpites_partida_idx on public.palpites (partida_id);
+
+-- curtidas e respostas de post viram notificação; tocar abre a thread
+alter table public.notifications
+  add column if not exists post_id uuid references public.posts (id) on delete cascade;
+
+-- posts também podem ser denunciados
+alter table public.reports drop constraint if exists reports_tipo_alvo_check;
+alter table public.reports add constraint reports_tipo_alvo_check
+  check (tipo_alvo in ('video', 'usuario', 'comentario', 'live', 'post'));
+
+-- Contador de curtidas do post e notificação ao autor
+create or replace function public.tg_post_likes()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  autor uuid;
+  raiz  uuid;
+begin
+  if tg_op = 'INSERT' then
+    update public.posts set likes_count = likes_count + 1 where id = new.post_id
+      returning autor_id, coalesce(pai_id, id) into autor, raiz;
+    if autor is not null and autor <> new.usuario_id then
+      insert into public.notifications (para_id, tipo, de_id, post_id, texto)
+      values (autor, 'curtida', new.usuario_id, raiz, 'curtiu seu post na Arquibancada');
+    end if;
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.posts set likes_count = greatest(0, likes_count - 1) where id = old.post_id;
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists post_likes_contadores on public.post_likes;
+create trigger post_likes_contadores
+  after insert or delete on public.post_likes
+  for each row execute function public.tg_post_likes();
+
+-- Contador de respostas do post raiz e notificação ao autor
+create or replace function public.tg_posts()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  autor uuid;
+begin
+  if tg_op = 'INSERT' and new.pai_id is not null then
+    update public.posts set replies_count = replies_count + 1 where id = new.pai_id
+      returning autor_id into autor;
+    if autor is not null and autor <> new.autor_id then
+      insert into public.notifications (para_id, tipo, de_id, post_id, texto)
+      values (autor, 'comentario', new.autor_id, new.pai_id,
+              case when btrim(new.texto) = '' then 'respondeu seu post com uma mídia'
+                   else 'respondeu seu post: "' || left(new.texto, 60) || '"' end);
+    end if;
+  elsif tg_op = 'DELETE' and old.pai_id is not null then
+    update public.posts set replies_count = greatest(0, replies_count - 1) where id = old.pai_id;
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+drop trigger if exists posts_contadores on public.posts;
+create trigger posts_contadores
+  after insert or delete on public.posts
+  for each row execute function public.tg_posts();
+
+-- O que a torcida aposta: só números agregados, nunca o palpite de cada pessoa
+create or replace function public.resumo_palpites(p_partida_id text)
+returns table (
+  total bigint,
+  vitoria_mandante bigint,
+  empate bigint,
+  vitoria_visitante bigint,
+  gols_mandante smallint,
+  gols_visitante smallint,
+  votos_placar bigint
+)
+language sql
+stable
+security definer set search_path = public
+as $$
+  with p as (
+    select gols_mandante, gols_visitante from public.palpites where partida_id = p_partida_id
+  ),
+  popular as (
+    select gols_mandante, gols_visitante, count(*) as votos
+    from p group by gols_mandante, gols_visitante
+    order by votos desc, gols_mandante desc, gols_visitante asc
+    limit 1
+  )
+  select
+    (select count(*) from p),
+    (select count(*) from p where gols_mandante > gols_visitante),
+    (select count(*) from p where gols_mandante = gols_visitante),
+    (select count(*) from p where gols_mandante < gols_visitante),
+    popular.gols_mandante,
+    popular.gols_visitante,
+    popular.votos
+  from (select 1) as um
+  left join popular on true;
+$$;
+
+revoke execute on function public.resumo_palpites(text) from public;
+grant execute on function public.resumo_palpites(text) to anon, authenticated;
+
+alter table public.posts      enable row level security;
+alter table public.post_likes enable row level security;
+alter table public.palpites   enable row level security;
+
+drop policy if exists "posts leitura publica" on public.posts;
+create policy "posts leitura publica" on public.posts for select using (true);
+drop policy if exists "posts inserir proprio" on public.posts;
+create policy "posts inserir proprio" on public.posts for insert
+  with check (auth.uid() = autor_id and public.midias_do_post_validas(midias, auth.uid()));
+drop policy if exists "posts excluir proprio" on public.posts;
+create policy "posts excluir proprio" on public.posts for delete using (auth.uid() = autor_id);
+
+-- contadores só mudam pelos triggers: o app não escreve likes_count/replies_count
+revoke insert, update on public.posts from anon, authenticated;
+grant insert (autor_id, texto, hashtags, hashtags_norm, pai_id, partida_id, partida_rotulo, midias)
+  on public.posts to authenticated;
+
+drop policy if exists "post_likes leitura propria" on public.post_likes;
+create policy "post_likes leitura propria" on public.post_likes for select using (auth.uid() = usuario_id);
+drop policy if exists "post_likes inserir" on public.post_likes;
+create policy "post_likes inserir" on public.post_likes for insert with check (auth.uid() = usuario_id);
+drop policy if exists "post_likes excluir" on public.post_likes;
+create policy "post_likes excluir" on public.post_likes for delete using (auth.uid() = usuario_id);
+
+-- palpites: cada um vê só os seus (o agregado vem de resumo_palpites);
+-- criar/trocar só antes do apito inicial registrado na linha
+drop policy if exists "palpites leitura propria" on public.palpites;
+create policy "palpites leitura propria" on public.palpites for select using (auth.uid() = usuario_id);
+drop policy if exists "palpites inserir antes do jogo" on public.palpites;
+create policy "palpites inserir antes do jogo" on public.palpites
+  for insert with check (auth.uid() = usuario_id and partida_inicio > now());
+drop policy if exists "palpites trocar antes do jogo" on public.palpites;
+create policy "palpites trocar antes do jogo" on public.palpites
+  for update using (auth.uid() = usuario_id and partida_inicio > now())
+  with check (auth.uid() = usuario_id and partida_inicio > now());
+
+-- -------------------------------------------------------------------------------------
+-- CALENDÁRIO DO FLAMENGO (cache da Highlightly, alimentado pela Edge Function
+-- atualizar-calendario). O app só lê daqui: a cota da API não depende de quantos usam.
+-- -------------------------------------------------------------------------------------
+
+create table if not exists public.partidas (
+  id              text primary key,                -- "hl-<id na Highlightly>"
+  temporada       integer not null,
+  competicao      text not null,
+  fase            text,
+  mandante        text not null,
+  visitante       text not null,
+  sigla_mandante  text not null,
+  sigla_visitante text not null,
+  data_hora       timestamptz not null,
+  estadio         text,
+  gols_mandante   smallint,
+  gols_visitante  smallint,
+  status          text not null check (status in ('agendada', 'ao_vivo', 'encerrada')),
+  minuto          smallint,
+  nota            text,
+  atualizado_em   timestamptz not null default now()
+);
+create index if not exists partidas_data_idx on public.partidas (data_hora);
+
+-- controle da cota diária da API (uma linha só)
+create table if not exists public.calendario_estado (
+  id              smallint primary key default 1 check (id = 1),
+  dia             text not null,
+  consultas       integer not null default 0,
+  ultima_completa timestamptz,
+  ultima_ao_vivo  timestamptz
+);
+
+alter table public.partidas          enable row level security;
+alter table public.calendario_estado enable row level security;
+
+-- todo mundo lê o calendário; só a Edge Function (service role, que ignora RLS) escreve
+drop policy if exists "partidas leitura publica" on public.partidas;
+create policy "partidas leitura publica" on public.partidas for select using (true);
+revoke insert, update, delete on public.partidas from anon, authenticated;
+-- o estado da cota é interno: nenhuma policy = ninguém do app lê nem escreve
+revoke all on public.calendario_estado from anon, authenticated;
+
+-- placar ao vivo chega no app na hora (Realtime)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'partidas'
+  ) then
+    alter publication supabase_realtime add table public.partidas;
+  end if;
+end $$;
