@@ -113,6 +113,8 @@ const ICONES = {
   menos: feather('minus'),
   escrever: material('feather'),
   gif: material('file-gif-box'),
+  // login social
+  google: material('google'),
 } as const;
 
 export type NomeDeIcone = keyof typeof ICONES;

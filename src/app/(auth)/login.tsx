@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Botao, Input, Listras, Texto } from '@/components/ui';
+import { Botao, Icone, Input, Listras, Texto } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos, raios } from '@/theme';
 import { emailValido, senhaValida } from '@/utils/validacao';
@@ -14,6 +14,7 @@ export default function TelaLogin() {
   const insets = useSafeAreaInsets();
   const entrar = useAuthStore((s) => s.entrar);
   const entrarComoVisitante = useAuthStore((s) => s.entrarComoVisitante);
+  const entrarComGoogle = useAuthStore((s) => s.entrarComGoogle);
   const ocupado = useAuthStore((s) => s.ocupado);
   const erroGlobal = useAuthStore((s) => s.erro);
   const limparErro = useAuthStore((s) => s.limparErro);
@@ -30,6 +31,15 @@ export default function TelaLogin() {
     if (Object.keys(novosErros).length > 0) return;
     try {
       await entrar(email, senha);
+    } catch {
+      // o erro já fica disponível em erroGlobal
+    }
+  }
+
+  async function aoEntrarComGoogle() {
+    setErros({});
+    try {
+      await entrarComGoogle();
     } catch {
       // o erro já fica disponível em erroGlobal
     }
@@ -126,6 +136,25 @@ export default function TelaLogin() {
             disabled={ocupado}
             largo
           />
+
+          <View style={estilos.separador}>
+            <View style={estilos.linha} />
+            <Texto variante="legenda" cor={cores.textoTerciario}>
+              ou
+            </Texto>
+            <View style={estilos.linha} />
+          </View>
+
+          {/* Entrar com Google cria a conta na primeira vez, como o cadastro por e-mail */}
+          <Botao
+            titulo="Continuar com Google"
+            variante="secundario"
+            onPress={aoEntrarComGoogle}
+            disabled={ocupado}
+            largo
+            icone={<Icone nome="google" tamanho={18} cor={cores.texto} />}
+            testID="botao-google"
+          />
         </View>
 
         <View style={estilos.rodape}>
@@ -148,6 +177,13 @@ export default function TelaLogin() {
 
 const estilos = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo },
+  separador: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacos.sm,
+    marginVertical: espacos.xs,
+  },
+  linha: { flex: 1, height: 1, backgroundColor: cores.borda },
   faixaTopo: { borderRadius: 0 },
   conteudo: { flexGrow: 1, paddingHorizontal: espacos.xl, gap: espacos.xl },
   cabecalho: { alignItems: 'center', gap: espacos.sm },

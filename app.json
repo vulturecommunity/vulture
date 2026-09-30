@@ -95,7 +95,8 @@
           "color": "#C8102E",
           "defaultChannel": "lives"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

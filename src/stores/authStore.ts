@@ -19,6 +19,7 @@ export interface EstadoAuth {
   entrar: (email: string, senha: string) => Promise<void>;
   cadastrar: (dados: DadosDeCadastro) => Promise<void>;
   entrarComoVisitante: () => Promise<void>;
+  entrarComGoogle: () => Promise<void>;
   concluirOnboarding: (dados: {
     apelido: string;
     interesses: Interesse[];
@@ -71,6 +72,8 @@ export const useAuthStore = create<EstadoAuth>((set) => {
     cadastrar: (dados) => executar(() => dataService().cadastrar(dados), 'Conta criada'),
     entrarComoVisitante: () =>
       executar(() => dataService().entrarComoVisitante(), 'Entrou como visitante'),
+    entrarComGoogle: () =>
+      executar(() => dataService().entrarComGoogle(), 'Você entrou com o Google'),
     concluirOnboarding: (dados) => executar(() => dataService().concluirOnboarding(dados)),
 
     atualizarUsuario: (usuario) =>
