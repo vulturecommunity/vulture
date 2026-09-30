@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CalendarioDeJogos } from '@/components/arquibancada/CalendarioDeJogos';
 import { ListaDaResenha } from '@/components/arquibancada/ListaDaResenha';
+import { RankingDePalpiteiros } from '@/components/arquibancada/RankingDePalpiteiros';
 import { Cabecalho, Icone, Texto, type NomeDeIcone } from '@/components/ui';
 import type { FiltroDaResenha } from '@/hooks/useArquibancada';
 import { useVoltar } from '@/hooks/useVoltar';
@@ -12,16 +13,24 @@ import type { Partida } from '@/services/partidas';
 import { cores, espacos, raios } from '@/theme';
 import { rotuloDaPartida } from '@/utils/palpites';
 
-type Aba = 'resenha' | 'jogos';
+type Aba = 'resenha' | 'jogos' | 'ranking';
 
 const ABAS: { id: Aba; rotulo: string; icone: NomeDeIcone }[] = [
   { id: 'resenha', rotulo: 'Resenha', icone: 'megafone' },
   { id: 'jogos', rotulo: 'Jogos', icone: 'calendario' },
+  { id: 'ranking', rotulo: 'Ranking', icone: 'trofeu' },
 ];
 
+function abaInicial(valor: string | undefined): Aba {
+  if (valor === 'jogos' || valor === 'ranking') return valor;
+  return 'resenha';
+}
+
 /**
- * Arquibancada: a resenha em texto (estilo X) e o calendário de jogos com palpites.
- * Parâmetros: ?aba=jogos abre no calendário; ?tag= ou ?partidaId=&rotulo= abrem a resenha filtrada.
+ * Arquibancada: a resenha em texto (estilo X), o calendário de jogos com palpites e o
+ * ranking de palpiteiros.
+ * Parâmetros: ?aba=jogos abre no calendário, ?aba=ranking no pódio; ?tag= ou
+ * ?partidaId=&rotulo= abrem a resenha filtrada.
  */
 export default function TelaArquibancada() {
   const insets = useSafeAreaInsets();
@@ -32,7 +41,7 @@ export default function TelaArquibancada() {
     partidaId?: string;
     rotulo?: string;
   }>();
-  const [aba, setAba] = useState<Aba>(params.aba === 'jogos' ? 'jogos' : 'resenha');
+  const [aba, setAba] = useState<Aba>(() => abaInicial(params.aba));
   const [filtro, setFiltro] = useState<FiltroDaResenha>(() => {
     if (params.tag) return { tipo: 'hashtag', tag: params.tag };
     if (params.partidaId) {
@@ -79,11 +88,9 @@ export default function TelaArquibancada() {
           );
         })}
       </View>
-      {aba === 'resenha' ? (
-        <ListaDaResenha filtro={filtro} aoMudarFiltro={setFiltro} />
-      ) : (
-        <CalendarioDeJogos aoVerResenha={verResenha} />
-      )}
+      {aba === 'resenha' ? <ListaDaResenha filtro={filtro} aoMudarFiltro={setFiltro} /> : null}
+      {aba === 'jogos' ? <CalendarioDeJogos aoVerResenha={verResenha} /> : null}
+      {aba === 'ranking' ? <RankingDePalpiteiros /> : null}
     </View>
   );
 }

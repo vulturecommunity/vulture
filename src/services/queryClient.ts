@@ -46,4 +46,11 @@ export const chaves = {
   respostas: (postId: string) => ['arquibancada', 'respostas', postId] as const,
   meusPalpites: ['palpites', 'meus'] as const,
   resumoDosPalpites: (partidaId: string) => ['palpites', 'resumo', partidaId] as const,
+  periodosDoRanking: ['ranking-palpites', 'periodos'] as const,
+  rankingDePalpites: (periodo: string) => ['ranking-palpites', 'top', periodo] as const,
+  podioDaPartida: (partidaId: string) => ['ranking-palpites', 'podio', partidaId] as const,
+  titulos: (usuarioId: string) => ['ranking-palpites', 'titulos', usuarioId] as const,
+  minhasLigas: (periodo: string) => ['ligas', 'minhas', periodo] as const,
+  rankingDaLiga: (ligaId: string, periodo: string) =>
+    ['ligas', 'ranking', ligaId, periodo] as const,
 };

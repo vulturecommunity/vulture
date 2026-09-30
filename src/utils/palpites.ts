@@ -1,5 +1,5 @@
 import type { Partida } from '@/services/partidas/types';
-import type { Palpite, ResumoDePalpites } from '@/types';
+import type { Palpite, ResultadoDoPalpite, ResumoDePalpites } from '@/types';
 
 import { ErroDeAplicacao } from './erros';
 import { abreviarTime } from './formatadores';
@@ -64,15 +64,34 @@ export function palpiteAberto(partida: Partida, agora: Date = new Date()): boole
   return partida.status === 'agendada' && new Date(partida.dataHora).getTime() > agora.getTime();
 }
 
-export type ResultadoDoPalpite = 'cravou' | 'vencedor' | 'errou';
+/**
+ * Quatro faixas, não três.
+ *
+ * Com ~6 jogos por mês e a régua antiga (3/1/0), acertar "o Flamengo ganha" era quase de
+ * graça: milhares de pessoas terminavam o mês empatadas na mesma pontuação e o Top 20
+ * virava sorteio. Separar "acertou o saldo" de "acertou só o vencedor" espalha as
+ * pontuações o suficiente para o pódio significar alguma coisa.
+ *
+ * Precisa bater exatamente com a apuração em SQL (`apurar_partida`, migration
+ * 20260924120700): quem manda no ranking é o servidor, isto aqui é o espelho para a tela
+ * conseguir mostrar o resultado antes da apuração passar.
+ */
+export const PONTOS_DO_PALPITE: Record<ResultadoDoPalpite, number> = {
+  cravou: 10,
+  saldo: 5,
+  vencedor: 3,
+  errou: 0,
+};
 
-/** Cravou = placar exato (3 pts); vencedor = acertou quem ganhou ou o empate (1 pt). */
 export function avaliarPalpite(
   palpite: Pick<Palpite, 'golsMandante' | 'golsVisitante'>,
   placar: { mandante: number; visitante: number },
 ): ResultadoDoPalpite {
   if (palpite.golsMandante === placar.mandante && palpite.golsVisitante === placar.visitante) {
     return 'cravou';
+  }
+  if (palpite.golsMandante - palpite.golsVisitante === placar.mandante - placar.visitante) {
+    return 'saldo';
   }
   const sinal = (a: number, b: number) => Math.sign(a - b);
   return sinal(palpite.golsMandante, palpite.golsVisitante) ===
@@ -81,10 +100,38 @@ export function avaliarPalpite(
     : 'errou';
 }
 
-export const PONTOS_DO_PALPITE: Record<ResultadoDoPalpite, number> = {
-  cravou: 3,
-  vencedor: 1,
-  errou: 0,
+/**
+ * Soma dos gols errados nos dois times. É o terceiro critério de desempate do ranking
+ * (menor é melhor) — e o que evita empate triplo no topo com só 6 jogos no mês.
+ */
+export function desvioDoPalpite(
+  palpite: Pick<Palpite, 'golsMandante' | 'golsVisitante'>,
+  placar: { mandante: number; visitante: number },
+): number {
+  return (
+    Math.abs(palpite.golsMandante - placar.mandante) +
+    Math.abs(palpite.golsVisitante - placar.visitante)
+  );
+}
+
+/**
+ * Pontos de um palpite já apurado. Prefere sempre o número que veio do servidor: ele já
+ * considera o peso do jogo (clássico e mata-mata valem em dobro), que a tela não conhece.
+ */
+export function pontosDoPalpite(
+  palpite: Pick<Palpite, 'golsMandante' | 'golsVisitante' | 'pontos'>,
+  placar: { mandante: number; visitante: number },
+  peso = 1,
+): number {
+  if (palpite.pontos !== null && palpite.pontos !== undefined) return palpite.pontos;
+  return PONTOS_DO_PALPITE[avaliarPalpite(palpite, placar)] * peso;
+}
+
+export const ROTULO_DO_RESULTADO: Record<ResultadoDoPalpite, string> = {
+  cravou: 'Cravou!',
+  saldo: 'Acertou o saldo',
+  vencedor: 'Acertou o vencedor',
+  errou: 'Não foi dessa vez',
 };
 
 const eFlamengo = (time: string) => /flamengo/i.test(time);
@@ -160,11 +207,13 @@ export function partidaEmDestaque(partidas: Partida[], agora: Date = new Date())
   if (aoVivo) return aoVivo;
   // ~2 h de jogo + 6 h de resenha depois do apito
   const janela = 8 * 60 * 60 * 1000;
-  const recente = [...partidas]
-    .reverse()
-    .find(
-      (p) => p.status === 'encerrada' && agora.getTime() - new Date(p.dataHora).getTime() < janela,
-    );
+  const recente = [...partidas].reverse().find((p) => {
+    if (p.status !== 'encerrada') return false;
+    // "acabou há pouco" tem que ter acabado: sem o >= 0, uma data futura dá subtração
+    // negativa e passa na janela como se fosse recente
+    const desdeOApito = agora.getTime() - new Date(p.dataHora).getTime();
+    return desdeOApito >= 0 && desdeOApito < janela;
+  });
   if (recente) return recente;
   return proximaPartida(partidas, agora);
 }
