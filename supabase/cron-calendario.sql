@@ -18,10 +18,10 @@ select cron.schedule(
   '*/3 * * * *',
   $$
   select net.http_post(
-    url := 'https://vcajpsizbjcblyufuclh.supabase.co/functions/v1/atualizar-calendario',
+    url := 'https://mlajeudfsjymgaxjofya.supabase.co/functions/v1/atualizar-calendario',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjYWpwc2l6YmpjYmx5dWZ1Y2xoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MzgxMzMsImV4cCI6MjEwNTUxNDEzM30.AwiOMda5MAmm5A04toYsfy06P3HwZRyOBBm_sGGUgPc'
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sYWpldWRmc2p5bWdheGpvZnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NzIzNDAsImV4cCI6MjEwNjM0ODM0MH0.5pyZz-AlrKzIH8SvnWJjK9NYg8ueauBj9uBIlYSZGto'
     ),
     body := '{}'::jsonb
   );

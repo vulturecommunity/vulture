@@ -7,9 +7,9 @@ import { cores, espacos, raios } from '@/theme';
 import type { Palpite } from '@/types';
 import { diaDaSemana, formatarHora } from '@/utils/formatadores';
 import {
-  PONTOS_DO_PALPITE,
   avaliarPalpite,
   palpiteAberto,
+  pontosDoPalpite,
   resultadoDoFlamengo,
   siglasDa,
 } from '@/utils/palpites';
@@ -58,10 +58,13 @@ function SeloDoPalpite({
     );
   }
   if (partida.status === 'encerrada' && partida.placar) {
-    const resultado = avaliarPalpite(palpite, partida.placar);
-    const pontos = PONTOS_DO_PALPITE[resultado];
-    const { texto, cor } = {
+    // `resultado`/`pontos` vêm da apuração no servidor quando ela já rodou (e só ela sabe
+    // se o jogo valia em dobro); enquanto não rodou, a conta local dá o mesmo número.
+    const resultado = palpite.resultado ?? avaliarPalpite(palpite, partida.placar);
+    const pontos = pontosDoPalpite(palpite, partida.placar);
+    const { texto, cor }: { texto: string; cor: string } = {
       cravou: { texto: `Cravou ${placarDoPalpite}! +${pontos}`, cor: cores.sucesso },
+      saldo: { texto: `Acertou o saldo +${pontos}`, cor: cores.sucesso },
       vencedor: { texto: `Acertou o vencedor +${pontos}`, cor: cores.aviso },
       errou: { texto: `Seu palpite: ${placarDoPalpite}`, cor: cores.textoTerciario },
     }[resultado];

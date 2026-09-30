@@ -18,9 +18,20 @@ export function criarServicoDeTeste(chave = `teste.${Math.random().toString(36).
   return servico;
 }
 
+/**
+ * `gcTime: 0` também nas mutations, e não só nas queries.
+ *
+ * Uma mutation concluída fica no cache pelo gcTime (5 min por padrão) e agenda um timer
+ * para se limpar. Esse timer segura o event loop do Node: o teste termina, mas o Jest fica
+ * esperando o processo esvaziar — é a origem do "a worker process has failed to exit
+ * gracefully" que a suíte mostrava, e de um arquivo com mutation travar por minutos.
+ */
 export function criarQueryClient() {
   return new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false, gcTime: 0 },
+    },
   });
 }
 

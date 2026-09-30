@@ -10,10 +10,9 @@ import { cores, espacos, raios } from '@/theme';
 import type { Palpite } from '@/types';
 import { diaDaSemana, formatarContagem, formatarDataHora, nomeDoMes } from '@/utils/formatadores';
 import {
-  PONTOS_DO_PALPITE,
-  avaliarPalpite,
   chaveDoMes,
   palpiteAberto,
+  pontosDoPalpite,
   proximaPartida,
   resumirMes,
   siglasDa,
@@ -175,8 +174,7 @@ export function CalendarioDeJogos({ aoVerResenha }: CalendarioDeJogosProps) {
       const meu = palpites.porPartida.get(p.id);
       if (!meu) continue;
       feitos += 1;
-      if (p.status === 'encerrada' && p.placar)
-        pontos += PONTOS_DO_PALPITE[avaliarPalpite(meu, p.placar)];
+      if (p.status === 'encerrada' && p.placar) pontos += pontosDoPalpite(meu, p.placar);
     }
     return { feitos, pontos };
   }, [doMes, palpites.porPartida]);

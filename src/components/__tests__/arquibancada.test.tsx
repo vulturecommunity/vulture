@@ -22,16 +22,35 @@ async function entrarComoVisitante() {
 }
 
 const HORA = 60 * 60 * 1000;
-const mesAtual = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 15, 19, 0).getTime();
-};
 
-/** Um jogo encerrado e um futuro no mês corrente, e um no mês seguinte. */
+/**
+ * Mês em que o cenário é montado.
+ *
+ * Precisa sobrar dia para caber um jogo "daqui a pouco" sem virar o mês — senão, rodando
+ * no fim de setembro, o jogo futuro caía em outubro, o calendário abria em setembro sem
+ * ele e os testes falhavam por causa do calendário, não do código. Sem folga, o cenário
+ * inteiro vai para o mês seguinte (o calendário abre nele, já que o corrente fica vazio).
+ */
+function mesDoCenario(): { ano: number; mes: number; corrente: boolean } {
+  const hoje = new Date();
+  const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+  if (hoje.getDate() <= ultimoDia - 4) {
+    return { ano: hoje.getFullYear(), mes: hoje.getMonth(), corrente: true };
+  }
+  const seguinte = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+  return { ano: seguinte.getFullYear(), mes: seguinte.getMonth(), corrente: false };
+}
+
+/** Um jogo encerrado e um futuro no mesmo mês, e um no mês seguinte. */
 function temporadaDeTeste(): Partida[] {
-  const base = mesAtual();
-  const futuro = Math.max(Date.now() + 3 * 24 * HORA, base);
-  const proximoMes = new Date(new Date(base).setMonth(new Date(base).getMonth() + 1));
+  const { ano, mes, corrente } = mesDoCenario();
+  const encerrado = corrente
+    ? new Date(Date.now() - 24 * HORA)
+    : new Date(ano, mes, 5, 19, 0);
+  const futuro = corrente
+    ? new Date(Date.now() + 3 * 24 * HORA)
+    : new Date(ano, mes, 15, 19, 0);
+  const proximoMes = new Date(ano, mes + 1, 12, 19, 0);
   return [
     {
       id: 'espn-a',
@@ -39,7 +58,7 @@ function temporadaDeTeste(): Partida[] {
       mandante: 'Remo',
       visitante: 'Flamengo',
       siglas: { mandante: 'REM', visitante: 'FLA' },
-      dataHora: new Date(Math.min(Date.now() - 24 * HORA, base)).toISOString(),
+      dataHora: encerrado.toISOString(),
       estadio: 'Mangueirão',
       placar: { mandante: 0, visitante: 1 },
       status: 'encerrada',
@@ -51,7 +70,7 @@ function temporadaDeTeste(): Partida[] {
       mandante: 'Flamengo',
       visitante: 'Estudiantes',
       siglas: { mandante: 'FLA', visitante: 'EST' },
-      dataHora: new Date(futuro).toISOString(),
+      dataHora: futuro.toISOString(),
       estadio: 'Maracanã',
       placar: null,
       status: 'agendada',
