@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { ItemDoFeed } from '@/components/feed/ItemDoFeed';
+import { useAjustesStore } from '@/stores/ajustesStore';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUiStore } from '@/stores/uiStore';
 
@@ -10,6 +11,7 @@ describe('ItemDoFeed', () => {
   beforeEach(() => {
     usePlayerStore.setState({ mudo: false, feedEmFoco: true });
     useUiStore.setState({ videoParaComentar: null, alvoParaDenuncia: null });
+    useAjustesStore.setState({ economizarDados: false });
   });
 
   it('renderiza autor, legenda com hashtag, áudio e contadores', async () => {
@@ -92,6 +94,29 @@ describe('ItemDoFeed — controles do player', () => {
     expect(screen.getByTestId('barra-progresso')).toBeTruthy();
     await renderizar(<ItemDoFeed video={video} altura={800} ativo={false} proximo meuId={null} />);
     expect(screen.queryByTestId('barra-progresso')).toBeNull();
+  });
+
+  it('economizar dados impede o pré-carregamento do próximo vídeo', async () => {
+    const video = videoDeTeste();
+    // montar o player já dispara o download, então "economizar dados" só cumpre o que
+    // promete se o item seguinte nem chegar a montar
+    await renderizar(<ItemDoFeed video={video} altura={800} ativo={false} proximo meuId={null} />);
+    expect(screen.getByTestId(`player-${video.id}`)).toBeTruthy();
+
+    useAjustesStore.setState({ economizarDados: true });
+    await renderizar(<ItemDoFeed video={video} altura={800} ativo={false} proximo meuId={null} />);
+    expect(screen.queryByTestId(`player-${video.id}`)).toBeNull();
+    // o store é persistido: sem devolver o valor aqui, a reidratação assíncrona vaza
+    // o "true" para o teste seguinte
+    useAjustesStore.setState({ economizarDados: false });
+  });
+
+  it('o item ativo toca mesmo com economizar dados (só não pré-carrega o próximo)', async () => {
+    const video = videoDeTeste();
+    useAjustesStore.setState({ economizarDados: true });
+    await renderizar(<ItemDoFeed video={video} altura={800} ativo proximo={false} meuId={null} />);
+    expect(screen.getByTestId(`player-${video.id}`)).toBeTruthy();
+    useAjustesStore.setState({ economizarDados: false });
   });
 
   it('o marcador do progresso aparece sem precisar arrastar', async () => {

@@ -8,7 +8,7 @@ import { runOnJS } from 'react-native-reanimated';
 import { Avatar, Icone, Texto } from '@/components/ui';
 import { ICONE_INTERESSE } from '@/constants/interesses';
 import { useCompartilhar, useCurtir, useSalvar } from '@/hooks/useInteracoes';
-import { dataService } from '@/services/data';
+import { registrarVisualizacao } from '@/services/data/visualizacoes';
 import { useAjustesStore } from '@/stores/ajustesStore';
 import { useHistoricoStore } from '@/stores/historicoStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -68,6 +68,16 @@ function ItemDoFeedBase({
   }
 
   const tocando = ativo && feedEmFoco;
+  /**
+   * Montar o player já dispara o download do vídeo — não existe "montar sem baixar".
+   *
+   * Por isso o modo "economizar dados" precisa impedir a montagem do PRÓXIMO item, e não
+   * só deixá-lo pausado: antes, quem ligava a economia continuava baixando o vídeo
+   * seguinte em segundo plano, que é exatamente o que a pessoa pediu para não acontecer.
+   * Também é a leitura mais fácil de evitar na conta do R2 — vídeo pré-carregado e nunca
+   * assistido é download 100% desperdiçado.
+   */
+  const montarPlayer = ativo || (proximo && !economizarDados);
   const assistindo = tocando && !pausado;
   // o nome só entra quando diz algo além do apelido
   const mostrarNome =
@@ -77,9 +87,8 @@ function ItemDoFeedBase({
   useEffect(() => {
     if (!assistindo) return;
     const timer = setTimeout(() => {
-      dataService()
-        .registrarVisualizacao(video.id)
-        .catch(() => {});
+      // entra numa fila local e sobe em lote (ver services/data/visualizacoes)
+      registrarVisualizacao(video.id);
       registrarAssistido({
         videoId: video.id,
         legenda: video.legenda,
@@ -136,7 +145,7 @@ function ItemDoFeedBase({
         <View style={StyleSheet.absoluteFill}>
           {video.tipo === 'foto' ? (
             <PostDeFoto video={video} />
-          ) : ativo || proximo ? (
+          ) : montarPlayer ? (
             <PlayerDeVideo video={video} tocando={tocando} pausado={pausado} mudo={mudo} />
           ) : (
             // fora da janela de players: só a miniatura, sem custo de player nativo

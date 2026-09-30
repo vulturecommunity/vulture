@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 
-import { supabase } from '@/services/data/supabase/cliente';
+import { configuracaoSupabase, supabase } from '@/services/data/supabase/cliente';
 import { ErroDeAplicacao } from '@/utils/erros';
 
 import type { LinhaDePartida } from '../../../supabase/functions/_shared/highlightly';
 import type { CalendarioService, MatchService, Partida } from './types';
 
 const CHAVE_CACHE = 'vulture.calendario.v2';
+/** o cache da Edge Function é de 20 s; sondar mais rápido só gastaria bateria */
+const INTERVALO_DE_SONDAGEM_MS = 25_000;
 const COLUNAS =
   'id, competicao, fase, mandante, visitante, sigla_mandante, sigla_visitante, data_hora, estadio, gols_mandante, gols_visitante, status, minuto, nota';
 
@@ -38,8 +39,10 @@ export function paraPartida(l: LinhaLida): Partida {
  * atualizar-calendario mantém com a Highlightly. O app nunca fala com a API de jogos.
  */
 export class PartidasSupabase implements MatchService, CalendarioService {
-  private canal: RealtimeChannel | null = null;
+  private temporizador: ReturnType<typeof setInterval> | null = null;
   private readonly ouvintes = new Set<(p: Partida) => void>();
+  /** última versão vista de cada jogo, para só avisar quando algo realmente muda */
+  private readonly ultimoPlacar = new Map<string, string>();
 
   async listarTemporada(): Promise<Partida[]> {
     const { data, error } = await supabase()
@@ -91,31 +94,62 @@ export class PartidasSupabase implements MatchService, CalendarioService {
   }
 
   /**
-   * Placar ao vivo: o Realtime empurra cada atualização que a Edge Function grava.
-   * Um canal só no app inteiro, compartilhado por quem estiver ouvindo.
+   * Placar ao vivo por leitura curta na Edge Function `placar`, que responde com
+   * Cache-Control de 20 s.
+   *
+   * Antes isto era um canal Realtime — ou seja, um websocket por aparelho com o app aberto
+   * durante o jogo. No pico de um clássico seriam centenas de milhares de conexões
+   * simultâneas, exatamente quando o app não pode falhar. Com o cache de CDN a mesma
+   * resposta serve todo mundo e o banco recebe ~3 consultas por minuto, com mil ou com um
+   * milhão de torcedores.
+   *
+   * Um temporizador só no app inteiro, compartilhado por quem estiver ouvindo.
    */
   assinar(aoMudar: (partida: Partida) => void): () => void {
     this.ouvintes.add(aoMudar);
-    if (!this.canal) {
-      this.canal = supabase()
-        .channel('partidas-ao-vivo')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'partidas' }, (evento) => {
-          const linha = evento.new as LinhaLida | undefined;
-          if (!linha?.id) return;
-          const partida = paraPartida(linha);
-          for (const ouvinte of this.ouvintes) ouvinte(partida);
-        })
-        .subscribe();
-    }
+    this.ligarSondagem();
     return () => {
       this.ouvintes.delete(aoMudar);
-      if (this.ouvintes.size === 0 && this.canal) {
-        supabase()
-          .removeChannel(this.canal)
-          .catch(() => {});
-        this.canal = null;
+      if (this.ouvintes.size === 0) this.desligarSondagem();
+    };
+  }
+
+  private ligarSondagem() {
+    if (this.temporizador) return;
+    const consultar = async () => {
+      try {
+        const partidas = await this.buscarPlacar();
+        for (const partida of partidas) {
+          const anterior = this.ultimoPlacar.get(partida.id);
+          const agora = JSON.stringify([partida.placar, partida.status, partida.minuto]);
+          if (anterior === agora) continue;
+          this.ultimoPlacar.set(partida.id, agora);
+          for (const ouvinte of this.ouvintes) ouvinte(partida);
+        }
+      } catch {
+        // rede instável no estádio é a regra: a próxima passada resolve
       }
     };
+    void consultar();
+    this.temporizador = setInterval(() => void consultar(), INTERVALO_DE_SONDAGEM_MS);
+  }
+
+  private desligarSondagem() {
+    if (this.temporizador) clearInterval(this.temporizador);
+    this.temporizador = null;
+    this.ultimoPlacar.clear();
+  }
+
+  /** Jogos da janela quente (últimas 6 h e próximos 7 dias), pela CDN. */
+  private async buscarPlacar(): Promise<Partida[]> {
+    const cfg = configuracaoSupabase();
+    if (!cfg) return [];
+    const resposta = await fetch(`${cfg.url}/functions/v1/placar`, {
+      headers: { apikey: cfg.chave, Authorization: `Bearer ${cfg.chave}` },
+    });
+    if (!resposta.ok) throw new Error(`placar: HTTP ${resposta.status}`);
+    const corpo = (await resposta.json()) as { partidas?: LinhaLida[] };
+    return (corpo.partidas ?? []).map(paraPartida);
   }
 
   private async lerCache(): Promise<Partida[] | null> {
