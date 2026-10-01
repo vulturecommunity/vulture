@@ -194,7 +194,21 @@ Consultas úteis:
 ```sql
 select * from public.uso_do_r2();                               -- situação agora
 select * from public.alertas_de_infra order by criado_em desc;  -- histórico
+select * from public.tamanho_das_tabelas();                     -- maiores tabelas do app
+select * from public.tamanho_por_schema();                      -- banco inteiro, por schema
 ```
+
+### O log de cron tem prazo de validade
+
+Achado medindo "o que ocupa o banco" pela primeira vez: `cron.job_run_details` — onde o
+pg_cron registra cada execução de cada job agendado — **não se limpa sozinho**. Com 13
+jobs ligados, vários de minuto em minuto, isso é ~8.200 linhas por dia. Sem limpeza,
+passaria de 70 MB por mês, crescendo para sempre, sem nenhuma relação com quanto o app é
+usado — contra os 500 MB grátis do banco, isso sozinho comeria 14% por mês.
+
+`limpar_dados_antigos()` agora também apaga execuções com mais de 3 dias, no mesmo cron
+diário que já limpava notificação e rasante vencidos. No ritmo medido, o log estabiliza
+em torno de 8 MB e para por aí.
 
 ### Configure no painel (5 minutos, grátis)
 
