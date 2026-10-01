@@ -1,6 +1,7 @@
 import {
   compartilharLiga,
   compartilharLive,
+  compartilharPalpite,
   compartilharPerfil,
   compartilharPost,
   compartilharVideo,
@@ -108,5 +109,44 @@ describe('convite de live', () => {
     const { mensagem } = compartilharLive({ ...base, titulo: '   ' });
     expect(mensagem).not.toContain('""');
     expect(mensagem).toMatch(/não fica gravada/i);
+  });
+});
+
+describe('provocação de palpite', () => {
+  const base = {
+    partidaId: 'hl-123',
+    mandante: 'FLA',
+    visitante: 'SAN',
+    golsMandante: 3,
+    golsVisitante: 1,
+    apelido: 'zico',
+  };
+
+  it('mostra o placar cravado e aponta para o jogo', () => {
+    const { mensagem, url, tipo } = compartilharPalpite(base);
+    expect(tipo).toBe('palpite');
+    expect(mensagem).toContain('FLA 3 x 1 SAN');
+    expect(url).toBe(`${BASE}/palpite/hl-123`);
+    expect(mensagem.split('\n\n').at(-1)).toBe(url);
+  });
+
+  it('termina com pergunta: o convite só fecha se o outro responder', () => {
+    const { mensagem } = compartilharPalpite(base);
+    expect(mensagem).toMatch(/acha que dá quanto\?/i);
+  });
+
+  it('usa a posição no ranking como credencial quando existe', () => {
+    const comPosicao = compartilharPalpite({ ...base, posicao: 42 });
+    expect(comPosicao.mensagem).toContain('42º');
+
+    // sem posição, explica a regra em vez de deixar a linha vazia
+    const semPosicao = compartilharPalpite({ ...base, posicao: null });
+    expect(semPosicao.mensagem).toMatch(/10 pontos/);
+    expect(semPosicao.mensagem).not.toContain('º no ranking');
+  });
+
+  it('id de partida com caractere especial não quebra a URL', () => {
+    const { url } = compartilharPalpite({ ...base, partidaId: 'a/b c' });
+    expect(url).toBe(`${BASE}/palpite/a%2Fb%20c`);
   });
 });

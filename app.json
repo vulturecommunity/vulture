@@ -96,7 +96,9 @@
           "defaultChannel": "lives"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@sentry/react-native",
+      "react-native-compressor"
     ],
     "experiments": {
       "typedRoutes": true,

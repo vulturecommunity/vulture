@@ -19,3 +19,18 @@ export type DriverDePartidas = 'real' | 'mock';
 export function driverDePartidas(): DriverDePartidas {
   return process.env.EXPO_PUBLIC_MATCH_DRIVER === 'mock' ? 'mock' : 'real';
 }
+
+/** DSN do Sentry; sem ela o app não reporta erro nenhum e segue funcionando. */
+export function dsnDoSentry(): string | null {
+  return process.env.EXPO_PUBLIC_SENTRY_DSN?.trim() || null;
+}
+
+/** Chave e host do PostHog; sem a chave nenhum evento de produto é enviado. */
+export function configuracaoDoPostHog(): { chave: string; host: string } | null {
+  const chave = process.env.EXPO_PUBLIC_POSTHOG_KEY?.trim();
+  if (!chave) return null;
+  return {
+    chave,
+    host: process.env.EXPO_PUBLIC_POSTHOG_HOST?.trim() || 'https://us.i.posthog.com',
+  };
+}

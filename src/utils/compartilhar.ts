@@ -1,6 +1,7 @@
 import { Share } from 'react-native';
 
 import { configuracaoSupabase } from '@/services/data/supabase/cliente';
+import { EVENTOS, registrar } from '@/services/telemetria';
 
 /**
  * Textos e links de compartilhamento.
@@ -52,6 +53,10 @@ export function linkDaLive(id: string): string {
   return `${baseDeLinks() ?? 'vulture://live'}/live/${id}`;
 }
 
+export function linkDoPalpite(partidaId: string): string {
+  return `${baseDeLinks() ?? 'vulture://arquibancada'}/palpite/${encodeURIComponent(partidaId)}`;
+}
+
 /** Corta um texto longo sem quebrar palavra no meio. */
 function resumir(texto: string, limite = 110): string {
   const limpo = texto.trim().replace(/\s+/g, ' ');
@@ -66,7 +71,11 @@ function montar(partes: (string | null)[]): string {
   return partes.filter(Boolean).join('\n\n');
 }
 
+/** Qual laço viral foi usado. Vai para a telemetria: nem todo convite converte igual. */
+export type TipoDeCompartilhamento = 'video' | 'post' | 'perfil' | 'liga' | 'live' | 'palpite';
+
 export interface ConteudoCompartilhavel {
+  tipo: TipoDeCompartilhamento;
   mensagem: string;
   titulo: string;
   url: string;
@@ -80,6 +89,7 @@ export function compartilharVideo(dados: {
   const url = linkDoVideo(dados.id);
   const legenda = dados.legenda.trim();
   return {
+    tipo: 'video',
     titulo: `Vídeo de @${dados.apelido} no Vulture`,
     url,
     mensagem: montar([
@@ -98,6 +108,7 @@ export function compartilharPost(dados: {
   const url = linkDoPost(dados.id);
   const texto = dados.texto.trim();
   return {
+    tipo: 'post',
     titulo: `Resenha de @${dados.apelido} no Vulture`,
     url,
     mensagem: montar([
@@ -111,6 +122,7 @@ export function compartilharPost(dados: {
 export function compartilharPerfil(dados: { apelido: string }): ConteudoCompartilhavel {
   const url = linkDoPerfil(dados.apelido);
   return {
+    tipo: 'perfil',
     titulo: 'Cola comigo no Vulture',
     url,
     mensagem: montar([
@@ -124,6 +136,7 @@ export function compartilharPerfil(dados: { apelido: string }): ConteudoComparti
 export function compartilharLiga(dados: { nome: string; codigo: string }): ConteudoCompartilhavel {
   const url = linkDaLiga(dados.codigo);
   return {
+    tipo: 'liga',
     titulo: `Liga ${dados.nome} no Vulture`,
     url,
     mensagem: montar([
@@ -154,6 +167,7 @@ export function compartilharLive(dados: {
   const titulo = dados.titulo.trim();
   const assunto = titulo ? `"${resumir(titulo, 80)}"\n` : '';
   return {
+    tipo: 'live',
     titulo: dados.souOAnfitriao
       ? 'Tô ao vivo no Vulture'
       : `@${dados.apelido} está ao vivo no Vulture`,
@@ -163,6 +177,48 @@ export function compartilharLive(dados: {
         ? '🔴 Tô AO VIVO agora no Vulture — cola na transmissão'
         : `🔴 @${dados.apelido} está AO VIVO agora no Vulture`,
       `${assunto}Entra antes que acabe: live não fica gravada.`,
+      url,
+    ]),
+  };
+}
+
+/**
+ * Convite a partir de um palpite cravado.
+ *
+ * POR QUE ESTE É O LAÇO QUE IMPORTA
+ *
+ * Compartilhar vídeo compete com o TikTok, onde já existe todo o conteúdo rubro-negro do
+ * mundo. Compartilhar palpite não compete com nada: o número ("3×1, cravado") é uma
+ * provocação que só faz sentido com um placar do lado, e a resposta natural de quem
+ * recebe é dar o próprio palpite — que exige abrir o app.
+ *
+ * E é o único convite que funciona sem base: não precisa de seguidor, nem de feed cheio,
+ * nem de ninguém ao vivo. Precisa de um jogo marcado, que o calendário já traz.
+ */
+export function compartilharPalpite(dados: {
+  partidaId: string;
+  mandante: string;
+  visitante: string;
+  golsMandante: number;
+  golsVisitante: number;
+  apelido: string;
+  /** posição no ranking, quando a pessoa já tem uma — é o que dá peso à provocação */
+  posicao?: number | null;
+}): ConteudoCompartilhavel {
+  const url = linkDoPalpite(dados.partidaId);
+  const jogo = `${dados.mandante} ${dados.golsMandante} x ${dados.golsVisitante} ${dados.visitante}`;
+  const credencial =
+    typeof dados.posicao === 'number' && dados.posicao > 0
+      ? `Tô em ${dados.posicao}º no ranking da nação.`
+      : 'Cravar o placar vale 10 pontos; acertar o saldo, 5.';
+
+  return {
+    tipo: 'palpite',
+    titulo: `Palpite de @${dados.apelido} no Vulture`,
+    url,
+    mensagem: montar([
+      `🦅 Cravei: ${jogo}`,
+      `${credencial}\nE você, acha que dá quanto?`,
       url,
     ]),
   };
@@ -183,7 +239,10 @@ export async function abrirCompartilhamento(
       { message: conteudo.mensagem, url: conteudo.url, title: conteudo.titulo },
       { subject: conteudo.titulo, dialogTitle: conteudo.titulo },
     );
-    return resultado.action === Share.sharedAction;
+    const compartilhou = resultado.action === Share.sharedAction;
+    // Só conta quando a folha confirma o envio: abrir e desistir não é um laço viral.
+    if (compartilhou) registrar(EVENTOS.COMPARTILHOU, { tipo: conteudo.tipo });
+    return compartilhou;
   } catch {
     // usuário fechou a folha, ou a plataforma não suporta
     return false;

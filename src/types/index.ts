@@ -321,6 +321,37 @@ export interface PalpiteiroDaPartida {
   resultado: ResultadoDoPalpite;
 }
 
+/** Onde a pessoa está na escada: 'acesso' sobe, 'rebaixamento' cai, 'neutro' fica. */
+export type ZonaDaDivisao = 'acesso' | 'rebaixamento' | 'neutro';
+
+/** Uma linha do grupo de divisão (~30 pessoas de nível parecido, disputando o mês). */
+export interface MembroDoGrupo {
+  posicao: number;
+  usuario: Pick<Usuario, 'id' | 'apelido' | 'nome' | 'avatarUrl'>;
+  pontos: number;
+  palpites: number;
+  cravadas: number;
+  souEu: boolean;
+  zona: ZonaDaDivisao;
+}
+
+/**
+ * O cartão do topo da tela: em que divisão estou e quanto falta para subir.
+ *
+ * `pontosParaSubir` é o número que faz a pessoa voltar amanhã — "faltam 35" é um objetivo;
+ * "você é o 4.312º do Brasil" não é.
+ */
+export interface MinhaDivisao {
+  nivel: number;
+  nome: string;
+  grupoNumero: number;
+  posicao: number;
+  total: number;
+  pontos: number;
+  zona: ZonaDaDivisao;
+  pontosParaSubir: number;
+}
+
 /** Pódio do mês congelado: medalha permanente no perfil. */
 export interface Titulo {
   periodo: string;

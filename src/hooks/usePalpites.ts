@@ -6,6 +6,7 @@ import { dataService } from '@/services/data';
 import type { NovoPalpite } from '@/services/data/types';
 import { calendarioService, type Partida } from '@/services/partidas';
 import { chaves } from '@/services/queryClient';
+import { EVENTOS, registrar } from '@/services/telemetria';
 import type { Palpite } from '@/types';
 
 import { haJogoAgora, usePlacarAoVivo } from './usePlacarAoVivo';
@@ -59,6 +60,9 @@ export function useSalvarPalpite() {
         palpite,
       ]);
       queryClient.invalidateQueries({ queryKey: chaves.resumoDosPalpites(palpite.partidaId) });
+      // A aposta de produto do app. Sem este evento não há como saber se o palpite pega
+      // antes de investir semanas em vídeo.
+      registrar(EVENTOS.PALPITE_CRAVADO, { partida: palpite.partidaId });
     },
   });
 }

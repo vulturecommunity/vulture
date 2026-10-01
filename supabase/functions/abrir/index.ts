@@ -232,6 +232,36 @@ const BUSCADORES: Record<string, Buscador> = {
     };
   },
 
+  // O convite de palpite aponta para o JOGO, não para o palpite de quem convidou: quem
+  // recebe precisa dar o próprio palpite, e ver o alheio antes estragaria a graça.
+  async palpite(admin, id) {
+    const { data } = await admin
+      .from('partidas')
+      .select('mandante, visitante, competicao, fase, data_hora, status')
+      .eq('id', id)
+      .maybeSingle();
+    if (!data) return null;
+
+    const jogo = `${data.mandante} x ${data.visitante}`;
+    const quando = new Date(data.data_hora).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    });
+    const encerrada = data.status === 'encerrada';
+
+    return {
+      titulo: encerrada ? `${jogo} já aconteceu` : `Qual o placar de ${jogo}?`,
+      descricao: encerrada
+        ? 'Este jogo já foi apurado. Abra o Vulture para palpitar no próximo.'
+        : `${data.competicao}${data.fase ? ` · ${data.fase}` : ''} · ${quando}. ` +
+          'Cravar o placar vale 10 pontos; acertar o saldo, 5.',
+      imagem: null,
+      deepLink: encerrada ? 'vulture://arquibancada' : `vulture://arquibancada?palpite=${id}`,
+      acao: encerrada ? 'Abrir o Vulture' : 'Dar meu palpite',
+    };
+  },
+
   async liga(admin, id) {
     const { data } = await admin
       .from('ligas')

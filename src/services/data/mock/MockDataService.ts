@@ -34,7 +34,10 @@ import type {
   PermissaoDeConversa,
   Post,
   PreferenciasDeMensagens,
+  MembroDoGrupo,
+  MinhaDivisao,
   RankingDePalpites,
+  ZonaDaDivisao,
   RankingTorcedor,
   Rasante,
   ResumoDePalpites,
@@ -402,6 +405,33 @@ export class MockDataService implements DataService {
       'O modo demonstração não envia e-mail. Troque a senha aqui mesmo informando a atual.',
       'sem_email_na_demo',
     );
+  }
+
+  async excluirMinhaConta(): Promise<{ arquivos: number }> {
+    const b = await this.banco();
+    const usuario = this.usuarioLogado(b);
+
+    // Tudo que aponta para o usuário sai junto, como o cascade faz no Postgres. A lista
+    // é explícita de propósito: se uma coleção nova for esquecida aqui, o teste de
+    // exclusão falha, e é esse o aviso que queremos.
+    const meu = usuario.id;
+    b.videos = b.videos.filter((v) => v.autorId !== meu);
+    b.posts = b.posts.filter((p) => p.autorId !== meu);
+    b.comentarios = b.comentarios.filter((c) => c.autorId !== meu);
+    b.curtidas = b.curtidas.filter((c) => c.usuarioId !== meu);
+    b.salvos = b.salvos.filter((s) => s.usuarioId !== meu);
+    b.seguidores = b.seguidores.filter((s) => s.seguidorId !== meu && s.seguidoId !== meu);
+    b.rasantes = b.rasantes.filter((r) => r.autorId !== meu);
+    b.palpites = b.palpites.filter((p) => p.usuarioId !== meu);
+    b.mensagens = b.mensagens.filter((m) => m.remetenteId !== meu);
+    b.conversas = b.conversas.filter((c) => !c.participantes.includes(meu));
+    b.notificacoes = b.notificacoes.filter((n) => n.paraId !== meu && n.deId !== meu);
+    b.usuarios = b.usuarios.filter((u) => u.id !== meu);
+    b.contas = b.contas.filter((c) => c.usuarioId !== meu);
+    b.sessao = null;
+
+    await this.armazenamento.salvarAgora();
+    return { arquivos: 0 };
   }
 
   // ---------------------------------------------------------------- feed e vídeos
@@ -1403,6 +1433,61 @@ export class MockDataService implements DataService {
         jogos,
         temporada: Number(periodo.slice(0, 4)),
       }));
+  }
+
+  /**
+   * Divisão do mês na demonstração.
+   *
+   * Espelha a regra do Postgres (`meu_grupo` / `minha_divisao`), inclusive o encolhimento
+   * das faixas em grupo pequeno — sem isso o modo demo mostraria todo mundo em zona de
+   * acesso, que é exatamente o bug que `vagas_no_grupo` existe para evitar.
+   */
+  async minhaDivisao(
+    periodo = chaveDoMes(new Date()),
+  ): Promise<{ resumo: MinhaDivisao; grupo: MembroDoGrupo[] } | null> {
+    const b = await this.banco();
+    const meuId = b.sessao?.usuarioId ?? null;
+    if (!meuId) return null;
+
+    const pontuacoes = await this.pontuacoesDoPeriodo(periodo);
+    if (pontuacoes.length === 0) return null;
+
+    const total = pontuacoes.length;
+    const vagas = Math.max(0, Math.min(7, Math.floor(total / 3)));
+    const zonaDe = (posicao: number): ZonaDaDivisao => {
+      if (vagas === 0) return 'neutro';
+      if (posicao <= vagas) return 'acesso';
+      if (posicao > total - vagas) return 'rebaixamento';
+      return 'neutro';
+    };
+
+    const grupo: MembroDoGrupo[] = pontuacoes.map((p) => ({
+      posicao: p.posicao,
+      usuario: p.usuario,
+      pontos: p.pontos,
+      palpites: p.palpites,
+      cravadas: p.cravadas,
+      souEu: p.souEu,
+      zona: zonaDe(p.posicao),
+    }));
+
+    const eu = grupo.find((g) => g.souEu);
+    if (!eu) return null;
+
+    const corte = grupo.find((g) => g.posicao === vagas)?.pontos ?? eu.pontos;
+    return {
+      resumo: {
+        nivel: 1,
+        nome: 'Série D',
+        grupoNumero: 1,
+        posicao: eu.posicao,
+        total,
+        pontos: eu.pontos,
+        zona: eu.zona,
+        pontosParaSubir: Math.max(0, corte - eu.pontos),
+      },
+      grupo,
+    };
   }
 
   async rankingDePalpites(periodo: string, limite = 20): Promise<RankingDePalpites> {

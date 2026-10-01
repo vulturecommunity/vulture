@@ -24,6 +24,8 @@ import type {
   PermissaoDeConversa,
   Post,
   PreferenciasDeMensagens,
+  MembroDoGrupo,
+  MinhaDivisao,
   RankingDePalpites,
   RankingTorcedor,
   Rasante,
@@ -165,6 +167,14 @@ export interface DataService {
   alterarSenha(senhaAtual: string, novaSenha: string): Promise<void>;
   /** Dispara o e-mail de redefinição de senha. */
   enviarRedefinicaoDeSenha(email: string): Promise<void>;
+  /**
+   * Apaga a conta e todo o conteúdo dela, sem volta.
+   *
+   * Exigido por Apple e Google (app com cadastro precisa oferecer exclusão DENTRO do app)
+   * e pela LGPD, art. 18, VI. Devolve quantos arquivos saíram do armazenamento, que é o
+   * que a tela mostra como comprovante.
+   */
+  excluirMinhaConta(): Promise<{ arquivos: number }>;
 
   // ---- Feed e vídeos ----
   listFeed(params: ParametrosDoFeed): Promise<Pagina<Video>>;
@@ -287,6 +297,13 @@ export interface DataService {
   periodosDoRanking(): Promise<PeriodoDoRanking[]>;
   /** Top N do período e a faixa em volta do usuário logado. */
   rankingDePalpites(periodo: string, limite?: number): Promise<RankingDePalpites>;
+  /**
+   * Meu grupo de divisão no período e o resumo da minha posição nele.
+   *
+   * Devolve `null` quando a pessoa ainda não entrou em nenhum grupo — o que acontece
+   * enquanto ela não palpitou nenhuma vez no mês.
+   */
+  minhaDivisao(periodo?: string): Promise<{ resumo: MinhaDivisao; grupo: MembroDoGrupo[] } | null>;
   /** Quem mais pontuou num jogo. */
   podioDaPartida(partidaId: string, limite?: number): Promise<PalpiteiroDaPartida[]>;
   /** Medalhas de pódio mensal de um perfil. */

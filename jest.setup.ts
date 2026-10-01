@@ -200,3 +200,22 @@ jest.mock('expo-constants', () => ({
     expoConfig: { extra: { eas: { projectId: 'projeto-teste' } } },
   },
 }));
+
+// Telemetria: os SDKs reais abrem rede e armazenamento no import. Nos testes só interessa
+// que o app chame os pontos certos, e `src/services/telemetria/__tests__` cobre a camada
+// em si com estes mesmos mocks por baixo.
+jest.mock('@sentry/react-native', () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+  addBreadcrumb: jest.fn(),
+  setUser: jest.fn(),
+}));
+
+jest.mock('posthog-react-native', () =>
+  jest.fn().mockImplementation(() => ({
+    capture: jest.fn(),
+    identify: jest.fn(),
+    reset: jest.fn(),
+    flush: jest.fn().mockResolvedValue(undefined),
+  })),
+);

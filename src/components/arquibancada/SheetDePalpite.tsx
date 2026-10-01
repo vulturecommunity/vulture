@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Botao, Carregando, Icone, Sheet, Texto } from '@/components/ui';
 import { useResumoDosPalpites, useSalvarPalpite } from '@/hooks/usePalpites';
 import type { Partida } from '@/services/partidas';
+import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos, raios } from '@/theme';
 import type { Palpite, ResumoDePalpites } from '@/types';
+import { abrirCompartilhamento, compartilharPalpite } from '@/utils/compartilhar';
 import { mensagemDeErro } from '@/utils/erros';
 import { diaDaSemana, formatarDataHora } from '@/utils/formatadores';
 import { GOLS_MAXIMOS_NO_PALPITE, palpiteAberto, siglasDa } from '@/utils/palpites';
@@ -162,8 +164,24 @@ function ConteudoDoPalpite({ partida, palpite }: { partida: Partida; palpite?: P
   const [mandante, setMandante] = useState(palpite?.golsMandante ?? 0);
   const [visitante, setVisitante] = useState(palpite?.golsVisitante ?? 0);
   const salvar = useSalvarPalpite();
+  const eu = useAuthStore((s) => s.sessao?.usuario);
   const mudou =
     !palpite || palpite.golsMandante !== mandante || palpite.golsVisitante !== visitante;
+
+  const convidar = useCallback(
+    () =>
+      abrirCompartilhamento(
+        compartilharPalpite({
+          partidaId: partida.id,
+          mandante: siglas.mandante,
+          visitante: siglas.visitante,
+          golsMandante: mandante,
+          golsVisitante: visitante,
+          apelido: eu?.apelido ?? 'torcedor',
+        }),
+      ),
+    [partida.id, siglas.mandante, siglas.visitante, mandante, visitante, eu?.apelido],
+  );
 
   return (
     <View style={estilos.conteudo}>
@@ -196,21 +214,33 @@ function ConteudoDoPalpite({ partida, palpite }: { partida: Partida; palpite?: P
       </View>
 
       {aberto ? (
-        <Botao
-          titulo={palpite ? 'Trocar palpite' : 'Confirmar palpite'}
-          onPress={() =>
-            salvar.mutate({
-              partidaId: partida.id,
-              inicioDaPartida: partida.dataHora,
-              golsMandante: mandante,
-              golsVisitante: visitante,
-            })
-          }
-          carregando={salvar.isPending}
-          disabled={!mudou}
-          largo
-          testID="botao-salvar-palpite"
-        />
+        <>
+          <Botao
+            titulo={palpite ? 'Trocar palpite' : 'Confirmar palpite'}
+            onPress={() =>
+              salvar.mutate({
+                partidaId: partida.id,
+                inicioDaPartida: partida.dataHora,
+                golsMandante: mandante,
+                golsVisitante: visitante,
+              })
+            }
+            carregando={salvar.isPending}
+            disabled={!mudou}
+            largo
+            testID="botao-salvar-palpite"
+          />
+          {/* Só depois de cravado: convidar para um palpite que você ainda não deu é vazio. */}
+          {palpite && !mudou ? (
+            <Botao
+              titulo="Provocar a galera"
+              variante="secundario"
+              onPress={() => void convidar()}
+              largo
+              testID="botao-compartilhar-palpite"
+            />
+          ) : null}
+        </>
       ) : (
         <Texto variante="pequeno" cor={cores.textoTerciario} centralizado>
           {palpite ? 'Palpites encerrados. Boa sorte!' : 'Palpites encerrados: a bola já rolou.'}

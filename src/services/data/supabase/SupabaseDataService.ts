@@ -10,6 +10,7 @@ import {
   VALIDADE_RASANTE_HORAS,
 } from '@/constants/rasantes';
 import { gerarThumbnail, tipoMimeDe } from '@/services/midia/arquivos';
+import { comprimirVideo, economiaEmPorcento } from '@/services/midia/video';
 import {
   apagarNoR2,
   chaveDoR2,
@@ -40,7 +41,10 @@ import type {
   PermissaoDeConversa,
   Post,
   PreferenciasDeMensagens,
+  MembroDoGrupo,
+  MinhaDivisao,
   RankingDePalpites,
+  ZonaDaDivisao,
   RankingTorcedor,
   Rasante,
   ResultadoDoPalpite,
@@ -53,6 +57,7 @@ import type {
   Usuario,
   Video,
 } from '@/types';
+import { EVENTOS, registrar } from '@/services/telemetria';
 import { ErroDeAplicacao } from '@/utils/erros';
 import { extrairHashtags, normalizarHashtag } from '@/utils/hashtags';
 import { novoId } from '@/utils/ids';
@@ -230,6 +235,41 @@ interface LinhaDoRanking {
   sequencia: number;
   variacao?: number;
   sou_eu?: boolean;
+}
+
+/**
+ * Mês corrente no formato do ranking ("2026-10").
+ *
+ * Duplicado de propósito em vez de importado de `hooks/useRanking`: um serviço de dados
+ * não deve depender da camada de hooks, e o formato é o mesmo que o Postgres produz com
+ * `to_char(now(), 'YYYY-MM')`.
+ */
+function periodoAtual(agora: Date = new Date()): string {
+  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+}
+
+interface LinhaDoGrupo {
+  posicao: number;
+  usuario_id: string;
+  apelido: string;
+  nome: string;
+  avatar_url: string | null;
+  pontos: number;
+  palpites: number;
+  cravadas: number;
+  sou_eu: boolean;
+  zona: ZonaDaDivisao;
+}
+
+interface LinhaDaDivisao {
+  nivel: number;
+  nome: string;
+  grupo_numero: number;
+  posicao: number;
+  total: number;
+  pontos: number;
+  zona: ZonaDaDivisao;
+  pontos_para_subir: number;
 }
 
 interface LinhaDeLiga {
@@ -859,6 +899,19 @@ export class SupabaseDataService implements DataService {
     if (error) erroDoSupabase(error, 'Falha ao enviar o e-mail de redefinição');
   }
 
+  async excluirMinhaConta(): Promise<{ arquivos: number }> {
+    // O trabalho é todo da Edge Function: apagar de `auth.users` exige a service role,
+    // que nunca pode estar no aparelho. Aqui só mandamos o JWT e a frase de confirmação.
+    const resposta = await this.funcoes.invocar<{ excluida?: boolean; arquivos?: number }>(
+      'excluir-conta',
+      { confirmacao: 'EXCLUIR MINHA CONTA' },
+    );
+    // A sessão local aponta para uma conta que não existe mais; limpar evita que a
+    // próxima abertura do app tente restaurá-la e caia num estado sem perfil.
+    await this.db.auth.signOut().catch(() => {});
+    return { arquivos: resposta.arquivos ?? 0 };
+  }
+
   // ---------------------------------------------------------------- feed e vídeos
 
   /**
@@ -915,15 +968,33 @@ export class SupabaseDataService implements DataService {
     const id = novoId();
     const progresso = (f: number, etapa: string) => aoProgredir?.(Math.min(1, f), etapa);
 
-    progresso(0.02, 'Enviando arquivo');
     const ehVideo = novo.tipo === 'video';
     const extensao = ehVideo ? 'mp4' : 'jpg';
+
+    // Comprimir ANTES de subir: o byte economizado aqui não é enviado, não é armazenado
+    // e não é baixado por ninguém. Sem o módulo nativo (Expo Go) devolve o original.
+    let origem = novo.uriLocal;
+    if (ehVideo) {
+      progresso(0.02, 'Preparando vídeo');
+      const comprimido = await comprimirVideo(novo.uriLocal, (f) =>
+        progresso(0.02 + f * 0.18, 'Preparando vídeo'),
+      );
+      origem = comprimido.uri;
+      if (comprimido.comprimido) {
+        registrar(EVENTOS.VIDEO_PUBLICADO, {
+          economia: economiaEmPorcento(comprimido),
+          mb: Math.round(comprimido.depois / 1024 / 1024),
+        });
+      }
+    }
+
+    progresso(0.2, 'Enviando arquivo');
     const url = await this.enviarArquivo(
       ehVideo ? 'videos' : 'thumbnails',
       `${meuId}/${id}.${extensao}`,
-      novo.uriLocal,
-      tipoMimeDe(novo.uriLocal, novo.tipo),
-      (f) => progresso(0.02 + f * 0.75, 'Enviando arquivo'),
+      origem,
+      tipoMimeDe(origem, novo.tipo),
+      (f) => progresso(0.2 + f * 0.57, 'Enviando arquivo'),
     );
 
     let thumbnail_url: string | null = ehVideo ? null : url;
@@ -2301,6 +2372,47 @@ export class SupabaseDataService implements DataService {
    * já congelou a posição de cada um quando o jogo terminou, então aqui não há agregação
    * nenhuma — é o que permite a tela abrir igual com dez ou com um milhão de palpiteiros.
    */
+  async minhaDivisao(
+    periodo = periodoAtual(),
+  ): Promise<{ resumo: MinhaDivisao; grupo: MembroDoGrupo[] } | null> {
+    const [resumo, grupo] = await Promise.all([
+      this.db.rpc('minha_divisao', { p_periodo: periodo }),
+      this.db.rpc('meu_grupo', { p_periodo: periodo }),
+    ]);
+    if (resumo.error) erroDoSupabase(resumo.error, 'Falha ao carregar a divisão');
+
+    const linha = ((resumo.data ?? []) as LinhaDaDivisao[])[0];
+    // sem linha = ainda não palpitou neste mês, então não está em grupo nenhum
+    if (!linha) return null;
+
+    return {
+      resumo: {
+        nivel: linha.nivel,
+        nome: linha.nome,
+        grupoNumero: linha.grupo_numero,
+        posicao: linha.posicao,
+        total: linha.total,
+        pontos: linha.pontos,
+        zona: linha.zona,
+        pontosParaSubir: linha.pontos_para_subir,
+      },
+      grupo: ((grupo.data ?? []) as LinhaDoGrupo[]).map((l) => ({
+        posicao: l.posicao,
+        usuario: {
+          id: l.usuario_id,
+          apelido: l.apelido,
+          nome: l.nome,
+          avatarUrl: l.avatar_url,
+        },
+        pontos: l.pontos,
+        palpites: l.palpites,
+        cravadas: l.cravadas,
+        souEu: l.sou_eu,
+        zona: l.zona,
+      })),
+    };
+  }
+
   async rankingDePalpites(periodo: string, limite = 20): Promise<RankingDePalpites> {
     const meuId = await this.meuId();
     const [topo, faixa] = await Promise.all([

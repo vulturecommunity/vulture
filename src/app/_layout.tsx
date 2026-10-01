@@ -12,11 +12,14 @@ import { TelaDeErro } from '@/components/navegacao/TelaDeErro';
 import { useAbrirPelaNotificacao, useRegistrarPush } from '@/hooks/useNotificacoesPush';
 import { configurarExibicaoDeNotificacoes } from '@/services/push';
 import { queryClient } from '@/services/queryClient';
+import { iniciarTelemetria } from '@/services/telemetria';
 import { useAuthStore } from '@/stores/authStore';
 import { cores } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 configurarExibicaoDeNotificacoes();
+// Antes de qualquer tela montar: um erro na primeira renderização também precisa chegar.
+iniciarTelemetria();
 
 /** Erros de renderização em qualquer rota caem aqui em vez de fechar o app. */
 export { TelaDeErro as ErrorBoundary };

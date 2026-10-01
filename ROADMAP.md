@@ -11,10 +11,10 @@ e servem para dimensionar — não são orçamento fechado.
 | **Development build + EAS**                                                 | `eas build` para Android/iOS, `eas update` para OTA. Perfis `development`, `preview`, `production` em `eas.json`. | Sair do Expo Go (lives reais, push, ícone próprio na tela). |
 | **Confirmação de e-mail e recuperação de senha**                            | Ligar "Confirm email" no Supabase, tela "Esqueci minha senha" (`resetPasswordForEmail` + deep link `vulture://`). | Segurança básica de conta.                                  |
 | **Login social**                                                            | Google e Apple via Supabase Auth (`signInWithIdToken`). Apple é obrigatório na App Store quando há login social.  | Conversão de cadastro.                                      |
-| **Termos de uso, privacidade e exclusão de conta**                          | Telas + endpoint que apaga usuário e arquivos (Edge Function com `service_role`).                                 | Exigência da App Store / Play Store.                        |
+| ~~**Termos de uso, privacidade e exclusão de conta**~~ **feito**             | Tela `configuracoes/conta/excluir`, Edge Function `excluir-conta` (apaga R2 + `auth.users`), trilha em `exclusoes_de_conta`. Textos de termos e privacidade atualizados para cobrir telemetria e direito de eliminação. | Exigência da App Store / Play Store.                        |
 | **Curtir comentários, editar legenda, excluir comentário do próprio vídeo** | Colunas já existem; falta UI e RLS para o dono do vídeo apagar comentários.                                       | Completar o social.                                         |
-| **Métricas**                                                                | PostHog (grátis até 1 M eventos/mês) ou Amplitude: visualização, tempo de sessão, funil de publicação.            | Sem dado não há produto.                                    |
-| **Crash reporting**                                                         | Sentry (plano Free: 5 k erros/mês) com `@sentry/react-native`.                                                    | Ver o que quebra no campo.                                  |
+| ~~**Métricas**~~ **feito**                                                  | PostHog em `src/services/telemetria`, com catálogo fechado de eventos (`EVENTOS`). Instrumentado: funil de cadastro, `push_registrado`, palpite, publicação e compartilhamento. Sem chave configurada, não envia nada. | Sem dado não há produto.                                    |
+| ~~**Crash reporting**~~ **feito**                                           | Sentry na mesma camada, com `sendDefaultPii: false` e amostragem de 10%.                                           | Ver o que quebra no campo.                                  |
 
 ## Fase B — Vídeo em escala: CDN e transcodificação (3–4 semanas)
 
@@ -35,9 +35,14 @@ Mudanças no código: novo método `uploadVideo` no `SupabaseDataService` (pedir
 `UploadTask` → salvar `playback_url`/`thumbnail_url` retornados), `expo-video` já toca HLS.
 Enquanto o vídeo processa, mostrar "Processando…" no perfil (webhook do provedor atualiza `videos.status`).
 
-**Também nesta fase:** compressão no aparelho antes do upload (limitar a 720p/30 fps, ~2 Mbps) com
-`react-native-compressor` ou `expo-video` transcode quando disponível; retomada de upload (TUS) para
-redes ruins; limite de 60 s já existe.
+**Também nesta fase:** ~~compressão no aparelho antes do upload~~ **feita** — `src/services/midia/video.ts`
+limita a 720p/~2 Mbps com `react-native-compressor`, roda antes do upload (o byte economizado nunca
+sobe) e devolve o original no Expo Go, onde o módulo nativo não existe. Falta: retomada de upload (TUS)
+para redes ruins; limite de 60 s já existe.
+
+> **Revisão de custo (out/2026):** a projeção de US$ 300–420 a 10 k MAU nesta página assume Cloudflare
+> Stream (US$ 165). Com o R2 atual, de egress zero, o mesmo cenário dá **US$ 93**. Stream compra
+> qualidade adaptativa e transcodificação, não economia — a prioridade dele cai.
 
 ## Fase C — Recomendação e descoberta (4–6 semanas)
 
@@ -51,7 +56,7 @@ redes ruins; limite de 60 s já existe.
 
 | Item                     | O que fazer                                                                                                                                                                                                                                                               |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Painel de moderação**  | App web simples (Next.js + Supabase) listando `reports` com preview do vídeo, ações: remover, banir, ignorar; log de decisões.                                                                                                                                            |
+| ~~**Painel de moderação**~~ **feito** | `painel/moderacao.html` (arquivo solto, sem build) + Edge Function `moderacao`, autenticada pelo `PAINEL_TOKEN`. A fila agrupa denúncias **por alvo**, não por denúncia: dez pessoas denunciando o mesmo vídeo é um caso. Ações: remover, suspender 7 dias, banir, descartar — todas registradas em `acoes_de_moderacao`. |
 | **Moderação automática** | Ao publicar: extrair 3 frames (já temos thumbnail) → API de classificação (Cloudflare Workers AI, AWS Rekognition ou Sightengine ~US$ 29/mês) → conteúdo sexual/violento fica "em análise". Texto de legenda/comentários: lista de palavras + OpenAI Moderation (grátis). |
 | **Rate limiting**        | Edge Function ou Postgres: máx. 10 comentários/min, 5 uploads/hora, 1 live ativa por usuário (já garantido).                                                                                                                                                              |
 | **Bloqueio/denúncia**    | Já existe; adicionar "silenciar palavras", denúncia em lote e resposta ao denunciante.                                                                                                                                                                                    |
@@ -81,10 +86,13 @@ redes ruins; limite de 60 s já existe.
 - ~~**Push de lembrete e de resultado do palpite**~~ **feito**: `lembrar_palpites` (com o número
   social — "87.412 já palpitaram") e `avisar_resultado_dos_palpites`, os dois pela fila.
 - Push de "gol!" durante o jogo, enquetes de escalação, "Torcedor do jogo".
-- Divisões estilo Duolingo (Série D → Libertadores) para quem não tem liga: subida e queda mensal
-  por grupos de ~30 pessoas de nível parecido, para todo mundo ter uma disputa possível de ganhar.
-- Card compartilhável do palpite e da posição (imagem para o X/WhatsApp/Instagram) — é o laço viral
-  mais barato que falta.
+- ~~**Divisões estilo Duolingo**~~ **feito**: Série D → Libertadores, grupos de 30, entrada automática
+  ao palpitar, apuração no dia 1 pelo `pg_cron`. As faixas de subida e queda encolhem junto com o
+  grupo (`vagas_no_grupo`), senão um grupo de 3 mostraria as três pessoas em zona de acesso — que é
+  justamente o tamanho dos grupos agora. Funções do app: `meu_grupo()` e `minha_divisao()`.
+- ~~**Card compartilhável do palpite**~~ **feito** (texto + Open Graph): `compartilharPalpite` e a rota
+  `/palpite/<id>` na Edge Function `abrir`. O link aponta para o JOGO, não para o palpite de quem
+  convidou — quem recebe precisa dar o próprio, que é o que fecha o laço. Falta a versão em imagem.
 - Retrospectiva anual ("você cravou 6 de 47, terminou em 3.211º").
 - Comunidades por região/embaixadas de torcida.
 

@@ -1,8 +1,10 @@
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Botao, Carregando, Erro, EstadoVazio, Icone, Texto } from '@/components/ui';
+import { useMinhaDivisao } from '@/hooks/useDivisao';
 import {
   periodoAtual,
   useMinhasLigas,
@@ -18,6 +20,42 @@ import { LinhaDoRanking, corDaPosicao } from './LinhaDoRanking';
 import { SheetDeLigas } from './SheetDeLigas';
 
 type Aba = 'nacao' | 'ligas';
+
+/**
+ * Atalho para a divisão do mês, acima do pódio nacional.
+ *
+ * Fica aqui, e não escondido num menu, porque é o contrapeso do ranking nacional: quem
+ * abre esta aba e se vê em 4.312º precisa encontrar, na mesma tela, a disputa que ele tem
+ * chance de ganhar. Some quando a pessoa ainda não entrou em grupo nenhum — aí o convite
+ * certo é dar o primeiro palpite, que o estado vazio do ranking já faz.
+ */
+function AtalhoDaDivisao() {
+  const router = useRouter();
+  const divisao = useMinhaDivisao();
+  const dados = divisao.data;
+  if (!dados) return null;
+
+  const { resumo } = dados;
+  return (
+    <Pressable
+      onPress={() => router.push('/divisao')}
+      style={estilos.atalhoDivisao}
+      accessibilityRole="button"
+      testID="atalho-divisao">
+      <Icone nome="escudo" tamanho={22} cor={cores.dourado} />
+      <View style={estilos.atalhoTexto}>
+        <Texto variante="corpoForte" numberOfLines={1}>
+          {resumo.nome} · {resumo.posicao}º de {resumo.total}
+        </Texto>
+        <Texto variante="legenda" cor={cores.textoSecundario} numberOfLines={1}>
+          {resumo.pontosParaSubir > 0
+            ? `Faltam ${resumo.pontosParaSubir} pontos para subir`
+            : 'Você está em zona de acesso'}
+        </Texto>
+      </View>
+    </Pressable>
+  );
+}
 
 /** O pódio: os três primeiros ganham tamanho, medalha e o degrau visual. */
 function Podio({ tres }: { tres: Palpiteiro[] }) {
@@ -204,6 +242,7 @@ export function RankingDePalpiteiros() {
 
       {aba === 'nacao' ? (
         <>
+          <AtalhoDaDivisao />
           {topo.length === 0 ? (
             <EstadoVazio
               icone="trofeu"
@@ -289,6 +328,19 @@ export function RankingDePalpiteiros() {
 }
 
 const estilos = StyleSheet.create({
+  atalhoDivisao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacos.sm,
+    backgroundColor: cores.fundoCartao,
+    borderRadius: raios.md,
+    borderLeftWidth: 3,
+    borderLeftColor: cores.dourado,
+    padding: espacos.md,
+    marginHorizontal: espacos.md,
+    marginBottom: espacos.sm,
+  },
+  atalhoTexto: { flex: 1 },
   flex: { flex: 1 },
   lista: { flexGrow: 1, paddingHorizontal: espacos.md },
   cabecalho: { gap: espacos.md, paddingTop: espacos.sm, paddingBottom: espacos.sm },

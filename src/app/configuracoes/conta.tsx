@@ -43,6 +43,16 @@ export default function TelaDaConta() {
         />
       </GrupoDeAjustes>
 
+      <GrupoDeAjustes rodape="Apagar a conta é permanente e leva junto tudo que você publicou.">
+        <LinhaDeAjuste
+          icone="alerta"
+          titulo="Excluir conta"
+          descricao={visitante ? 'Sair do modo visitante' : 'Apagar a conta e tudo que está nela'}
+          aoPressionar={() => router.push('/configuracoes/conta/excluir')}
+          testID="link-excluir-conta"
+        />
+      </GrupoDeAjustes>
+
       {visitante ? (
         <NotaDeAjuste atencao>
           O visitante existe só para você conhecer o app: não tem e-mail nem senha, e o que você
