@@ -599,6 +599,31 @@
       .finally(function () { btn.disabled = false; btn.textContent = 'Atualizar'; });
   }
 
+  // ---------------------------------------------------------------- atualização automática
+  var CINCO_MINUTOS = 5 * 60 * 1000;
+  var cronometro = null;
+
+  /**
+   * Busca de novo a cada 5 minutos, sozinho.
+   *
+   * O R2 só muda uma vez por dia (o levantamento é no cron das 04:20), mas banco e contas
+   * são calculados na hora a cada chamada — então atualizar automaticamente tem valor
+   * real para esses dois, sem precisar ficar clicando.
+   *
+   * Pausa com a aba em segundo plano: perguntar à função a cada 5 minutos enquanto
+   * ninguém está olhando seria gasto à toa, e esta página inteira existe para evitar
+   * gasto à toa.
+   */
+  function iniciarAtualizacaoAutomatica() {
+    pararAtualizacaoAutomatica();
+    cronometro = setInterval(function () {
+      if (!document.hidden) atualizar(lerToken());
+    }, CINCO_MINUTOS);
+  }
+  function pararAtualizacaoAutomatica() {
+    if (cronometro) { clearInterval(cronometro); cronometro = null; }
+  }
+
   // ---------------------------------------------------------------- início
   var token = lerToken();
   if (token) {
@@ -606,6 +631,7 @@
     if (guardado) { mostrarPainel(); render(guardado); }
     else { $('medidores').appendChild(el('p', 'vazio', 'Buscando os números…')); }
     atualizar(token);
+    iniciarAtualizacaoAutomatica();
   } else {
     mostrarPorta();
   }
@@ -615,6 +641,7 @@
     if (!t) return;
     buscar(t).then(function (d) {
       guardar(t); guardarCache(d); mostrarPainel(); render(d);
+      iniciarAtualizacaoAutomatica();
     }).catch(function (err) { mostrarPorta(err.message); });
   });
   $('campo-token').addEventListener('keydown', function (ev) {
@@ -622,7 +649,13 @@
   });
   $('atualizar').addEventListener('click', function () { atualizar(lerToken()); });
   $('sair').addEventListener('click', function () {
+    pararAtualizacaoAutomatica();
     esquecer(); $('campo-token').value = ''; mostrarPorta();
+  });
+  // aba volta a ficar visível depois de um tempo em segundo plano: busca na hora, em vez
+  // de esperar sobrar até 5 minutos do intervalo
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && lerToken()) atualizar(lerToken());
   });
   addEventListener('scroll', esconderDica, { passive: true });
 })();
