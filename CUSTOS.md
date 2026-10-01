@@ -142,18 +142,23 @@ esse número.
 
 Página externa (fora do app) que mostra quanto de cada plano gratuito já foi consumido:
 
-**https://claude.ai/artifact/RthsVzGmRpQDSaYdcmkbFp**
+```bash
+xdg-open painel/index.html
+```
 
-Pede um token na primeira abertura — o `PAINEL_TOKEN`, que fica salvo no navegador. Não é
-a anon key de propósito: a anon key está embutida no APK, e quem tivesse o APK veria a
-telemetria de infraestrutura do projeto. Também não é a service role, porque a página roda
-no navegador. Este token só lê números agregados.
+Pede o `PAINEL_TOKEN` na primeira abertura e guarda no navegador. Não é a anon key de
+propósito: a anon key está embutida no APK, e quem tivesse o APK veria a telemetria de
+infraestrutura do projeto. Também não é a service role, porque a página roda no navegador.
+Este token só lê números agregados.
 
 | Onde | O quê |
 | --- | --- |
+| `painel/index.html` | a página; arquivo solto, sem build nem servidor |
 | `painel_de_uso()` | função SQL que junta tudo numa chamada |
 | Edge Function `painel` | expõe o JSON, autenticada pelo `PAINEL_TOKEN` |
 | `monitorar-midia` | grava o snapshot diário (R2 + banco + contas juntos) |
+
+Detalhes de hospedagem e por que ela não está num servidor: [`painel/README.md`](painel/README.md).
 
 O painel mede **armazenamento no R2, escritas no R2, tamanho do banco e contas**, e marca
 70%/85%/95% em cada trilho — os mesmos limiares que disparam push de alerta.

@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; -webkit-text-size-adjust: 100%; }
+</style>
+<title>Placar de Custos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  /* Layout: painel de placar — cabeçalho com faixa rubro-negra, medidores empilhados
+     como um marcador de estádio, seção do que não é medido, histórico ao pé. */
+  :root {
+    --fundo:        #f7f6f4;
+    --superficie:   #ffffff;
+    --borda:        #e2dfda;
+    --trilho:       #eae7e2;
+    --texto:        #16150f;
+    --texto-2:      #5c5950;
+    --texto-3:      #8a867c;
+    --marca:        #c8102e;
+    --bom:          #0ca30c;
+    --atencao:      #fab219;
+    --serio:        #ec835a;
+    --critico:      #d03b3b;
+
+    --display: 'Oswald', 'Arial Narrow', sans-serif;
+    --corpo:   'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --dado:    'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fundo:      #0e0e10;
+      --superficie: #17171a;
+      --borda:      #2a2a2f;
+      --trilho:     #232328;
+      --texto:      #f4f3f0;
+      --texto-2:    #a9a69d;
+      --texto-3:    #78756d;
+      --marca:      #e4172f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --fundo:      #0e0e10;
+    --superficie: #17171a;
+    --borda:      #2a2a2f;
+    --trilho:     #232328;
+    --texto:      #f4f3f0;
+    --texto-2:    #a9a69d;
+    --texto-3:    #78756d;
+    --marca:      #e4172f;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: var(--corpo);
+    line-height: 1.5;
+  }
+  .pagina { max-width: 860px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 56px; }
+
+  /* ---------------------------------------------------------------- cabeçalho */
+  .topo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; }
+  .marca-nome {
+    font-family: var(--display); font-weight: 600; font-size: 13px;
+    letter-spacing: .22em; text-transform: uppercase; color: var(--marca);
+  }
+  h1 {
+    font-family: var(--display); font-weight: 500; font-size: clamp(26px, 5vw, 34px);
+    letter-spacing: -.01em; margin: 0; text-wrap: balance; width: 100%;
+  }
+  .sub { color: var(--texto-2); font-size: 14px; max-width: 62ch; margin-top: 4px; }
+  .faixa { height: 3px; background: var(--marca); margin: 18px 0 0; border-radius: 2px; }
+
+  .barra-estado {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+    margin-top: 14px; font-size: 12.5px; color: var(--texto-3);
+  }
+  .barra-estado b { color: var(--texto-2); font-weight: 500; }
+  button {
+    font: inherit; font-size: 12.5px; cursor: pointer; color: var(--texto-2);
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-radius: 7px; padding: 5px 11px;
+  }
+  button:hover { color: var(--texto); border-color: var(--texto-3); }
+  button:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+
+  /* ---------------------------------------------------------------- veredito */
+  .veredito {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-top: 22px; padding: 15px 17px;
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-left: 4px solid var(--bom); border-radius: 10px;
+  }
+  .veredito .icone { font-size: 17px; line-height: 1.3; }
+  .veredito .titulo { font-weight: 600; font-size: 15px; }
+  .veredito .texto { color: var(--texto-2); font-size: 13.5px; margin-top: 2px; }
+
+  /* ---------------------------------------------------------------- medidores */
+  h2 {
+    font-family: var(--display); font-weight: 500; text-transform: uppercase;
+    letter-spacing: .13em; font-size: 12.5px; color: var(--texto-3);
+    margin: 34px 0 12px;
+  }
+  .medidores { display: grid; gap: 10px; }
+  .medidor {
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .medidor-topo {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 4px 12px;
+  }
+  .medidor-nome { font-weight: 600; font-size: 14.5px; }
+  .medidor-num { font-family: var(--dado); font-variant-numeric: tabular-nums; font-size: 13.5px; }
+  .medidor-num .usado { font-weight: 600; font-size: 16px; }
+  .medidor-num .limite { color: var(--texto-3); }
+
+  /* Trilho com as marcas de 70/85/95% — os mesmos limiares que disparam alerta */
+  .trilho {
+    position: relative; height: 9px; border-radius: 5px;
+    background: var(--trilho); margin: 11px 0 8px; overflow: hidden;
+  }
+  .preenchido {
+    position: absolute; inset: 0 auto 0 0; border-radius: 5px;
+    background: var(--bom); transition: width .5s ease;
+  }
+  .marca-limiar { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--fundo); opacity: .85; }
+
+  .medidor-pe {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    gap: 3px 12px; font-size: 12.5px; color: var(--texto-3);
+  }
+  .selo {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-weight: 600; font-size: 12px;
+  }
+  .estimado {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--texto-3); border: 1px solid var(--borda);
+    border-radius: 4px; padding: 1px 5px; margin-left: 7px; white-space: nowrap;
+  }
+
+  /* ---------------------------------------------------------------- não medido */
+  .cegos { display: grid; gap: 8px; }
+  .cego {
+    background: var(--superficie); border: 1px dashed var(--borda);
+    border-radius: 9px; padding: 12px 15px; font-size: 13px;
+  }
+  .cego-nome { font-weight: 600; }
+  .cego-nome span { font-family: var(--dado); font-weight: 400; color: var(--texto-3); margin-left: 7px; font-size: 12px; }
+  .cego-motivo { color: var(--texto-2); margin-top: 2px; }
+  .cego-onde { color: var(--texto-3); font-size: 12.5px; margin-top: 4px; }
+
+  /* ---------------------------------------------------------------- histórico */
+  .grafico-caixa {
+    background: var(--superficie); border: 1px solid var(--borda);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .grafico-caixa svg { display: block; width: 100%; height: auto; }
+  .vazio { color: var(--texto-3); font-size: 13px; }
+  .dica {
+    position: fixed; pointer-events: none; z-index: 9;
+    background: var(--texto); color: var(--fundo);
+    font-family: var(--dado); font-size: 11.5px;
+    padding: 5px 8px; border-radius: 6px; white-space: nowrap;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--borda); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--texto-3); font-weight: 500; }
+  td.n { font-family: var(--dado); font-variant-numeric: tabular-nums; }
+
+  /* ---------------------------------------------------------------- token */
+  .porta { max-width: 420px; margin: 8vh auto 0; }
+  .porta input {
+    font: inherit; font-family: var(--dado); width: 100%; box-sizing: border-box;
+    padding: 10px 12px; border-radius: 8px; margin-top: 10px;
+    border: 1px solid var(--borda); background: var(--superficie); color: var(--texto);
+  }
+  .porta button { margin-top: 10px; padding: 9px 16px; }
+  .erro { color: var(--critico); font-size: 13px; margin-top: 10px; }
+  .sr {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+  .rodape { margin-top: 38px; font-size: 12px; color: var(--texto-3); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="pagina">
+  <div id="porta" hidden>
+    <div class="porta">
+      <div class="marca-nome">Vulture</div>
+      <h1>Placar de Custos</h1>
+      <p class="sub">Cole o token de leitura para ver o consumo dos planos gratuitos.</p>
+      <label for="campo-token" class="sr">Token do painel</label>
+      <input id="campo-token" type="password" placeholder="token do painel"
+             autocomplete="off" spellcheck="false">
+      <button id="entrar">Abrir painel</button>
+      <div id="erro-porta" class="erro" hidden></div>
+    </div>
+  </div>
+
+  <div id="painel">
+    <header class="topo">
+      <span class="marca-nome">Vulture</span>
+      <h1>Placar de Custos</h1>
+      <p class="sub">
+        Quanto de cada recurso gratuito já foi usado, e o que dispara cobrança.
+        Os limiares marcados em cada trilho são 70%, 85% e 95% — os mesmos que
+        disparam alerta por push.
+      </p>
+    </header>
+    <div class="faixa"></div>
+
+    <div class="barra-estado">
+      <span>Medido em <b id="medido-em">—</b></span>
+      <span>Atualizado <b id="gerado-em">—</b></span>
+      <button id="atualizar">Atualizar</button>
+      <button id="sair">Trocar token</button>
+    </div>
+
+    <div class="veredito" id="veredito">
+      <span class="icone" id="veredito-icone">·</span>
+      <div>
+        <div class="titulo" id="veredito-titulo">Carregando</div>
+        <div class="texto" id="veredito-texto">Buscando o consumo atual dos planos.</div>
+      </div>
+    </div>
+
+    <h2>Recursos medidos</h2>
+    <div class="medidores" id="medidores"></div>
+
+    <h2>Fora do alcance desta medição</h2>
+    <div class="cegos" id="cegos"></div>
+
+    <h2>Armazenamento ao longo do tempo</h2>
+    <div class="grafico-caixa" id="grafico-caixa"></div>
+
+    <h2 id="titulo-alertas" hidden>Alertas registrados</h2>
+    <div id="alertas"></div>
+
+    <p class="rodape">
+      Os números vêm da função <code>painel_de_uso()</code> no Postgres e do último
+      levantamento do bucket, feito todo dia às 04:20.
+    </p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var ENDPOINT = 'https://mlajeudfsjymgaxjofya.supabase.co/functions/v1/painel';
+  var CHAVE = 'vulture.painel.token';
+  var CACHE = 'vulture.painel.ultimo';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function guardar(t) { try { localStorage.setItem(CHAVE, t); } catch (e) {} }
+  function lerToken() { try { return localStorage.getItem(CHAVE) || ''; } catch (e) { return ''; } }
+  function esquecer() {
+    try { localStorage.removeItem(CHAVE); localStorage.removeItem(CACHE); } catch (e) {}
+  }
+
+  // O último resultado fica guardado no navegador de quem já entrou, para o painel
+  // pintar na hora ao reabrir. Nenhum número vive dentro deste arquivo de propósito:
+  // se ele fosse hospedado em algum lugar, os dados passariam por fora do token.
+  function guardarCache(d) { try { localStorage.setItem(CACHE, JSON.stringify(d)); } catch (e) {} }
+  function lerCache() {
+    try {
+      var bruto = localStorage.getItem(CACHE);
+      return bruto ? JSON.parse(bruto) : null;
+    } catch (e) { return null; }
+  }
+
+  // ---------------------------------------------------------------- formato
+  function bytes(n) {
+    if (n < 1024) return n + ' B';
+    var u = ['KB', 'MB', 'GB', 'TB'], i = -1, v = n;
+    do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+    return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' ' + u[i];
+  }
+  function contagem(n) { return n.toLocaleString('pt-BR'); }
+  function valor(n, unidade) { return unidade === 'bytes' ? bytes(n) : contagem(n); }
+  function pct(f) {
+    var p = f * 100;
+    if (p === 0) return '0%';
+    if (p < 0.01) return '<0,01%';
+    return p.toLocaleString('pt-BR', { maximumFractionDigits: p < 1 ? 2 : 1 }) + '%';
+  }
+  function quando(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso), agora = new Date(), min = Math.round((agora - d) / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return 'há ' + min + ' min';
+    if (min < 1440) return 'há ' + Math.round(min / 60) + ' h';
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  }
+
+  // ---------------------------------------------------------------- estado
+  // Cor de status nunca viaja sozinha: cada uma anda junto de um ícone e de uma
+  // palavra, porque quem não distingue as cores precisa ler o mesmo aviso.
+  function estado(fracao, lim) {
+    if (fracao >= lim.critico) return { cor: 'var(--critico)', rotulo: 'crítico', icone: '⛔' };
+    if (fracao >= lim.alerta)  return { cor: 'var(--serio)',   rotulo: 'perto do limite', icone: '▲' };
+    if (fracao >= lim.aviso)   return { cor: 'var(--atencao)', rotulo: 'atenção', icone: '▲' };
+    return { cor: 'var(--bom)', rotulo: 'folgado', icone: '✓' };
+  }
+
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+
+  // ---------------------------------------------------------------- medidores
+  function desenharMedidores(dados) {
+    var alvo = $('medidores');
+    alvo.textContent = '';
+    var lim = dados.limiares;
+
+    dados.metricas.forEach(function (m) {
+      var fracao = m.limite > 0 ? m.usado / m.limite : 0;
+      var st = estado(fracao, lim);
+
+      var card = el('div', 'medidor');
+
+      var topo = el('div', 'medidor-topo');
+      var nome = el('div', 'medidor-nome', m.nome);
+      if (!m.exato) nome.appendChild(el('span', 'estimado', 'estimado'));
+      topo.appendChild(nome);
+
+      var num = el('div', 'medidor-num');
+      var usado = el('span', 'usado', valor(m.usado, m.unidade));
+      usado.style.color = st.cor;
+      num.appendChild(usado);
+      num.appendChild(el('span', 'limite', ' / ' + valor(m.limite, m.unidade)));
+      topo.appendChild(num);
+      card.appendChild(topo);
+
+      var trilho = el('div', 'trilho');
+      var cheio = el('div', 'preenchido');
+      // barra visível mesmo com fração ínfima: 0,02% viraria zero pixel
+      cheio.style.width = Math.max(fracao * 100, fracao > 0 ? 0.8 : 0) + '%';
+      cheio.style.background = st.cor;
+      trilho.appendChild(cheio);
+      [lim.aviso, lim.alerta, lim.critico].forEach(function (t) {
+        var marca = el('div', 'marca-limiar');
+        marca.style.left = (t * 100) + '%';
+        trilho.appendChild(marca);
+      });
+      card.appendChild(trilho);
+
+      var pe = el('div', 'medidor-pe');
+      var selo = el('span', 'selo', st.icone + ' ' + pct(fracao) + ' · ' + st.rotulo);
+      selo.style.color = st.cor;
+      pe.appendChild(selo);
+      pe.appendChild(el('span', null, m.detalhe));
+      card.appendChild(pe);
+
+      alvo.appendChild(card);
+    });
+  }
+
+  // ---------------------------------------------------------------- veredito
+  function desenharVeredito(dados) {
+    var pior = null, piorFracao = -1;
+    dados.metricas.forEach(function (m) {
+      var f = m.limite > 0 ? m.usado / m.limite : 0;
+      if (f > piorFracao) { piorFracao = f; pior = m; }
+    });
+    var st = estado(piorFracao, dados.limiares);
+    $('veredito').style.borderLeftColor = st.cor;
+    $('veredito-icone').textContent = st.icone;
+
+    if (piorFracao >= dados.limiares.aviso) {
+      $('veredito-titulo').textContent = pior.nome + ' em ' + pct(piorFracao) + ' do limite';
+      $('veredito-texto').textContent =
+        'É o recurso mais próximo de gerar cobrança. Restam ' +
+        valor(pior.limite - pior.usado, pior.unidade) + ' antes do teto do plano gratuito.';
+    } else {
+      $('veredito-titulo').textContent = 'Tudo dentro do plano gratuito';
+      $('veredito-texto').textContent =
+        'O recurso mais usado é ' + pior.nome.toLowerCase() + ', em ' + pct(piorFracao) +
+        ' do limite. Nada aqui gera cobrança hoje.';
+    }
+  }
+
+  // ---------------------------------------------------------------- não medido
+  function desenharCegos(dados) {
+    var alvo = $('cegos');
+    alvo.textContent = '';
+    (dados.naoMedido || []).forEach(function (c) {
+      var d = el('div', 'cego');
+      var nome = el('div', 'cego-nome', c.nome);
+      nome.appendChild(el('span', null, c.limite));
+      d.appendChild(nome);
+      d.appendChild(el('div', 'cego-motivo', c.motivo));
+      d.appendChild(el('div', 'cego-onde', 'Só no ' + c.onde));
+      alvo.appendChild(d);
+    });
+  }
+
+  // ---------------------------------------------------------------- histórico
+  var dica = null;
+  function esconderDica() { if (dica) { dica.remove(); dica = null; } }
+
+  function desenharHistorico(dados) {
+    var caixa = $('grafico-caixa');
+    caixa.textContent = '';
+    var pontos = (dados.historico || []).filter(function (p) { return p && p.bytes != null; });
+
+    // Medições no mesmo dia não formam série: dizer isso é mais útil que desenhar
+    // uma linha reta que fingiria ser tendência.
+    var dias = {};
+    pontos.forEach(function (p) { dias[p.medido_em.slice(0, 10)] = true; });
+    if (Object.keys(dias).length < 2) {
+      caixa.appendChild(el('p', 'vazio',
+        'Ainda não há dias suficientes para mostrar tendência. O levantamento roda uma vez ' +
+        'por dia, às 04:20 — volte depois de alguns dias para ver a curva e a projeção de ' +
+        'quando o limite seria atingido.'));
+      return;
+    }
+
+    var L = 44, R = 12, T = 12, B = 26, W = 620, H = 170;
+    var limite = dados.metricas[0].limite;
+    var maxY = Math.max.apply(null, pontos.map(function (p) { return p.bytes; }));
+    var topo = Math.max(maxY * 1.25, limite * 0.02);
+    var t0 = new Date(pontos[0].medido_em).getTime();
+    var t1 = new Date(pontos[pontos.length - 1].medido_em).getTime();
+    var vao = Math.max(t1 - t0, 1);
+
+    var x = function (p) { return L + (new Date(p.medido_em).getTime() - t0) / vao * (W - L - R); };
+    var y = function (v) { return T + (1 - v / topo) * (H - T - B); };
+
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Armazenamento no R2 ao longo do tempo');
+
+    var css = getComputedStyle(document.documentElement);
+    var corBorda = css.getPropertyValue('--borda').trim();
+    var corTexto3 = css.getPropertyValue('--texto-3').trim();
+    var corBom = css.getPropertyValue('--bom').trim();
+    var corSup = css.getPropertyValue('--superficie').trim();
+
+    [0, 0.5, 1].forEach(function (f) {
+      var v = topo * f;
+      var linha = document.createElementNS(ns, 'line');
+      linha.setAttribute('x1', L); linha.setAttribute('x2', W - R);
+      linha.setAttribute('y1', y(v)); linha.setAttribute('y2', y(v));
+      linha.setAttribute('stroke', corBorda); linha.setAttribute('stroke-width', '1');
+      svg.appendChild(linha);
+      var rot = document.createElementNS(ns, 'text');
+      rot.setAttribute('x', L - 7); rot.setAttribute('y', y(v) + 4);
+      rot.setAttribute('text-anchor', 'end');
+      rot.setAttribute('font-size', '10');
+      rot.setAttribute('font-family', 'IBM Plex Mono, monospace');
+      rot.setAttribute('fill', corTexto3);
+      rot.textContent = bytes(v);
+      svg.appendChild(rot);
+    });
+
+    var d = pontos.map(function (p, i) { return (i ? 'L' : 'M') + x(p) + ' ' + y(p.bytes); }).join(' ');
+    var area = document.createElementNS(ns, 'path');
+    area.setAttribute('d', d + ' L' + x(pontos[pontos.length - 1]) + ' ' + y(0) + ' L' + x(pontos[0]) + ' ' + y(0) + ' Z');
+    area.setAttribute('fill', corBom); area.setAttribute('opacity', '0.1');
+    svg.appendChild(area);
+
+    var linha = document.createElementNS(ns, 'path');
+    linha.setAttribute('d', d); linha.setAttribute('fill', 'none');
+    linha.setAttribute('stroke', corBom); linha.setAttribute('stroke-width', '2');
+    linha.setAttribute('stroke-linejoin', 'round'); linha.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(linha);
+
+    pontos.forEach(function (p, i) {
+      var c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', x(p)); c.setAttribute('cy', y(p.bytes));
+      // o último ponto é o estado atual: ganha ênfase
+      c.setAttribute('r', i === pontos.length - 1 ? 5 : 3.5);
+      c.setAttribute('fill', corBom);
+      c.setAttribute('stroke', corSup); c.setAttribute('stroke-width', '2');
+      c.style.cursor = 'pointer';
+      c.addEventListener('pointerenter', function (ev) {
+        esconderDica();
+        dica = el('div', 'dica',
+          bytes(p.bytes) + ' · ' + p.objetos + ' arquivos · ' +
+          new Date(p.medido_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }));
+        document.body.appendChild(dica);
+        dica.style.left = Math.min(ev.clientX + 12, innerWidth - dica.offsetWidth - 8) + 'px';
+        dica.style.top = (ev.clientY - 34) + 'px';
+      });
+      c.addEventListener('pointerleave', esconderDica);
+      svg.appendChild(c);
+    });
+
+    caixa.appendChild(svg);
+
+    // Projeção: com uma taxa de crescimento real dá para dizer quando o teto chega.
+    var primeiro = pontos[0], ultimo = pontos[pontos.length - 1];
+    var dDias = (new Date(ultimo.medido_em) - new Date(primeiro.medido_em)) / 86400000;
+    var cresc = ultimo.bytes - primeiro.bytes;
+    var nota = el('p', 'vazio');
+    nota.style.marginTop = '10px';
+    if (dDias >= 1 && cresc > 0) {
+      var porDia = cresc / dDias;
+      var faltam = (limite - ultimo.bytes) / porDia;
+      nota.textContent = 'Crescendo ' + bytes(porDia) + ' por dia. Nesse ritmo, o limite de ' +
+        bytes(limite) + ' seria atingido em cerca de ' +
+        (faltam > 365 ? Math.round(faltam / 365) + ' anos' : Math.round(faltam) + ' dias') + '.';
+    } else {
+      nota.textContent = 'Sem crescimento no período medido — nada a projetar.';
+    }
+    caixa.appendChild(nota);
+  }
+
+  // ---------------------------------------------------------------- alertas
+  function desenharAlertas(dados) {
+    var lista = dados.alertas || [];
+    $('titulo-alertas').hidden = lista.length === 0;
+    var alvo = $('alertas');
+    alvo.textContent = '';
+    if (!lista.length) return;
+
+    var t = el('table');
+    var thead = el('thead');
+    var tr = el('tr');
+    ['Quando', 'Nível', 'Mensagem'].forEach(function (h) { tr.appendChild(el('th', null, h)); });
+    thead.appendChild(tr); t.appendChild(thead);
+    var tb = el('tbody');
+    lista.forEach(function (a) {
+      var l = el('tr');
+      l.appendChild(el('td', 'n', quando(a.criado_em)));
+      var nivel = el('td', null, a.nivel);
+      nivel.style.color = a.nivel === 'critico' ? 'var(--critico)'
+        : a.nivel === 'alerta' ? 'var(--serio)' : 'var(--atencao)';
+      nivel.style.fontWeight = '600';
+      l.appendChild(nivel);
+      l.appendChild(el('td', null, a.mensagem));
+      tb.appendChild(l);
+    });
+    t.appendChild(tb);
+    alvo.appendChild(t);
+  }
+
+  // ---------------------------------------------------------------- render
+  function render(dados) {
+    $('medido-em').textContent = quando(dados.medidoEm);
+    $('gerado-em').textContent = quando(dados.geradoEm);
+    desenharVeredito(dados);
+    desenharMedidores(dados);
+    desenharCegos(dados);
+    desenharHistorico(dados);
+    desenharAlertas(dados);
+  }
+
+  function buscar(token) {
+    return fetch(ENDPOINT, { headers: { 'x-painel-token': token } })
+      .then(function (r) {
+        if (r.status === 401) throw new Error('Token inválido.');
+        if (!r.ok) throw new Error('O servidor respondeu ' + r.status + '.');
+        return r.json();
+      });
+  }
+
+  function mostrarPainel() { $('porta').hidden = true; $('painel').hidden = false; }
+  function mostrarPorta(msg) {
+    $('painel').hidden = true; $('porta').hidden = false;
+    var e = $('erro-porta');
+    e.hidden = !msg; e.textContent = msg || '';
+  }
+
+  function atualizar(token) {
+    var btn = $('atualizar');
+    btn.disabled = true; btn.textContent = 'Atualizando…';
+    buscar(token)
+      .then(function (d) { guardarCache(d); mostrarPainel(); render(d); })
+      .catch(function (err) {
+        if (/Token inválido/.test(err.message)) { esquecer(); mostrarPorta(err.message); }
+        // sem rede, o painel continua mostrando o último resultado guardado —
+        // o "atualizado há X" ao lado denuncia que o número envelheceu
+        else { $('gerado-em').textContent = 'falhou'; }
+      })
+      .finally(function () { btn.disabled = false; btn.textContent = 'Atualizar'; });
+  }
+
+  // ---------------------------------------------------------------- início
+  var token = lerToken();
+  if (token) {
+    var guardado = lerCache();
+    if (guardado) { mostrarPainel(); render(guardado); }
+    else { $('medidores').appendChild(el('p', 'vazio', 'Buscando os números…')); }
+    atualizar(token);
+  } else {
+    mostrarPorta();
+  }
+
+  $('entrar').addEventListener('click', function () {
+    var t = $('campo-token').value.trim();
+    if (!t) return;
+    buscar(t).then(function (d) {
+      guardar(t); guardarCache(d); mostrarPainel(); render(d);
+    }).catch(function (err) { mostrarPorta(err.message); });
+  });
+  $('campo-token').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') $('entrar').click();
+  });
+  $('atualizar').addEventListener('click', function () { atualizar(lerToken()); });
+  $('sair').addEventListener('click', function () {
+    esquecer(); $('campo-token').value = ''; mostrarPorta();
+  });
+  addEventListener('scroll', esconderDica, { passive: true });
+})();
+</script>
+</body>
+</html>

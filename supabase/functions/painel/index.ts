@@ -1,8 +1,18 @@
 // Supabase Edge Function: dados de uso para o painel de custos.
 // Deploy: supabase functions deploy painel --no-verify-jwt
 //
-// Devolve o JSON que o painel externo consome: quanto de cada recurso já foi usado e
-// quanto falta para o plano gratuito acabar.
+// Devolve o JSON que o painel consome: quanto de cada recurso já foi usado e quanto
+// falta para o plano gratuito acabar. A página que desenha isso é painel/index.html,
+// aberta direto do disco — por isso os cabeçalhos de CORS abaixo precisam valer também
+// para origem `null`, que é a origem de um arquivo local.
+//
+// POR QUE A PÁGINA NÃO É SERVIDA AQUI
+//
+// Seria natural devolver o HTML nesta mesma rota e acabar com o CORS. Não dá: o gateway
+// da Supabase reescreve a resposta para `text/plain` e aplica
+// `content-security-policy: default-src 'none'; sandbox`. É proteção anti-phishing do
+// domínio compartilhado deles, e não há como desligar — o navegador mostraria o
+// código-fonte em vez da página.
 //
 // AUTENTICAÇÃO
 //
