@@ -51,22 +51,41 @@ O banco guarda a **URL inteira** de cada arquivo (`videos.url`, `posts.midias[].
 `profiles.avatar_url`, `rasantes.url`). Trocar de domínio depois significa reescrever esse
 prefixo nas linhas já gravadas:
 
-```sql
--- 1. a base nova passa a ser aceita pela RLS (a antiga continua, para não quebrar nada)
-insert into public.origens_de_midia (base, descricao)
-values ('https://midia.seudominio.com', 'R2 com domínio próprio');
+Isso já está pronto, e não é para fazer na mão:
 
--- 2. reescreve o prefixo nas linhas existentes
-update public.videos
-   set url = replace(url, 'https://pub-xxxx.r2.dev', 'https://midia.seudominio.com'),
-       thumbnail_url = replace(thumbnail_url, 'https://pub-xxxx.r2.dev', 'https://midia.seudominio.com')
- where url like 'https://pub-xxxx.r2.dev%';
--- idem para rasantes, profiles.avatar_url e posts.midias (jsonb)
+```bash
+# 1. a base nova passa a ser aceita pela RLS (a antiga continua, para não quebrar nada)
+#    psql "$SUPABASE_DB_URL" -c "insert into public.origens_de_midia (base, descricao)
+#      values ('https://midia.seudominio.com', 'dominio proprio');"
+
+# 2. a troca, com prévia do que muda e confirmação digitada
+export SUPABASE_DB_URL='postgresql://postgres:SENHA@db.PROJETO.supabase.co:5432/postgres'
+./scripts/trocar-dominio-midia.sh https://pub-xxxx.r2.dev https://midia.seudominio.com
 ```
 
+O script mostra quantas linhas serão afetadas **por tabela**, pede a frase `TROCAR DOMINIO`
+e só então executa — tudo numa transação só, pela função `trocar_dominio_de_midia()`.
+
+A versão anterior desta seção trazia o `update` para copiar e colar, com um "idem para
+rasantes, `profiles.avatar_url` e `posts.midias`" no fim. Esse "idem" era a armadilha: os
+anexos de post são um **array jsonb**, não uma coluna de texto, e quem seguisse o passo a
+passo ficaria com metade das imagens num domínio e metade no outro — sem erro nenhum
+aparecer. A função cobre as cinco colunas, inclusive o jsonb, preservando largura e duração
+de cada anexo.
+
 Os arquivos **não se movem** — é o mesmo bucket, só muda o endereço por onde ele é servido.
-É uma migration de uns 20 minutos, não um projeto. Se você já tiver um domínio, porém, vale
-usar desde o começo e pular isso.
+Se você já tiver um domínio, porém, vale usar desde o começo e pular isso.
+
+Depois da troca, falta fora do banco: `EXPO_PUBLIC_MIDIA_URL` no `.env` (é variável de
+build, então precisa de build novo), `npx supabase secrets set R2_PUBLIC_URL=<base nova>`, e
+deixar a base antiga cadastrada por alguns dias — link já compartilhado continua chegando
+por lá até o cache expirar.
+
+Para conferir antes ou depois:
+
+```sql
+select * from public.midias_na_base('https://pub-xxxx.r2.dev');
+```
 
 ## 3. Criar as credenciais
 

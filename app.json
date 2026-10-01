@@ -98,7 +98,8 @@
       ],
       "expo-web-browser",
       "@sentry/react-native",
-      "react-native-compressor"
+      "react-native-compressor",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

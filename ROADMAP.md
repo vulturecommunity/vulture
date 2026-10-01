@@ -90,9 +90,12 @@ para redes ruins; limite de 60 s já existe.
   ao palpitar, apuração no dia 1 pelo `pg_cron`. As faixas de subida e queda encolhem junto com o
   grupo (`vagas_no_grupo`), senão um grupo de 3 mostraria as três pessoas em zona de acesso — que é
   justamente o tamanho dos grupos agora. Funções do app: `meu_grupo()` e `minha_divisao()`.
-- ~~**Card compartilhável do palpite**~~ **feito** (texto + Open Graph): `compartilharPalpite` e a rota
-  `/palpite/<id>` na Edge Function `abrir`. O link aponta para o JOGO, não para o palpite de quem
-  convidou — quem recebe precisa dar o próprio, que é o que fecha o laço. Falta a versão em imagem.
+- ~~**Card compartilhável do palpite**~~ **feito**, nos dois formatos: texto + Open Graph
+  (`compartilharPalpite` e a rota `/palpite/<id>` na Edge Function `abrir`) e **imagem 1080×1920**
+  (`CardDoPalpite` + `react-native-view-shot`). O botão tenta a imagem e cai no link quando a
+  captura não é possível — a imagem serve Instagram Stories e X, onde link é texto cinza que
+  ninguém toca; o link serve WhatsApp, que renderiza card. O destino é sempre o JOGO, não o
+  palpite de quem convidou: quem recebe precisa dar o próprio, e é isso que fecha o laço.
 - Retrospectiva anual ("você cravou 6 de 47, terminou em 3.211º").
 - Comunidades por região/embaixadas de torcida.
 
@@ -138,9 +141,13 @@ está em [`DECISOES.md`](DECISOES.md), seção **Escala**.
 | Fan-out de push | 2 mil chamadas HTTP em série na Edge Function | fila `push_pendente` + worker paralelo |
 | Retenção | nada era apagado | crons diários + limpeza de arquivos no Storage |
 
-**O que ainda falta para a próxima ordem de grandeza:** particionar `notifications` e
-`contador_pendente` por mês; réplica de leitura quando o Postgres passar de ~70% de CPU; e a
-Fase B (vídeo em CDN), que continua sendo o custo dominante a partir de 10 k MAU.
+**O que ainda falta para a próxima ordem de grandeza:** ~~particionar `notifications`~~
+**feito** (por mês, com retenção por `drop` de partição em vez de `delete` em massa);
+réplica de leitura quando o Postgres passar de ~70% de CPU; e a Fase B (vídeo em CDN).
+
+> `contador_pendente` saiu dessa lista de propósito: não é um log que cresce, é uma fila
+> que `consolidar_contadores` esvazia a cada minuto. O problema dela é bloat, não volume, e
+> partição não resolve bloat — autovacuum agressivo resolve, e é o que está configurado.
 
 ## Ordem sugerida
 

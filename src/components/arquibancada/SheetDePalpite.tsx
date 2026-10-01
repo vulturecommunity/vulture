@@ -1,13 +1,16 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import type { ViewShotRef } from 'react-native-view-shot';
 
 import { Botao, Carregando, Icone, Sheet, Texto } from '@/components/ui';
+import { CardDoPalpite } from '@/components/arquibancada/CardDoPalpite';
 import { useResumoDosPalpites, useSalvarPalpite } from '@/hooks/usePalpites';
 import type { Partida } from '@/services/partidas';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos, raios } from '@/theme';
 import type { Palpite, ResumoDePalpites } from '@/types';
 import { abrirCompartilhamento, compartilharPalpite } from '@/utils/compartilhar';
+import { compartilharImagemDoPalpite } from '@/utils/compartilharImagem';
 import { mensagemDeErro } from '@/utils/erros';
 import { diaDaSemana, formatarDataHora } from '@/utils/formatadores';
 import { GOLS_MAXIMOS_NO_PALPITE, palpiteAberto, siglasDa } from '@/utils/palpites';
@@ -168,20 +171,30 @@ function ConteudoDoPalpite({ partida, palpite }: { partida: Partida; palpite?: P
   const mudou =
     !palpite || palpite.golsMandante !== mandante || palpite.golsVisitante !== visitante;
 
-  const convidar = useCallback(
-    () =>
-      abrirCompartilhamento(
-        compartilharPalpite({
-          partidaId: partida.id,
-          mandante: siglas.mandante,
-          visitante: siglas.visitante,
-          golsMandante: mandante,
-          golsVisitante: visitante,
-          apelido: eu?.apelido ?? 'torcedor',
-        }),
-      ),
-    [partida.id, siglas.mandante, siglas.visitante, mandante, visitante, eu?.apelido],
-  );
+  const cardRef = useRef<ViewShotRef>(null);
+
+  /**
+   * Tenta a imagem primeiro e cai no link se não der.
+   *
+   * A imagem funciona no Instagram Stories e no X, onde link é texto cinza que ninguém
+   * toca. O link funciona em todo lugar e gera card no WhatsApp. Tentar a imagem e cair
+   * no link cobre os dois sem perguntar nada a quem está compartilhando.
+   */
+  const convidar = useCallback(async () => {
+    const porImagem = await compartilharImagemDoPalpite(cardRef.current);
+    if (porImagem.compartilhou || porImagem.motivo === 'cancelado') return;
+
+    await abrirCompartilhamento(
+      compartilharPalpite({
+        partidaId: partida.id,
+        mandante: siglas.mandante,
+        visitante: siglas.visitante,
+        golsMandante: mandante,
+        golsVisitante: visitante,
+        apelido: eu?.apelido ?? 'torcedor',
+      }),
+    );
+  }, [partida.id, siglas.mandante, siglas.visitante, mandante, visitante, eu?.apelido]);
 
   return (
     <View style={estilos.conteudo}>
@@ -232,13 +245,26 @@ function ConteudoDoPalpite({ partida, palpite }: { partida: Partida; palpite?: P
           />
           {/* Só depois de cravado: convidar para um palpite que você ainda não deu é vazio. */}
           {palpite && !mudou ? (
-            <Botao
-              titulo="Provocar a galera"
-              variante="secundario"
-              onPress={() => void convidar()}
-              largo
-              testID="botao-compartilhar-palpite"
-            />
+            <>
+              <Botao
+                titulo="Provocar a galera"
+                variante="secundario"
+                onPress={() => void convidar()}
+                largo
+                testID="botao-compartilhar-palpite"
+              />
+              {/* fora da tela: existe só para ser fotografado na hora de compartilhar */}
+              <CardDoPalpite
+                ref={cardRef}
+                mandante={siglas.mandante}
+                visitante={siglas.visitante}
+                golsMandante={mandante}
+                golsVisitante={visitante}
+                apelido={eu?.apelido ?? 'torcedor'}
+                competicao={partida.competicao}
+                quando={formatarDataHora(partida.dataHora)}
+              />
+            </>
           ) : null}
         </>
       ) : (
