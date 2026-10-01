@@ -55,11 +55,20 @@ No painel do projeto → **Authentication → Providers → Google**:
 
 ### 2.1 Liberar o endereço de retorno — não pule
 
-Em **Authentication → URL Configuration → Redirect URLs**, acrescente:
+Em **Authentication → URL Configuration → Redirect URLs**, acrescente as duas:
 
 ```
 vulture://login-google
+exp://**
 ```
+
+A primeira é o APK e o development build. A segunda é o Expo Go — e ela engana: o
+Supabase já libera `exp://127.0.0.1:8081` por padrão, mas o celular não acessa o Metro
+por `127.0.0.1` e sim pelo IP da máquina na rede (`exp://10.0.0.42:8081/--/login-google`,
+por exemplo). Esse IP muda de rede para rede, por isso o curinga.
+
+Só o Expo Go abre `exp://`, então o curinga não é um buraco em produção — mas vale tirar
+da lista quando o app for publicado, já que aí ele não serve mais para nada.
 
 **Esta é a etapa que mais quebra**, e quebra de um jeito enganoso: sem ela o Google
 autentica normalmente, mas o Supabase se recusa a mandar o navegador de volta para o app
@@ -104,7 +113,8 @@ O provedor deve aparecer como `google`.
 | "Entrar com Google ainda não está ligado" | provedor desligado no Supabase (passo 2) |
 | `redirect_uri_mismatch` no navegador | a URI do passo 1.3 não bate exatamente com a do Supabase |
 | **"O navegador fechou sem voltar para o app"** | **`vulture://login-google` faltando nas Redirect URLs (passo 2.1)** |
-| **Funciona no Expo Go, falha no APK** | **o mesmo: o Expo Go usa `exp://`, já liberado; o APK usa `vulture://`, que não está** |
+| Falha no Expo Go dizendo `exp://<IP-da-rede>:8081/…` | falta `exp://**`; o padrão do Supabase cobre só `127.0.0.1`, e o celular entra pelo IP da rede |
+| O navegador para numa página "localhost" que não carrega | é o mesmo problema: sem o endereço na lista, o Supabase cai na Site URL, que por padrão é `http://localhost:3000` |
 | "Login com Google cancelado" | aí sim foi recusa na tela de consentimento do Google |
 | "Acesso bloqueado: não verificado" | app em modo de teste e o e-mail não está em Usuários de teste |
 
