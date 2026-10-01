@@ -7,16 +7,17 @@ import { definirCalendarioService, type Partida } from '@/services/partidas';
 import { useAuthStore } from '@/stores/authStore';
 import type { Palpiteiro } from '@/types';
 
-import { criarServicoDeTeste, renderizar } from './utilitarios-de-teste';
+import { congelarORelogio, criarServicoDeTeste, renderizar } from './utilitarios-de-teste';
 
 const HORA = 60 * 60 * 1000;
+
+congelarORelogio();
 
 /** Dois jogos encerrados no mês corrente, para ter o que pontuar. */
 function temporadaDeTeste(): Partida[] {
   const base = new Date();
   const noMes = (dia: number) =>
     new Date(base.getFullYear(), base.getMonth(), dia, 19, 0).toISOString();
-  const passado = (dias: number) => new Date(Date.now() - dias * 24 * HORA).toISOString();
   return [
     {
       id: 'jogo-1',
@@ -24,7 +25,7 @@ function temporadaDeTeste(): Partida[] {
       mandante: 'Flamengo',
       visitante: 'Cuiabá',
       siglas: { mandante: 'FLA', visitante: 'CUI' },
-      dataHora: base.getDate() > 2 ? noMes(1) : passado(1),
+      dataHora: noMes(1),
       estadio: 'Maracanã',
       placar: { mandante: 3, visitante: 1 },
       status: 'encerrada',

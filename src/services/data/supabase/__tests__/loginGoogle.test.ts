@@ -10,6 +10,7 @@
  * Isso aconteceu de verdade neste projeto e a mensagem dizia "Login com Google cancelado",
  * que mandava procurar o problema no lugar errado. Estes testes prendem a diferença.
  */
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -19,6 +20,11 @@ import { SupabaseDataService } from '@/services/data/supabase/SupabaseDataServic
 jest.mock('expo-linking');
 jest.mock('expo-web-browser');
 jest.mock('@/services/data/supabase/cliente');
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { executionEnvironment: 'bare', expoConfig: { scheme: 'vulture' } },
+  ExecutionEnvironment: { StoreClient: 'storeClient', Standalone: 'standalone', Bare: 'bare' },
+}));
 
 const RETORNO = 'vulture://login-google';
 const URL_DO_GOOGLE = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=x';
@@ -38,10 +44,52 @@ function clienteFalso(sessao: { user: { id: string; email: string } } | null = n
   };
 }
 
+const constantes = Constants as unknown as {
+  executionEnvironment: string;
+  expoConfig: { scheme?: string | string[] } | null;
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
   criarUrl.mockReturnValue(RETORNO);
   cliente.mockReturnValue(clienteFalso());
+  constantes.executionEnvironment = ExecutionEnvironment.Bare;
+  constantes.expoConfig = { scheme: 'vulture' };
+});
+
+/**
+ * O Supabase compara o endereço de retorno caractere a caractere com a lista de Redirect
+ * URLs. `vulture:///login-google` e `vulture://login-google/` são rejeitados — então a
+ * forma exata não pode depender de onde o app está rodando.
+ */
+describe('endereço de retorno', () => {
+  async function enderecoUsado(): Promise<string> {
+    const falso = clienteFalso();
+    cliente.mockReturnValue(falso);
+    abrirNavegador.mockResolvedValue({ type: 'dismiss' });
+    await new SupabaseDataService().entrarComGoogle().catch(() => {});
+    return falso.auth.signInWithOAuth.mock.calls[0][0].options.redirectTo;
+  }
+
+  it('em build, é o esquema do app sem barra sobrando', async () => {
+    await expect(enderecoUsado()).resolves.toBe('vulture://login-google');
+  });
+
+  it('em build, não usa o createURL — ele varia com o hostUri', async () => {
+    criarUrl.mockReturnValue('vulture://10.0.0.42:8081login-google');
+    await expect(enderecoUsado()).resolves.toBe('vulture://login-google');
+  });
+
+  it('respeita o esquema declarado no app.json, mesmo em lista', async () => {
+    constantes.expoConfig = { scheme: ['outroapp', 'vulture'] };
+    await expect(enderecoUsado()).resolves.toBe('outroapp://login-google');
+  });
+
+  it('no Expo Go, usa o createURL — só ele conhece o endereço do Metro', async () => {
+    constantes.executionEnvironment = ExecutionEnvironment.StoreClient;
+    criarUrl.mockReturnValue('exp://10.0.0.42:8081/--/login-google');
+    await expect(enderecoUsado()).resolves.toBe('exp://10.0.0.42:8081/--/login-google');
+  });
 });
 
 describe('login com Google que não volta para o app', () => {

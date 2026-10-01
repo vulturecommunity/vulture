@@ -74,3 +74,30 @@ export function videoDeTeste(parcial: Partial<Video> = {}): Video {
     ...parcial,
   };
 }
+
+/**
+ * Congela o relógio num instante fixo pelo tempo do arquivo de teste.
+ *
+ * Teste que monta cenário a partir de `new Date()` depende de que dia é hoje, e isso
+ * quebra sozinho na virada do mês: o jogo "de ontem" cai no mês anterior, a tela abre no
+ * mês corrente e não encontra nada. Já aconteceu duas vezes neste projeto — primeiro em
+ * 30 de setembro, depois em 1º de outubro — e nas duas o código estava certo.
+ *
+ * A data é meio de mês de propósito, para que "ontem" e "daqui a três dias" caiam no
+ * mesmo mês sem nenhum ajuste condicional. Testado: com o relógio em 1º de janeiro às
+ * 00h30 os mesmos testes falham, o que mostra que a escolha do instante é parte da
+ * correção, e não detalhe.
+ *
+ * `advanceTimers` mantém os temporizadores correndo em tempo real, senão o `waitFor` do
+ * Testing Library esperaria para sempre.
+ */
+export const INSTANTE_FIXO = new Date(2026, 2, 15, 18, 0, 0); // 15/03/2026, 18h
+
+export function congelarORelogio(instante: Date = INSTANTE_FIXO): void {
+  beforeAll(() => {
+    jest.useFakeTimers({ now: instante, advanceTimers: true });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+}

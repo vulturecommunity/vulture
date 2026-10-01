@@ -1,3 +1,4 @@
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { File } from 'expo-file-system';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -663,6 +664,28 @@ export class SupabaseDataService implements DataService {
   }
 
   /**
+   * Para onde o Google deve devolver o login.
+   *
+   * O Supabase compara este endereço com a lista de Redirect URLs caractere a caractere:
+   * uma barra a mais e o login falha. Por isso, em build, ele é escrito à mão em vez de
+   * sair do `Linking.createURL` — a forma que o createURL monta depende do `hostUri`, que
+   * existe no development build e não existe no APK, e as duas não dão o mesmo texto.
+   *
+   * No Expo Go não há esquema próprio: o retorno passa pelo Metro, vira
+   * `exp://<ip>:<porta>/--/login-google`, e só o createURL sabe montar isso. Esse endereço
+   * muda de rede para rede, então precisa estar na lista do Supabase a cada IP novo — ou
+   * use `expo start --tunnel`, que troca o IP por um nome fixo. Veja SETUP_GOOGLE.md.
+   */
+  private enderecoDeRetornoDoGoogle(): string {
+    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      return Linking.createURL('login-google');
+    }
+    // `scheme` pode vir como lista quando o app declara mais de um
+    const esquema = [Constants.expoConfig?.scheme ?? 'vulture'].flat()[0];
+    return `${esquema}://login-google`;
+  }
+
+  /**
    * Login com Google pelo fluxo de OAuth do Supabase.
    *
    * O caminho é: pedir a URL de autorização ao Supabase → abrir na aba segura do sistema
@@ -677,7 +700,7 @@ export class SupabaseDataService implements DataService {
    * quem entra pela primeira vez já chega com apelido e perfil prontos.
    */
   async entrarComGoogle(): Promise<Sessao> {
-    const redirectTo = Linking.createURL('login-google');
+    const redirectTo = this.enderecoDeRetornoDoGoogle();
     const { data, error } = await this.db.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo, skipBrowserRedirect: true },

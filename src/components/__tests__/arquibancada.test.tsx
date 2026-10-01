@@ -13,7 +13,7 @@ import { definirCalendarioService, type Partida } from '@/services/partidas';
 import { useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
 
-import { criarServicoDeTeste, renderizar } from './utilitarios-de-teste';
+import { congelarORelogio, criarServicoDeTeste, renderizar } from './utilitarios-de-teste';
 
 async function entrarComoVisitante() {
   const servico = criarServicoDeTeste();
@@ -23,34 +23,14 @@ async function entrarComoVisitante() {
 
 const HORA = 60 * 60 * 1000;
 
-/**
- * Mês em que o cenário é montado.
- *
- * Precisa sobrar dia para caber um jogo "daqui a pouco" sem virar o mês — senão, rodando
- * no fim de setembro, o jogo futuro caía em outubro, o calendário abria em setembro sem
- * ele e os testes falhavam por causa do calendário, não do código. Sem folga, o cenário
- * inteiro vai para o mês seguinte (o calendário abre nele, já que o corrente fica vazio).
- */
-function mesDoCenario(): { ano: number; mes: number; corrente: boolean } {
-  const hoje = new Date();
-  const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
-  if (hoje.getDate() <= ultimoDia - 4) {
-    return { ano: hoje.getFullYear(), mes: hoje.getMonth(), corrente: true };
-  }
-  const seguinte = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
-  return { ano: seguinte.getFullYear(), mes: seguinte.getMonth(), corrente: false };
-}
+congelarORelogio();
 
 /** Um jogo encerrado e um futuro no mesmo mês, e um no mês seguinte. */
 function temporadaDeTeste(): Partida[] {
-  const { ano, mes, corrente } = mesDoCenario();
-  const encerrado = corrente
-    ? new Date(Date.now() - 24 * HORA)
-    : new Date(ano, mes, 5, 19, 0);
-  const futuro = corrente
-    ? new Date(Date.now() + 3 * 24 * HORA)
-    : new Date(ano, mes, 15, 19, 0);
-  const proximoMes = new Date(ano, mes + 1, 12, 19, 0);
+  const encerrado = new Date(Date.now() - 24 * HORA);
+  const futuro = new Date(Date.now() + 3 * 24 * HORA);
+  const agora = new Date();
+  const proximoMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 12, 19, 0);
   return [
     {
       id: 'espn-a',
