@@ -18,6 +18,21 @@
 -- OS ARQUIVOS NÃO SE MOVEM. É o mesmo bucket; muda só o endereço por onde ele é servido.
 -- =====================================================================================
 
+/**
+ * Escapa os curingas de LIKE numa base de URL.
+ *
+ * `_` casa qualquer caractere no LIKE, e underscore é válido em hostname. Sem escapar,
+ * trocar `https://pub_abc.r2.dev` também reescreveria `https://pubXabc.r2.dev` — e numa
+ * operação que reescreve a mídia inteira de uma vez, "improvável" não é margem aceitável.
+ */
+create or replace function public.escapar_like(p_texto text)
+returns text
+language sql
+immutable
+as $$
+  select replace(replace(replace(p_texto, '\', '\\'), '%', '\%'), '_', '\_');
+$$;
+
 create or replace function public.trocar_dominio_de_midia(
   p_antigo      text,
   p_novo        text,
@@ -60,26 +75,28 @@ begin
   update public.videos
      set url = replace(url, p_antigo, p_novo),
          thumbnail_url = replace(thumbnail_url, p_antigo, p_novo)
-   where url like p_antigo || '%' or thumbnail_url like p_antigo || '%';
+   where url like public.escapar_like(p_antigo) || '%' escape '\'
+      or thumbnail_url like public.escapar_like(p_antigo) || '%' escape '\';
   get diagnostics n = row_count;
   tabela := 'videos'; linhas := n; return next;
 
   update public.rasantes
      set url = replace(url, p_antigo, p_novo),
          thumbnail_url = replace(thumbnail_url, p_antigo, p_novo)
-   where url like p_antigo || '%' or thumbnail_url like p_antigo || '%';
+   where url like public.escapar_like(p_antigo) || '%' escape '\'
+      or thumbnail_url like public.escapar_like(p_antigo) || '%' escape '\';
   get diagnostics n = row_count;
   tabela := 'rasantes'; linhas := n; return next;
 
   update public.profiles
      set avatar_url = replace(avatar_url, p_antigo, p_novo)
-   where avatar_url like p_antigo || '%';
+   where avatar_url like public.escapar_like(p_antigo) || '%' escape '\';
   get diagnostics n = row_count;
   tabela := 'profiles.avatar_url'; linhas := n; return next;
 
   update public.live_streams
      set thumbnail_url = replace(thumbnail_url, p_antigo, p_novo)
-   where thumbnail_url like p_antigo || '%';
+   where thumbnail_url like public.escapar_like(p_antigo) || '%' escape '\';
   get diagnostics n = row_count;
   tabela := 'live_streams'; linhas := n; return next;
 
@@ -104,7 +121,7 @@ begin
        )
        from jsonb_array_elements(p.midias) with ordinality as t(m, i)
      ), '[]'::jsonb)
-   where p.midias::text like '%' || p_antigo || '%';
+   where p.midias::text like '%' || public.escapar_like(p_antigo) || '%' escape '\';
   get diagnostics n = row_count;
   tabela := 'posts.midias'; linhas := n; return next;
 
@@ -130,15 +147,21 @@ begin
   p_base := rtrim(btrim(p_base), '/');
 
   return query select 'videos'::text, count(*)
-    from public.videos where url like p_base || '%' or thumbnail_url like p_base || '%';
+    from public.videos
+   where url like public.escapar_like(p_base) || '%' escape '\'
+      or thumbnail_url like public.escapar_like(p_base) || '%' escape '\';
   return query select 'rasantes'::text, count(*)
-    from public.rasantes where url like p_base || '%' or thumbnail_url like p_base || '%';
+    from public.rasantes
+   where url like public.escapar_like(p_base) || '%' escape '\'
+      or thumbnail_url like public.escapar_like(p_base) || '%' escape '\';
   return query select 'profiles.avatar_url'::text, count(*)
-    from public.profiles where avatar_url like p_base || '%';
+    from public.profiles where avatar_url like public.escapar_like(p_base) || '%' escape '\';
   return query select 'live_streams'::text, count(*)
-    from public.live_streams where thumbnail_url like p_base || '%';
+    from public.live_streams
+   where thumbnail_url like public.escapar_like(p_base) || '%' escape '\';
   return query select 'posts.midias'::text, count(*)
-    from public.posts where midias::text like '%' || p_base || '%';
+    from public.posts
+   where midias::text like '%' || public.escapar_like(p_base) || '%' escape '\';
 end;
 $$;
 
@@ -203,6 +226,34 @@ begin
     -- os campos que não são URL precisam sobreviver intactos
     if (anexo->>'largura')::int <> 1080 or anexo->>'tipo' <> 'imagem' then
       raise exception 'a reescrita do jsonb perdeu campos do anexo: %', anexo::text;
+    end if;
+
+    -- O CURINGA DO LIKE: `_` casa qualquer caractere. Um vizinho que só difere naquele
+    -- caractere NÃO pode ser arrastado junto.
+    insert into public.origens_de_midia (base, descricao)
+    values ('https://pub_x.r2.dev', 'autoteste'), ('https://pubZx.r2.dev', 'autoteste'),
+           ('https://destino.test', 'autoteste')
+    on conflict (base) do nothing;
+
+    insert into public.videos (autor_id, url, legenda)
+    values (autor, 'https://pub_x.r2.dev/v.mp4', 'alvo do escape'),
+           (autor, 'https://pubZx.r2.dev/v.mp4', 'vizinho inocente');
+
+    perform public.trocar_dominio_de_midia(
+      'https://pub_x.r2.dev', 'https://destino.test', 'TROCAR DOMINIO');
+
+    if not exists (
+      select 1 from public.videos
+       where legenda = 'vizinho inocente' and url = 'https://pubZx.r2.dev/v.mp4'
+    ) then
+      raise exception
+        'o LIKE tratou _ como curinga e reescreveu o dominio vizinho por engano';
+    end if;
+    if not exists (
+      select 1 from public.videos
+       where legenda = 'alvo do escape' and url = 'https://destino.test/v.mp4'
+    ) then
+      raise exception 'o alvo com _ no dominio nao foi reescrito';
     end if;
 
     -- sem a base cadastrada, precisa recusar

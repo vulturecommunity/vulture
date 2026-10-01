@@ -40,6 +40,10 @@ export const EVENTOS = {
 
   // ---- criação: o lado escasso de todo app social ----
   VIDEO_PUBLICADO: 'video_publicado',
+  /** Economia da compressão. Separado de VIDEO_PUBLICADO de propósito: nem todo vídeo é
+   *  comprimido (foto não é, Expo Go não é), e misturar os dois faria a contagem de
+   *  publicações depender de um detalhe de infraestrutura. */
+  VIDEO_COMPRIMIDO: 'video_comprimido',
   POST_PUBLICADO: 'post_publicado',
   LIVE_INICIADA: 'live_iniciada',
 

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Botao, Cabecalho, Input, Listras, Texto } from '@/components/ui';
 import { useVoltar } from '@/hooks/useVoltar';
+import { EVENTOS, registrar } from '@/services/telemetria';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos } from '@/theme';
 import { emailValido, normalizarApelido, senhaValida } from '@/utils/validacao';
@@ -21,6 +22,12 @@ export default function TelaCadastro() {
   const [senha, setSenha] = useState('');
   const [confirmacao, setConfirmacao] = useState('');
   const [erros, setErros] = useState<{ email?: string; senha?: string; confirmacao?: string }>({});
+
+  // Abrir a tela é o começo do funil. Sem este evento, `cadastro_concluido` é um número
+  // sem denominador: não dá para saber se 10 cadastros vieram de 12 tentativas ou de 400.
+  useEffect(() => {
+    registrar(EVENTOS.CADASTRO_INICIADO);
+  }, []);
 
   async function aoCadastrar() {
     const novosErros: typeof erros = {};

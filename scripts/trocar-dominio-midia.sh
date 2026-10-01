@@ -40,6 +40,22 @@ if [ -z "$ANTIGA" ] || [ -z "$NOVA" ]; then
   exit 1
 fi
 
+# tira a barra final: a tabela origens_de_midia guarda sem
+ANTIGA="${ANTIGA%/}"
+NOVA="${NOVA%/}"
+
+# As bases entram no SQL por interpolação, então o formato é verificado antes. Um
+# apóstrofo num argumento viraria SQL arbitrário rodando com privilégio de dono do banco —
+# e este script já é destrutivo o bastante quando usado corretamente.
+VALIDA='^https://[A-Za-z0-9._-]+(:[0-9]+)?(/[A-Za-z0-9._-]+)*$'
+for BASE in "$ANTIGA" "$NOVA"; do
+  if ! printf '%s' "$BASE" | grep -qE "$VALIDA"; then
+    echo "base inválida: $BASE" >&2
+    echo "esperado algo como https://midia.seudominio.com (sem barra no fim)" >&2
+    exit 1
+  fi
+done
+
 if [ -z "${SUPABASE_DB_URL:-}" ]; then
   echo "defina SUPABASE_DB_URL (painel → Settings → Database → Connection string)" >&2
   exit 1
@@ -53,6 +69,7 @@ fi
 # tira a barra final: a tabela origens_de_midia guarda sem
 ANTIGA="${ANTIGA%/}"
 NOVA="${NOVA%/}"
+
 
 echo
 echo "  de:   $ANTIGA"

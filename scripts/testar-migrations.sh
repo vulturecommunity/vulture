@@ -124,17 +124,23 @@ grant select, insert, update, delete on all tables in schema public to anon, aut
 grant usage, select on all sequences in schema public to anon, authenticated;
 SQL
 
-echo "→ semeando perfis e um jogo (sem eles, os autotestes se pulam ou acusam falso)"
+echo "→ semeando 5 perfis e um jogo (com menos, autotestes se pulam ou acusam falso)"
 psql_f <<'SQL' >/dev/null
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111','zico@teste.local'),
   ('22222222-2222-2222-2222-222222222222','pedro@teste.local'),
-  ('33333333-3333-3333-3333-333333333333','arrasca@teste.local')
+  ('33333333-3333-3333-3333-333333333333','arrasca@teste.local'),
+  ('44444444-4444-4444-4444-444444444444','gabigol@teste.local'),
+  ('55555555-5555-5555-5555-555555555555','everton@teste.local')
 on conflict do nothing;
 insert into public.profiles (id, apelido, nome, criado_em) values
   ('11111111-1111-1111-1111-111111111111','zico','Zico', now() - interval '3 day'),
   ('22222222-2222-2222-2222-222222222222','pedro','Pedro', now() - interval '2 day'),
-  ('33333333-3333-3333-3333-333333333333','arrasca','Arrasca', now() - interval '1 day')
+  ('33333333-3333-3333-3333-333333333333','arrasca','Arrasca', now() - interval '1 day'),
+  -- 4º e 5º existem porque o autoteste do ranking exige 5 perfis; com menos ele se pula,
+  -- e um autoteste que se pula passa sem verificar nada
+  ('44444444-4444-4444-4444-444444444444','gabigol','Gabigol', now() - interval '12 hour'),
+  ('55555555-5555-5555-5555-555555555555','everton','Everton', now() - interval '6 hour')
 on conflict (id) do nothing;
 
 -- Sem um jogo no calendário, o autoteste de `limpar_conteudo` não distingue "o calendário

@@ -981,7 +981,10 @@ export class SupabaseDataService implements DataService {
       );
       origem = comprimido.uri;
       if (comprimido.comprimido) {
-        registrar(EVENTOS.VIDEO_PUBLICADO, {
+        // evento PRÓPRIO: medir compressão não é medir publicação. Antes isto registrava
+        // `video_publicado` aqui, o que contava a publicação antes do upload acontecer e
+        // deixava de fora toda foto e todo vídeo que não passou por compressão.
+        registrar(EVENTOS.VIDEO_COMPRIMIDO, {
           economia: economiaEmPorcento(comprimido),
           mb: Math.round(comprimido.depois / 1024 / 1024),
         });
@@ -1033,6 +1036,12 @@ export class SupabaseDataService implements DataService {
       .single();
     if (error || !data) erroDoSupabase(error, 'Falha ao publicar');
     progresso(1, 'Publicado');
+    // aqui, e não antes: só agora a linha existe no banco
+    registrar(EVENTOS.VIDEO_PUBLICADO, {
+      tipo: novo.tipo,
+      duracao: ehVideo ? Math.round(novo.duracao) : 0,
+      hashtags: novo.hashtags.length,
+    });
     const [video] = await this.decorarVideos([data as unknown as LinhaVideo]);
     return video;
   }
@@ -1060,6 +1069,11 @@ export class SupabaseDataService implements DataService {
   async registrarVisualizacoes(ids: Id[]): Promise<void> {
     if (ids.length === 0) return;
     await this.db.rpc('registrar_visualizacoes', { p_ids: ids });
+    // UM evento por lote, com a contagem — e não um por vídeo. A 30 vídeos/dia por
+    // pessoa, um evento por vídeo consumiria a cota gratuita do PostHog (1 M/mês) com
+    // menos de mil usuários, e a pergunta que isso responde ("as pessoas assistem ou só
+    // rolam o feed?") é respondida igual pela contagem agregada.
+    registrar(EVENTOS.VIDEO_ASSISTIDO, { quantidade: ids.length });
   }
 
   async registrarCompartilhamento(id: Id): Promise<void> {
@@ -1452,6 +1466,7 @@ export class SupabaseDataService implements DataService {
       .single();
     if (error || !data) erroDoSupabase(error, 'Falha ao iniciar a live');
     const live = paraLive(data as unknown as LinhaLive);
+    registrar(EVENTOS.LIVE_INICIADA, { comTitulo: !!limpo });
     // Avisa os seguidores sem atrasar o início da live. O fan-out inteiro (notificação em
     // tela + push enfileirado) é feito em dois INSERT ... SELECT dentro do Postgres, então
     // 200 mil seguidores custam uma varredura de índice — e não 2 mil chamadas HTTP em
@@ -1479,6 +1494,7 @@ export class SupabaseDataService implements DataService {
 
   async entrarNaLive(id: Id): Promise<void> {
     await this.db.rpc('ajustar_espectadores', { p_live_id: id, p_delta: 1 });
+    registrar(EVENTOS.LIVE_ASSISTIDA);
   }
 
   async sairDaLive(id: Id): Promise<void> {
@@ -2243,6 +2259,11 @@ export class SupabaseDataService implements DataService {
         .select(SELECAO_POST)
         .single();
       if (error || !data) erroDoSupabase(error, 'Falha ao publicar');
+      registrar(EVENTOS.POST_PUBLICADO, {
+        anexos: novas.length,
+        resposta: !!novo.paiId,
+        comPartida: !!novo.partida,
+      });
       return paraPost(data as unknown as LinhaPost, new Set());
     } catch (erro) {
       // sem post, os arquivos já enviados só ocupariam espaço
@@ -2485,6 +2506,7 @@ export class SupabaseDataService implements DataService {
     if (error) erroDoSupabase(error, 'Falha ao criar a liga');
     const linha = ((data ?? []) as LinhaDeLiga[])[0];
     if (!linha) throw new ErroDeAplicacao('Falha ao criar a liga.', 'liga_invalida');
+    registrar(EVENTOS.LIGA_CRIADA);
     return paraLiga(linha);
   }
 
@@ -2496,6 +2518,7 @@ export class SupabaseDataService implements DataService {
     if (error) erroDoSupabase(error, 'Falha ao entrar na liga');
     const linha = ((data ?? []) as LinhaDeLiga[])[0];
     if (!linha) throw new ErroDeAplicacao('Não existe liga com esse código.', 'liga_invalida');
+    registrar(EVENTOS.LIGA_ENTROU);
     return paraLiga(linha);
   }
 
