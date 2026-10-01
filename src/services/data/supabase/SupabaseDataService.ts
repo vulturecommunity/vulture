@@ -693,11 +693,36 @@ export class SupabaseDataService implements DataService {
     }
 
     const resultado = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
     if (resultado.type !== 'success') {
-      throw new ErroDeAplicacao('Login com Google cancelado.', 'login_cancelado');
+      // O navegador fechou sem devolver para o app. O motivo óbvio é desistência, mas há
+      // um segundo que parece idêntico daqui: se `redirectTo` não estiver liberado no
+      // Supabase, ele manda o navegador para a Site URL depois do consentimento e o app
+      // nunca é chamado de volta. A pessoa fecha a aba e chega aqui tendo feito tudo
+      // certo. Dizer "cancelado" nesse caso esconde a única informação útil, então a
+      // mensagem nomeia o endereço que precisa estar na lista.
+      const sessaoTardia = await this.sessaoAtual();
+      if (sessaoTardia) return sessaoTardia;
+      throw new ErroDeAplicacao(
+        'O navegador fechou sem voltar para o app. Se você chegou a autorizar no Google, ' +
+          `falta liberar "${redirectTo}" em Authentication → URL Configuration → ` +
+          'Redirect URLs no painel do Supabase.',
+        'login_nao_retornou',
+      );
     }
 
-    const codigo = new URL(resultado.url).searchParams.get('code');
+    const devolvido = new URL(resultado.url);
+    // o Google devolve `error=access_denied` quando a pessoa recusa na tela de consentimento
+    const recusa = devolvido.searchParams.get('error_description')
+      ?? devolvido.searchParams.get('error');
+    if (recusa) {
+      throw new ErroDeAplicacao(
+        recusa === 'access_denied' ? 'Login com Google cancelado.' : `O Google recusou: ${recusa}`,
+        'login_cancelado',
+      );
+    }
+
+    const codigo = devolvido.searchParams.get('code');
     if (!codigo) {
       // alguns fluxos devolvem a sessão direto no fragmento em vez de código
       const sessaoAtual = await this.sessaoAtual();

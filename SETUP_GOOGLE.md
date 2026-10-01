@@ -53,11 +53,28 @@ No painel do projeto → **Authentication → Providers → Google**:
 2. Cole o **Client ID** e o **Client Secret** do passo anterior
 3. **Save**
 
-Confirme também, em **Authentication → URL Configuration**, que a lista de
-**Redirect URLs** inclui o esquema do app:
+### 2.1 Liberar o endereço de retorno — não pule
+
+Em **Authentication → URL Configuration → Redirect URLs**, acrescente:
 
 ```
 vulture://login-google
+```
+
+**Esta é a etapa que mais quebra**, e quebra de um jeito enganoso: sem ela o Google
+autentica normalmente, mas o Supabase se recusa a mandar o navegador de volta para o app
+e redireciona para a Site URL. A aba fica numa página qualquer, a pessoa fecha, e o app
+só sabe que o navegador fechou — exatamente o que aconteceria se ela tivesse desistido.
+
+Pior: o fluxo **funciona no Expo Go** mesmo sem isso, porque ali o endereço de retorno é
+`exp://…`, que já está liberado por padrão. Então o problema aparece só no APK.
+
+Para conferir sem precisar abrir o app — se o endereço estiver liberado, a resposta volta
+para ele; se não, cai na Site URL:
+
+```bash
+curl -s -o /dev/null -w '%{redirect_url}\n' \
+  "https://<SEU-PROJETO>.supabase.co/auth/v1/verify?token=invalido&type=signup&redirect_to=vulture%3A%2F%2Flogin-google"
 ```
 
 ---
@@ -86,9 +103,10 @@ O provedor deve aparecer como `google`.
 | --- | --- |
 | "Entrar com Google ainda não está ligado" | provedor desligado no Supabase (passo 2) |
 | `redirect_uri_mismatch` no navegador | a URI do passo 1.3 não bate exatamente com a do Supabase |
-| Volta para o app mas não entra | `vulture://login-google` faltando nas Redirect URLs |
+| **"O navegador fechou sem voltar para o app"** | **`vulture://login-google` faltando nas Redirect URLs (passo 2.1)** |
+| **Funciona no Expo Go, falha no APK** | **o mesmo: o Expo Go usa `exp://`, já liberado; o APK usa `vulture://`, que não está** |
+| "Login com Google cancelado" | aí sim foi recusa na tela de consentimento do Google |
 | "Acesso bloqueado: não verificado" | app em modo de teste e o e-mail não está em Usuários de teste |
-| Funciona no Expo Go e falha no APK | o `scheme` do `app.json` precisa ser `vulture` nos dois |
 
 ---
 
