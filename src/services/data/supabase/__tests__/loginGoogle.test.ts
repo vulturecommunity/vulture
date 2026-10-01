@@ -63,6 +63,23 @@ beforeEach(() => {
  * URLs. `vulture:///login-google` e `vulture://login-google/` são rejeitados — então a
  * forma exata não pode depender de onde o app está rodando.
  */
+/**
+ * Sem `preferEphemeralSession`, o iOS mostra um diálogo do sistema pedindo consentimento
+ * para compartilhar cookies com o Safari, e nele aparece o domínio cru do projeto
+ * Supabase (`mlajeudfsjymgaxjofya.supabase.co`) — confuso para quem não sabe o que é
+ * aquilo. A opção desliga o compartilhamento e o diálogo some.
+ */
+it('pede sessão efêmera para não mostrar o diálogo de domínio do iOS', async () => {
+  abrirNavegador.mockResolvedValue({ type: 'dismiss' });
+  await new SupabaseDataService().entrarComGoogle().catch(() => {});
+
+  expect(abrirNavegador).toHaveBeenCalledWith(
+    URL_DO_GOOGLE,
+    RETORNO,
+    expect.objectContaining({ preferEphemeralSession: true }),
+  );
+});
+
 describe('endereço de retorno', () => {
   async function enderecoUsado(): Promise<string> {
     const falso = clienteFalso();

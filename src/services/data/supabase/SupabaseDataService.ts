@@ -696,6 +696,14 @@ export class SupabaseDataService implements DataService {
    * `skipBrowserRedirect` existe porque quem abre o navegador aqui somos nós: sem isso o
    * supabase-js tentaria redirecionar sozinho, o que não faz sentido em app nativo.
    *
+   * `preferEphemeralSession` evita um diálogo do iOS: por padrão o `ASWebAuthenticationSession`
+   * compartilha cookies com o Safari, e para isso pede consentimento ("App" quer usar
+   * "<domínio>" para fazer login) mostrando o endereço cru do projeto Supabase — confuso
+   * e feio para quem não sabe o que é aquilo. Sem esse compartilhamento, o diálogo nem
+   * aparece. O custo é não reaproveitar uma sessão já aberta do Google no Safari; como o
+   * próprio Google mantém login entre apps pela conta do aparelho, isso quase nunca pesa
+   * na prática. No Android a opção não existe e é ignorada sem erro.
+   *
    * O perfil é criado pelo mesmo trigger do cadastro por e-mail (`handle_new_user`), então
    * quem entra pela primeira vez já chega com apelido e perfil prontos.
    */
@@ -715,7 +723,9 @@ export class SupabaseDataService implements DataService {
       erroDoSupabase(error, 'Falha ao abrir o login do Google');
     }
 
-    const resultado = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    const resultado = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
+      preferEphemeralSession: true,
+    });
 
     if (resultado.type !== 'success') {
       // O navegador fechou sem devolver para o app. O motivo óbvio é desistência, mas há
