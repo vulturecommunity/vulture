@@ -40,6 +40,7 @@ function clienteFalso(sessao: { user: { id: string; email: string } } | null = n
       signInWithOAuth: jest.fn().mockResolvedValue({ data: { url: URL_DO_GOOGLE }, error: null }),
       getSession: jest.fn().mockResolvedValue({ data: { session: sessao } }),
       exchangeCodeForSession: jest.fn(),
+      setSession: jest.fn(),
     },
   };
 }
@@ -117,6 +118,58 @@ describe('login com Google que não volta para o app', () => {
     jest.spyOn(servico, 'sessaoAtual').mockResolvedValue(jaEntrou as never);
 
     await expect(servico.entrarComGoogle()).resolves.toBe(jaEntrou);
+  });
+});
+
+/**
+ * O supabase-js devolve o resultado em dois lugares diferentes conforme o `flowType`:
+ * `?code=…` no PKCE (o que o cliente pede) e `#access_token=…` no implícito (o padrão
+ * da biblioteca). Ler só a query fazia o login morrer dizendo "o Google não devolveu o
+ * código", que mandava procurar no Google um problema que era nosso.
+ */
+describe('onde o retorno traz a sessão', () => {
+  it('fluxo PKCE: troca o código da query pela sessão', async () => {
+    const falso = clienteFalso();
+    falso.auth.exchangeCodeForSession.mockResolvedValue({
+      data: { user: { id: 'u1', email: 'a@b.c' } },
+      error: null,
+    });
+    cliente.mockReturnValue(falso);
+    abrirNavegador.mockResolvedValue({ type: 'success', url: `${RETORNO}?code=abc123` });
+
+    await new SupabaseDataService().entrarComGoogle().catch(() => {});
+
+    expect(falso.auth.exchangeCodeForSession).toHaveBeenCalledWith('abc123');
+    expect(falso.auth.setSession).not.toHaveBeenCalled();
+  });
+
+  it('fluxo implícito: usa os tokens do fragmento, sem reclamar de código', async () => {
+    const falso = clienteFalso();
+    falso.auth.setSession.mockResolvedValue({
+      data: { user: { id: 'u1', email: 'a@b.c' } },
+      error: null,
+    });
+    cliente.mockReturnValue(falso);
+    abrirNavegador.mockResolvedValue({
+      type: 'success',
+      url: `${RETORNO}#access_token=tok123&refresh_token=ref456&token_type=bearer`,
+    });
+
+    await new SupabaseDataService().entrarComGoogle().catch(() => {});
+
+    expect(falso.auth.setSession).toHaveBeenCalledWith({
+      access_token: 'tok123',
+      refresh_token: 'ref456',
+    });
+  });
+
+  it('erro escondido no fragmento também é lido', async () => {
+    abrirNavegador.mockResolvedValue({
+      type: 'success',
+      url: `${RETORNO}#error=access_denied&error_description=${encodeURIComponent('negado')}`,
+    });
+
+    await expect(new SupabaseDataService().entrarComGoogle()).rejects.toThrow(/negado/);
   });
 });
 

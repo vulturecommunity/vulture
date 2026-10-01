@@ -34,6 +34,12 @@ export function supabase(): SupabaseClient {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      // O padrão do supabase-js é 'implicit', que devolve o token de acesso dentro do
+      // fragmento da URL de retorno. Em app nativo isso é ruim por dois motivos: o token
+      // passa por um lugar que vaza fácil (histórico do navegador, log de deep link), e
+      // o fragmento nem sempre sobrevive ao caminho até o app. O PKCE devolve só um
+      // código de uso único, que trocamos pela sessão numa chamada nossa.
+      flowType: 'pkce',
     },
   });
 

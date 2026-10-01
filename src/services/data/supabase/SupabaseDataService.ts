@@ -735,9 +735,15 @@ export class SupabaseDataService implements DataService {
     }
 
     const devolvido = new URL(resultado.url);
+    // O retorno pode trazer os dados na query (?code=…, fluxo PKCE) ou no fragmento
+    // (#access_token=…, fluxo implícito). Erro também vem num ou noutro, dependendo de
+    // onde o Supabase desistiu, então os dois são lidos juntos.
+    const fragmento = new URLSearchParams(devolvido.hash.replace(/^#/, ''));
+    const doRetorno = (campo: string) =>
+      devolvido.searchParams.get(campo) ?? fragmento.get(campo);
+
     // o Google devolve `error=access_denied` quando a pessoa recusa na tela de consentimento
-    const recusa = devolvido.searchParams.get('error_description')
-      ?? devolvido.searchParams.get('error');
+    const recusa = doRetorno('error_description') ?? doRetorno('error');
     if (recusa) {
       throw new ErroDeAplicacao(
         recusa === 'access_denied' ? 'Login com Google cancelado.' : `O Google recusou: ${recusa}`,
@@ -745,7 +751,20 @@ export class SupabaseDataService implements DataService {
       );
     }
 
-    const codigo = devolvido.searchParams.get('code');
+    // Fluxo implícito: o par de tokens vem pronto no fragmento, sem código para trocar.
+    // O cliente pede PKCE, mas um link antigo ainda em trânsito pode chegar assim.
+    const tokenDeAcesso = doRetorno('access_token');
+    const tokenDeRenovacao = doRetorno('refresh_token');
+    if (tokenDeAcesso && tokenDeRenovacao) {
+      const { data: posto, error: erroAoPor } = await this.db.auth.setSession({
+        access_token: tokenDeAcesso,
+        refresh_token: tokenDeRenovacao,
+      });
+      if (erroAoPor || !posto.user) erroDoSupabase(erroAoPor, 'Falha ao concluir o login');
+      return this.montarSessao(posto.user.id, false, posto.user.email ?? null);
+    }
+
+    const codigo = doRetorno('code');
     if (!codigo) {
       // alguns fluxos devolvem a sessão direto no fragmento em vez de código
       const sessaoAtual = await this.sessaoAtual();
