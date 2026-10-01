@@ -62,13 +62,47 @@ vulture://login-google
 exp://**
 ```
 
-A primeira é o APK e o development build. A segunda é o Expo Go — e ela engana: o
-Supabase já libera `exp://127.0.0.1:8081` por padrão, mas o celular não acessa o Metro
-por `127.0.0.1` e sim pelo IP da máquina na rede (`exp://10.0.0.42:8081/--/login-google`,
-por exemplo). Esse IP muda de rede para rede, por isso o curinga.
+A primeira é o APK e o development build — é a única que importa em produção.
 
-Só o Expo Go abre `exp://`, então o curinga não é um buraco em produção — mas vale tirar
-da lista quando o app for publicado, já que aí ele não serve mais para nada.
+### O Expo Go é o caso chato
+
+O Supabase libera `exp://127.0.0.1:8081` por padrão, mas o celular não acessa o Metro por
+`127.0.0.1`: acessa pelo IP da sua máquina na rede, algo como
+`exp://10.0.0.42:8081/--/login-google`.
+
+E aí vem a parte que faz perder tempo: **`exp://**` não cobre esse endereço.** O GoTrue
+recusa expandir curinga para IP que não seja loopback — é proteção contra um curinga abrir
+a porta para qualquer máquina da rede. Medido no projeto real:
+
+| Endereço de retorno | Com `exp://**` cadastrado |
+| --- | --- |
+| `exp://127.0.0.1:8081/--/login-google` | permitido (loopback) |
+| `exp://a.b.c.d/--/login-google` | permitido (nome, não IP) |
+| `exp://999.999.999.999/…` | permitido (IP inválido vira nome) |
+| `exp://192.168.1.5/…` | **bloqueado** |
+| `exp://10.0.0.42:8081/…` | **bloqueado** |
+
+Duas saídas:
+
+**Entrada exata** — cole o endereço que o próprio app mostra na mensagem de erro:
+
+```
+exp://10.0.0.42:8081/--/login-google
+```
+
+Funciona, mas quebra quando o IP mudar (outra rede, roteador reiniciado).
+
+**Túnel** — a saída que não quebra:
+
+```bash
+npx expo start --tunnel
+```
+
+O endereço vira `exp://algo.exp.direct`, que é nome e não IP, então o `exp://**` cobre
+sozinho em qualquer rede. Recarrega mais devagar, e resolve de vez.
+
+Só o Expo Go abre `exp://`, então essas entradas não são buraco em produção — mas vale
+tirá-las da lista quando o app for publicado, porque aí não servem mais para nada.
 
 **Esta é a etapa que mais quebra**, e quebra de um jeito enganoso: sem ela o Google
 autentica normalmente, mas o Supabase se recusa a mandar o navegador de volta para o app
@@ -113,7 +147,8 @@ O provedor deve aparecer como `google`.
 | "Entrar com Google ainda não está ligado" | provedor desligado no Supabase (passo 2) |
 | `redirect_uri_mismatch` no navegador | a URI do passo 1.3 não bate exatamente com a do Supabase |
 | **"O navegador fechou sem voltar para o app"** | **`vulture://login-google` faltando nas Redirect URLs (passo 2.1)** |
-| Falha no Expo Go dizendo `exp://<IP-da-rede>:8081/…` | falta `exp://**`; o padrão do Supabase cobre só `127.0.0.1`, e o celular entra pelo IP da rede |
+| Falha no Expo Go dizendo `exp://<IP-da-rede>:8081/…` | o curinga `exp://**` **não** cobre IP; use a entrada exata ou `--tunnel` (passo 2.1) |
+| Funcionava no Expo Go e parou do nada | o IP da sua máquina mudou; a entrada exata antiga não vale mais |
 | O navegador para numa página "localhost" que não carrega | é o mesmo problema: sem o endereço na lista, o Supabase cai na Site URL, que por padrão é `http://localhost:3000` |
 | "Login com Google cancelado" | aí sim foi recusa na tela de consentimento do Google |
 | "Acesso bloqueado: não verificado" | app em modo de teste e o e-mail não está em Usuários de teste |
