@@ -1,5 +1,6 @@
 import {
   compartilharLiga,
+  compartilharLive,
   compartilharPerfil,
   compartilharPost,
   compartilharVideo,
@@ -75,5 +76,37 @@ describe('mensagem de post, perfil e liga', () => {
     // o convite precisa dizer por que vale entrar, não só "entre na liga"
     expect(mensagem).toMatch(/10 pontos/);
     expect(url).toBe(`${BASE}/liga/ABC234`);
+  });
+});
+
+describe('convite de live', () => {
+  const base = { id: 'l1', titulo: 'Esquenta pro clássico', apelido: 'zico' };
+
+  it('leva o link https da live e o assunto da transmissão', () => {
+    const { mensagem, url } = compartilharLive(base);
+    expect(url).toBe(`${BASE}/live/l1`);
+    expect(mensagem).toContain('"Esquenta pro clássico"');
+    expect(mensagem.split('\n\n').at(-1)).toBe(url);
+  });
+
+  it('diz que é agora e que não fica gravada — live expira, os outros links não', () => {
+    const { mensagem } = compartilharLive(base);
+    expect(mensagem).toMatch(/agora/i);
+    expect(mensagem).toMatch(/não fica gravada/i);
+  });
+
+  it('o anfitrião chama para a própria live; o espectador credita quem transmite', () => {
+    const doAnfitriao = compartilharLive({ ...base, souOAnfitriao: true });
+    expect(doAnfitriao.mensagem).toMatch(/Tô AO VIVO/);
+    expect(doAnfitriao.mensagem).not.toContain('@zico');
+
+    const doEspectador = compartilharLive(base);
+    expect(doEspectador.mensagem).toContain('@zico');
+  });
+
+  it('live sem título não gera aspas vazias', () => {
+    const { mensagem } = compartilharLive({ ...base, titulo: '   ' });
+    expect(mensagem).not.toContain('""');
+    expect(mensagem).toMatch(/não fica gravada/i);
   });
 });

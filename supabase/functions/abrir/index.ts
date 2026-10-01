@@ -15,7 +15,7 @@
 //   3. mostra uma página de convite decente para quem ainda não tem.
 //
 // Sem verificação de JWT: é um link público, aberto por quem recebeu a mensagem.
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
 const CORES = {
   fundo: '#0A0A0B',
@@ -134,6 +134,132 @@ function responderHtml(html: string, status = 200) {
   });
 }
 
+/**
+ * Um buscador por tipo de link. Cada um devolve a prévia daquele conteúdo, ou null quando
+ * o id não existe (aí o handler cai na prévia genérica do app).
+ *
+ * Está como mapa, e não como cadeia de `else if`, porque a lista só cresce: cada conteúdo
+ * novo que vira link compartilhável entra aqui como uma entrada, sem mexer no handler.
+ */
+type Buscador = (admin: SupabaseClient, id: string) => Promise<Previa | null>;
+
+const BUSCADORES: Record<string, Buscador> = {
+  async v(admin, id) {
+    const { data } = await admin
+      .from('videos')
+      .select('legenda, thumbnail_url, autor:profiles!videos_autor_id_fkey(apelido)')
+      .eq('id', id)
+      .maybeSingle();
+    if (!data) return null;
+    const autor = (data.autor as unknown as { apelido: string } | null)?.apelido ?? 'torcedor';
+    return {
+      titulo: data.legenda?.trim() || `Vídeo de @${autor}`,
+      descricao: `@${autor} postou na nação rubro-negra. Abra no Vulture para assistir.`,
+      imagem: data.thumbnail_url,
+      deepLink: `vulture://video/${id}`,
+      acao: 'Assistir no Vulture',
+    };
+  },
+
+  async p(admin, id) {
+    const { data } = await admin
+      .from('posts')
+      .select('texto, midias, autor:profiles!posts_autor_id_fkey(apelido)')
+      .eq('id', id)
+      .maybeSingle();
+    if (!data) return null;
+    const autor = (data.autor as unknown as { apelido: string } | null)?.apelido ?? 'torcedor';
+    const midias = (data.midias ?? []) as { url?: string; thumbnailUrl?: string }[];
+    return {
+      titulo: data.texto?.trim() || `Resenha de @${autor}`,
+      descricao: `@${autor} na Arquibancada do Vulture.`,
+      imagem: midias[0]?.thumbnailUrl ?? midias[0]?.url ?? null,
+      deepLink: `vulture://arquibancada/post/${id}`,
+      acao: 'Ver a resenha',
+    };
+  },
+
+  async u(admin, id) {
+    const { data } = await admin
+      .from('profiles')
+      .select('apelido, nome, bio, avatar_url')
+      .eq('apelido', id.replace(/^@/, ''))
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      titulo: `@${data.apelido} no Vulture`,
+      descricao: data.bio?.trim() || `${data.nome || data.apelido} está na nação rubro-negra.`,
+      imagem: data.avatar_url,
+      deepLink: `vulture://usuario/${data.apelido}`,
+      acao: 'Ver o perfil',
+    };
+  },
+
+  // Live é o único conteúdo que EXPIRA. O link compartilhado sobrevive à transmissão, então
+  // a prévia precisa saber dizer "já acabou" — mandar quem chegou tarde para uma sala vazia
+  // é pior do que não ter link nenhum.
+  async live(admin, id) {
+    const { data } = await admin
+      .from('live_streams')
+      .select(
+        'titulo, thumbnail_url, ativa, ' +
+          'anfitriao:profiles!live_streams_anfitriao_id_fkey(apelido, avatar_url)',
+      )
+      .eq('id', id)
+      .maybeSingle();
+    if (!data) return null;
+    const perfil = data.anfitriao as unknown as {
+      apelido: string;
+      avatar_url: string | null;
+    } | null;
+    const apelido = perfil?.apelido ?? 'torcedor';
+    if (!data.ativa) {
+      return {
+        titulo: `A live de @${apelido} já encerrou`,
+        descricao:
+          'Live no Vulture não fica gravada. Abra o app para ver quem está ao vivo agora.',
+        imagem: perfil?.avatar_url ?? null,
+        deepLink: 'vulture://lives',
+        acao: 'Ver quem está ao vivo',
+      };
+    }
+    return {
+      titulo: `🔴 @${apelido} está ao vivo`,
+      descricao: data.titulo?.trim() || 'Transmitindo agora para a nação rubro-negra.',
+      imagem: data.thumbnail_url ?? perfil?.avatar_url ?? null,
+      deepLink: `vulture://live/${id}`,
+      acao: 'Entrar na live',
+    };
+  },
+
+  async liga(admin, id) {
+    const { data } = await admin
+      .from('ligas')
+      .select('nome, codigo')
+      .eq('codigo', id.toUpperCase())
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      titulo: `Liga "${data.nome}" está te esperando`,
+      descricao:
+        `Entre com o código ${data.codigo} e dispute os palpites do Mengão ` +
+        'com a galera. Cravar o placar vale 10 pontos.',
+      imagem: null,
+      deepLink: `vulture://arquibancada?aba=ranking&liga=${data.codigo}`,
+      acao: `Entrar com o código ${data.codigo}`,
+    };
+  },
+};
+
+/** Link quebrado, id inexistente ou tipo desconhecido: ainda assim convida para o app. */
+const PREVIA_PADRAO: Previa = {
+  titulo: 'Vulture · o app da nação',
+  descricao: 'Resenha, vídeos, lives e o ranking de palpites do Mengão. Feito por torcedores.',
+  imagem: null,
+  deepLink: 'vulture://',
+  acao: 'Abrir o Vulture',
+};
+
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
@@ -154,85 +280,8 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    let previa: Previa | null = null;
-
-    if (tipo === 'v' && id) {
-      const { data } = await admin
-        .from('videos')
-        .select('legenda, thumbnail_url, autor:profiles!videos_autor_id_fkey(apelido)')
-        .eq('id', id)
-        .maybeSingle();
-      if (data) {
-        const autor = (data.autor as unknown as { apelido: string } | null)?.apelido ?? 'torcedor';
-        previa = {
-          titulo: data.legenda?.trim() || `Vídeo de @${autor}`,
-          descricao: `@${autor} postou na nação rubro-negra. Abra no Vulture para assistir.`,
-          imagem: data.thumbnail_url,
-          deepLink: `vulture://video/${id}`,
-          acao: 'Assistir no Vulture',
-        };
-      }
-    } else if (tipo === 'p' && id) {
-      const { data } = await admin
-        .from('posts')
-        .select('texto, midias, autor:profiles!posts_autor_id_fkey(apelido)')
-        .eq('id', id)
-        .maybeSingle();
-      if (data) {
-        const autor = (data.autor as unknown as { apelido: string } | null)?.apelido ?? 'torcedor';
-        const midias = (data.midias ?? []) as { url?: string; thumbnailUrl?: string }[];
-        previa = {
-          titulo: data.texto?.trim() || `Resenha de @${autor}`,
-          descricao: `@${autor} na Arquibancada do Vulture.`,
-          imagem: midias[0]?.thumbnailUrl ?? midias[0]?.url ?? null,
-          deepLink: `vulture://arquibancada/post/${id}`,
-          acao: 'Ver a resenha',
-        };
-      }
-    } else if (tipo === 'u' && id) {
-      const { data } = await admin
-        .from('profiles')
-        .select('apelido, nome, bio, avatar_url')
-        .eq('apelido', id.replace(/^@/, ''))
-        .maybeSingle();
-      if (data) {
-        previa = {
-          titulo: `@${data.apelido} no Vulture`,
-          descricao: data.bio?.trim() || `${data.nome || data.apelido} está na nação rubro-negra.`,
-          imagem: data.avatar_url,
-          deepLink: `vulture://usuario/${data.apelido}`,
-          acao: 'Ver o perfil',
-        };
-      }
-    } else if (tipo === 'liga' && id) {
-      const { data } = await admin
-        .from('ligas')
-        .select('nome, codigo')
-        .eq('codigo', id.toUpperCase())
-        .maybeSingle();
-      if (data) {
-        previa = {
-          titulo: `Liga "${data.nome}" está te esperando`,
-          descricao:
-            `Entre com o código ${data.codigo} e dispute os palpites do Mengão ` +
-            'com a galera. Cravar o placar vale 10 pontos.',
-          imagem: null,
-          deepLink: `vulture://arquibancada?aba=ranking&liga=${data.codigo}`,
-          acao: `Entrar com o código ${data.codigo}`,
-        };
-      }
-    }
-
-    if (!previa) {
-      previa = {
-        titulo: 'Vulture · o app da nação',
-        descricao:
-          'Resenha, vídeos, lives e o ranking de palpites do Mengão. Feito por torcedores.',
-        imagem: null,
-        deepLink: 'vulture://',
-        acao: 'Abrir o Vulture',
-      };
-    }
+    const buscar = BUSCADORES[tipo];
+    const previa = (id && buscar ? await buscar(admin, id) : null) ?? PREVIA_PADRAO;
 
     return responderHtml(pagina(previa, urlCanonica));
   } catch {

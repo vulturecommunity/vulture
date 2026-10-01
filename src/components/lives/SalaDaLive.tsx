@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
 import { cores, espacos, raios } from '@/theme';
 import type { Live } from '@/types';
+import { abrirCompartilhamento, compartilharLive } from '@/utils/compartilhar';
 import { formatarContador } from '@/utils/formatadores';
 
 import { ChatDaLive } from './ChatDaLive';
@@ -33,6 +35,19 @@ export function SalaDaLive({ live, anfitriao, aoSair, aoEncerrar, encerrando }: 
   const modo = modoDeLive();
   const chat = useChatDaLive(live.id, live.espectadores, usuario?.id ?? null, anfitriao);
   const encerrada = chat.encerrada || !live.ativa;
+
+  // Chamar gente de fora enquanto a transmissão acontece: é o único momento em que o
+  // convite serve para alguma coisa, por isso o botão some quando a live encerra.
+  const convidar = useCallback(() => {
+    void abrirCompartilhamento(
+      compartilharLive({
+        id: live.id,
+        titulo: live.titulo,
+        apelido: live.anfitriao.apelido,
+        souOAnfitriao: anfitriao,
+      }),
+    );
+  }, [live.id, live.titulo, live.anfitriao.apelido, anfitriao]);
 
   return (
     <View style={estilos.tela} testID={`sala-live-${live.id}`}>
@@ -70,6 +85,16 @@ export function SalaDaLive({ live, anfitriao, aoSair, aoEncerrar, encerrando }: 
               {formatarContador(chat.espectadores)}
             </Texto>
           </View>
+          {!encerrada ? (
+            <Pressable
+              onPress={convidar}
+              hitSlop={12}
+              accessibilityLabel="Convidar para a live"
+              style={estilos.fechar}
+              testID="botao-compartilhar-live">
+              <Icone nome="compartilhar" tamanho={17} cor={cores.branco} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={aoSair}
             hitSlop={12}

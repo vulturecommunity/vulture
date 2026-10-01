@@ -18,8 +18,16 @@ describe('notificações de live', () => {
   it('monta título, corpo e dados no mesmo formato do servidor', () => {
     const n = construirNotificacaoDeLive(live);
     expect(n.title).toBe('🔴 @maraca_vibes está ao vivo');
-    expect(n.body).toBe('Esquenta pro clássico · Toque para assistir');
+    // igual ao que a RPC notificar_live enfileira: o corpo é o assunto da live, sem
+    // "Toque para assistir" — toda notificação é tocável
+    expect(n.body).toBe('Esquenta pro clássico');
+    expect(n.body).not.toMatch(/Toque para assistir/);
     expect(n.data).toEqual({ tipo: 'live', liveId: 'l-1', url: 'vulture://live/l-1' });
+  });
+
+  it('live sem título cai no mesmo texto de reserva do servidor', () => {
+    const n = construirNotificacaoDeLive({ ...live, titulo: '   ' });
+    expect(n.body).toBe('Transmitindo agora para a nação');
   });
 
   it('reconhece o id da live nos dados de uma notificação', () => {

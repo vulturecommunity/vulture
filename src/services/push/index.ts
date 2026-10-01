@@ -19,8 +19,15 @@ export interface DadosDeNotificacaoDeLive {
 
 /**
  * Monta título, corpo e dados da notificação "fulano está ao vivo".
- * É a mesma forma usada pelo servidor (Edge Function) e pelo envio local do modo demo,
- * então o toque cai sempre no mesmo tratamento (abrir a live).
+ *
+ * Precisa sair IGUAL ao que a RPC `notificar_live` enfileira no servidor: quem segue recebe
+ * o push do backend, e quem está no aparelho que iniciou a live recebe este aqui. Dois
+ * textos diferentes para o mesmo evento é bug visível — e foi o que aconteceu quando o
+ * corpo mudou só no SQL.
+ *
+ * Título = quem está ao vivo (o gancho: é alguém que a pessoa segue).
+ * Corpo = o assunto da transmissão, que é o que decide se vale abrir agora. Sem
+ * "Toque para assistir": toda notificação é tocável, dizer isso só gasta a linha.
  */
 export function construirNotificacaoDeLive(live: Pick<Live, 'id' | 'titulo' | 'anfitriao'>): {
   title: string;
@@ -29,8 +36,8 @@ export function construirNotificacaoDeLive(live: Pick<Live, 'id' | 'titulo' | 'a
 } {
   const apelido = live.anfitriao.apelido;
   return {
-    title: `🔴 @${apelido} está ao vivo`,
-    body: live.titulo ? `${live.titulo} · Toque para assistir` : 'Toque para assistir agora',
+    title: `🔴 @${apelido || 'alguém'} está ao vivo`,
+    body: live.titulo?.trim() || 'Transmitindo agora para a nação',
     data: { tipo: 'live', liveId: live.id, url: `vulture://live/${live.id}` },
   };
 }

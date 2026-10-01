@@ -48,6 +48,10 @@ export function linkDaLiga(codigo: string): string {
   return `${baseDeLinks() ?? 'vulture://arquibancada'}/liga/${codigo}`;
 }
 
+export function linkDaLive(id: string): string {
+  return `${baseDeLinks() ?? 'vulture://live'}/live/${id}`;
+}
+
 /** Corta um texto longo sem quebrar palavra no meio. */
 function resumir(texto: string, limite = 110): string {
   const limpo = texto.trim().replace(/\s+/g, ' ');
@@ -125,6 +129,40 @@ export function compartilharLiga(dados: { nome: string; codigo: string }): Conte
     mensagem: montar([
       `🏆 Criei a liga "${dados.nome}" no Vulture — bora ver quem entende de Mengão`,
       `Código de entrada: ${dados.codigo}\n\nCravar o placar vale 10 pontos, acertar o saldo vale 5. No fim do mês, o pódio fica registrado no perfil.`,
+      url,
+    ]),
+  };
+}
+
+/**
+ * Convite para uma live que está acontecendo AGORA.
+ *
+ * Diferente dos outros: vídeo e resenha continuam lá amanhã, live não. Por isso a mensagem
+ * diz "agora" no gancho e avisa que não fica gravada — sem essa urgência o convite vira um
+ * link que a pessoa abre à noite e encontra uma transmissão encerrada.
+ *
+ * O gancho muda conforme quem compartilha: o anfitrião está chamando gente para a PRÓPRIA
+ * transmissão ("tô ao vivo"), e o espectador está indicando a de outra pessoa.
+ */
+export function compartilharLive(dados: {
+  id: string;
+  titulo: string;
+  apelido: string;
+  souOAnfitriao?: boolean;
+}): ConteudoCompartilhavel {
+  const url = linkDaLive(dados.id);
+  const titulo = dados.titulo.trim();
+  const assunto = titulo ? `"${resumir(titulo, 80)}"\n` : '';
+  return {
+    titulo: dados.souOAnfitriao
+      ? 'Tô ao vivo no Vulture'
+      : `@${dados.apelido} está ao vivo no Vulture`,
+    url,
+    mensagem: montar([
+      dados.souOAnfitriao
+        ? '🔴 Tô AO VIVO agora no Vulture — cola na transmissão'
+        : `🔴 @${dados.apelido} está AO VIVO agora no Vulture`,
+      `${assunto}Entra antes que acabe: live não fica gravada.`,
       url,
     ]),
   };
