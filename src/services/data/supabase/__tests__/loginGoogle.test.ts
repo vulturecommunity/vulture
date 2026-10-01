@@ -64,20 +64,20 @@ beforeEach(() => {
  * forma exata não pode depender de onde o app está rodando.
  */
 /**
- * Sem `preferEphemeralSession`, o iOS mostra um diálogo do sistema pedindo consentimento
- * para compartilhar cookies com o Safari, e nele aparece o domínio cru do projeto
- * Supabase (`mlajeudfsjymgaxjofya.supabase.co`) — confuso para quem não sabe o que é
- * aquilo. A opção desliga o compartilhamento e o diálogo some.
+ * `preferEphemeralSession` parecia a correção óbvia para o diálogo do iOS que mostra o
+ * domínio cru do projeto Supabase — e chegou a ficar ligada aqui por uma versão. Foi
+ * revertida porque, em teste real, sessão efêmera derrubou o retorno via esquema
+ * customizado: o mesmo túnel do Expo Go, com o mesmo endereço já liberado no Supabase,
+ * funcionava sem a opção e parou de voltar para o app com ela — mudando só essa opção
+ * entre duas tentativas consecutivas. Este teste existe para a opção não voltar por
+ * engano numa futura limpeza de código.
  */
-it('pede sessão efêmera para não mostrar o diálogo de domínio do iOS', async () => {
+it('NÃO pede sessão efêmera — ela quebrou o retorno do login em teste real', async () => {
   abrirNavegador.mockResolvedValue({ type: 'dismiss' });
   await new SupabaseDataService().entrarComGoogle().catch(() => {});
 
-  expect(abrirNavegador).toHaveBeenCalledWith(
-    URL_DO_GOOGLE,
-    RETORNO,
-    expect.objectContaining({ preferEphemeralSession: true }),
-  );
+  const opcoes = abrirNavegador.mock.calls[0]?.[2];
+  expect(opcoes?.preferEphemeralSession).not.toBe(true);
 });
 
 describe('endereço de retorno', () => {
