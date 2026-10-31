@@ -25,7 +25,9 @@ export interface DadosDeNotificacaoDeLive {
  * textos diferentes para o mesmo evento é bug visível — e foi o que aconteceu quando o
  * corpo mudou só no SQL.
  *
- * Título = quem está ao vivo (o gancho: é alguém que a pessoa segue).
+ * Título = quem está ao vivo (o gancho: é alguém que a pessoa segue). Vale o nome, não o
+ * apelido: fora do app é pelo nome que a pessoa é reconhecida. `nome` pode vir vazio
+ * (no banco é `not null default ''`), e aí o apelido entra como reserva.
  * Corpo = o assunto da transmissão, que é o que decide se vale abrir agora. Sem
  * "Toque para assistir": toda notificação é tocável, dizer isso só gasta a linha.
  */
@@ -34,9 +36,10 @@ export function construirNotificacaoDeLive(live: Pick<Live, 'id' | 'titulo' | 'a
   body: string;
   data: DadosDeNotificacaoDeLive;
 } {
-  const apelido = live.anfitriao.apelido;
+  const { nome, apelido } = live.anfitriao;
+  const quemTransmite = nome?.trim() || apelido?.trim() || 'alguém';
   return {
-    title: `🔴 @${apelido || 'alguém'} está ao vivo`,
+    title: `🔴 ${quemTransmite} está ao vivo`,
     body: live.titulo?.trim() || 'Transmitindo agora para a nação',
     data: { tipo: 'live', liveId: live.id, url: `vulture://live/${live.id}` },
   };

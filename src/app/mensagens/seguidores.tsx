@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar, Botao, Cabecalho, Carregando, EstadoVazio, Texto } from '@/components/ui';
 import { useSeguir } from '@/hooks/useInteracoes';
 import { useMarcarNotificacoesComoLidas } from '@/hooks/useNotificacoes';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useNovosSeguidores } from '@/hooks/useSeguidores';
 import { useVoltar } from '@/hooks/useVoltar';
 import { cores, espacos } from '@/theme';
@@ -20,6 +21,7 @@ export default function TelaNovosSeguidores() {
   const voltar = useVoltar('/mensagens');
   const insets = useSafeAreaInsets();
   const seguidores = useNovosSeguidores();
+  const puxar = usePuxarParaAtualizar(seguidores.refetch);
   const { alternar, ocupado } = useSeguir();
   const { mutate: marcarLidas } = useMarcarNotificacoesComoLidas();
 
@@ -39,8 +41,8 @@ export default function TelaNovosSeguidores() {
           data={seguidores.data ?? []}
           keyExtractor={(s) => s.usuario.id}
           contentContainerStyle={estilos.lista}
-          onRefresh={() => seguidores.refetch()}
-          refreshing={seguidores.isRefetching}
+          onRefresh={puxar.aoAtualizar}
+          refreshing={puxar.atualizando}
           ListEmptyComponent={
             <EstadoVazio
               icone="adicionarPessoa"

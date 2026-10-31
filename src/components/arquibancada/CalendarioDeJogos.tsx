@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Carregando, EstadoVazio, Erro, Icone, Texto } from '@/components/ui';
 import { useAgora } from '@/hooks/useAgora';
 import { useCalendario, useMeusPalpites } from '@/hooks/usePalpites';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import type { Partida } from '@/services/partidas';
 import { cores, espacos, raios } from '@/theme';
 import type { Palpite } from '@/types';
@@ -148,6 +149,7 @@ export function CalendarioDeJogos({ aoVerResenha }: CalendarioDeJogosProps) {
   const insets = useSafeAreaInsets();
   const agora = useAgora();
   const calendario = useCalendario();
+  const puxar = usePuxarParaAtualizar(calendario.refetch);
   const partidas = calendario.data;
   const palpites = useMeusPalpites(partidas);
   const [mesEscolhido, setMesEscolhido] = useState<string | null>(null);
@@ -276,8 +278,8 @@ export function CalendarioDeJogos({ aoVerResenha }: CalendarioDeJogosProps) {
         renderItem={renderizar}
         ListHeaderComponent={cabecalho}
         contentContainerStyle={[estilos.lista, { paddingBottom: insets.bottom + espacos.xl }]}
-        onRefresh={() => calendario.refetch()}
-        refreshing={calendario.isRefetching}
+        onRefresh={puxar.aoAtualizar}
+        refreshing={puxar.atualizando}
         ListEmptyComponent={
           <EstadoVazio
             icone="calendario"

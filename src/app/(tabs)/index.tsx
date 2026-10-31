@@ -8,6 +8,7 @@ import { CardsDePartida } from '@/components/partidas/CardsDePartida';
 import { Erro, Icone, Texto } from '@/components/ui';
 import { useFeed } from '@/hooks/useFeed';
 import { useTotalNaoLido } from '@/hooks/useMensagens';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import type { AbaDoFeed } from '@/services/data/types';
 import { useAuthStore } from '@/stores/authStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -30,6 +31,7 @@ export default function TelaFeed() {
   const [aba, setAba] = useState<AbaDoFeed>('paraVoce');
   const feed = useFeed({ aba });
   const naoLidas = useTotalNaoLido();
+  const puxar = usePuxarParaAtualizar(feed.refetch);
 
   useFocusEffect(
     useCallback(() => {
@@ -108,8 +110,8 @@ export default function TelaFeed() {
           videos={feed.videos}
           meuId={meuId}
           carregando={feed.isLoading}
-          atualizando={feed.isRefetching && !feed.isFetchingNextPage}
-          aoAtualizar={() => feed.refetch()}
+          atualizando={puxar.atualizando}
+          aoAtualizar={puxar.aoAtualizar}
           aoChegarNoFim={aoChegarNoFim}
           temMais={feed.hasNextPage}
           vazio={

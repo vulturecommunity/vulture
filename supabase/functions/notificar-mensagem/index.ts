@@ -26,6 +26,8 @@ interface MensagemPush {
   priority: 'high';
   channelId: 'mensagens';
   ttl: number;
+  /** foto de quem escreveu — o Android mostra como ícone grande ao lado do texto */
+  richContent?: { image: string };
 }
 
 Deno.serve(async (req) => {
@@ -68,10 +70,18 @@ Deno.serve(async (req) => {
 
     const { data: remetente } = await admin
       .from('profiles')
-      .select('apelido')
+      .select('nome, apelido, avatar_url')
       .eq('id', usuario.id)
       .maybeSingle();
-    const apelido = (remetente as { apelido: string } | null)?.apelido ?? 'alguém';
+    const perfil = remetente as {
+      nome: string | null;
+      apelido: string | null;
+      avatar_url: string | null;
+    } | null;
+    // Na notificação vale o nome: é assim que a pessoa é reconhecida fora do app.
+    // O apelido só entra como reserva, se o nome estiver vazio.
+    const quemEscreveu = perfil?.nome?.trim() || perfil?.apelido?.trim() || 'Alguém';
+    const fotoDoRemetente = perfil?.avatar_url?.trim() || null;
 
     const { data: tokens } = await admin
       .from('push_tokens')
@@ -84,7 +94,7 @@ Deno.serve(async (req) => {
     const previa = texto.length > 120 ? `${texto.slice(0, 117)}…` : texto;
     const mensagens: MensagemPush[] = listaTokens.map((to) => ({
       to,
-      title: `@${apelido}`,
+      title: quemEscreveu,
       body: previa,
       data: {
         tipo: 'mensagem',
@@ -95,6 +105,7 @@ Deno.serve(async (req) => {
       priority: 'high',
       channelId: 'mensagens',
       ttl: 24 * 60 * 60,
+      ...(fotoDoRemetente ? { richContent: { image: fotoDoRemetente } } : {}),
     }));
 
     const resposta = await fetch(EXPO_PUSH_URL, {

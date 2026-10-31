@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConteudoDePerfil } from '@/components/perfil/ConteudoDePerfil';
 import { Carregando, Erro, Icone, Texto } from '@/components/ui';
 import { usePerfil } from '@/hooks/usePerfil';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos } from '@/theme';
 
@@ -14,6 +15,7 @@ export default function TelaPerfil() {
   const router = useRouter();
   const sessao = useAuthStore((s) => s.sessao);
   const perfil = usePerfil(sessao ? 'eu' : undefined);
+  const puxar = usePuxarParaAtualizar(perfil.refetch);
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
@@ -56,8 +58,8 @@ export default function TelaPerfil() {
       ) : perfil.data ? (
         <ConteudoDePerfil
           perfil={perfil.data}
-          atualizando={perfil.isRefetching}
-          aoAtualizar={() => perfil.refetch()}
+          atualizando={puxar.atualizando}
+          aoAtualizar={puxar.aoAtualizar}
         />
       ) : null}
     </View>

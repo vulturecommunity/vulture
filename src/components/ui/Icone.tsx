@@ -115,6 +115,7 @@ const ICONES = {
   gif: material('file-gif-box'),
   // login social
   google: material('google'),
+  apple: material('apple'),
 } as const;
 
 export type NomeDeIcone = keyof typeof ICONES;
@@ -124,12 +125,15 @@ export interface IconeProps {
   tamanho?: number;
   cor?: string;
   style?: StyleProp<TextStyle>;
+  testID?: string;
 }
 
-export function Icone({ nome, tamanho = 22, cor = cores.texto, style }: IconeProps) {
+export function Icone({ nome, tamanho = 22, cor = cores.texto, style, testID }: IconeProps) {
   const def: Definicao = ICONES[nome];
   if (def.f === 'material') {
-    return <MaterialCommunityIcons name={def.g} size={tamanho} color={cor} style={style} />;
+    return (
+      <MaterialCommunityIcons name={def.g} size={tamanho} color={cor} style={style} testID={testID} />
+    );
   }
-  return <Feather name={def.g} size={tamanho} color={cor} style={style} />;
+  return <Feather name={def.g} size={tamanho} color={cor} style={style} testID={testID} />;
 }

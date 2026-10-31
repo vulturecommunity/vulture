@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Carregando, EstadoVazio, Erro, Icone, Texto } from '@/components/ui';
 import { usePostsDaResenha, type FiltroDaResenha } from '@/hooks/useArquibancada';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos, raios } from '@/theme';
 import type { MarcacaoDePartida, Post } from '@/types';
@@ -22,6 +23,7 @@ export function ListaDaResenha({ filtro, aoMudarFiltro }: ListaDaResenhaProps) {
   const insets = useSafeAreaInsets();
   const eu = useAuthStore((s) => s.sessao?.usuario ?? null);
   const resenha = usePostsDaResenha(filtro);
+  const puxar = usePuxarParaAtualizar(resenha.refetch);
 
   const escrever = useCallback(() => {
     if (filtro?.tipo === 'partida') {
@@ -111,8 +113,8 @@ export function ListaDaResenha({ filtro, aoMudarFiltro }: ListaDaResenhaProps) {
         renderItem={renderizar}
         ListHeaderComponent={cabecalho}
         contentContainerStyle={[estilos.lista, { paddingBottom: insets.bottom + 96 }]}
-        onRefresh={() => resenha.refetch()}
-        refreshing={resenha.isRefetching && !resenha.isFetchingNextPage}
+        onRefresh={puxar.aoAtualizar}
+        refreshing={puxar.atualizando}
         onEndReached={() => {
           if (resenha.hasNextPage && !resenha.isFetchingNextPage) resenha.fetchNextPage();
         }}

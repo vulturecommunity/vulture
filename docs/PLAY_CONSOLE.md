@@ -23,34 +23,44 @@ Vulture
 ### Descrição curta (80 caracteres)
 
 ```
-A rede da nação rubro-negra: vídeos, resenha, lives e ranking de palpites.
+Crave o placar do Mengão, suba de divisão e assista à resenha da nação.
 ```
 
-(73 caracteres.)
+(70 caracteres.)
+
+> **Por que o palpite vem antes do vídeo, aqui e na descrição completa.** A ordem anterior
+> abria com "vídeos curtos da nação", e essa é a única parte do app que disputa atenção
+> diretamente com o TikTok — onde já existe conteúdo do Flamengo de sobra, com algoritmo
+> maduro e criadores grandes. Entrar nessa briga na primeira linha é pedir para ser
+> comparado justamente onde um app novo perde: no acervo.
+>
+> O ranking de palpites é o contrário. Não existe em lugar nenhum, funciona no primeiro dia
+> com o feed vazio (quem gera o conteúdo é o calendário do Flamengo, não os usuários), e
+> tem um laço de convite fechado — o card do palpite leva para o JOGO, e quem recebe
+> precisa dar o próprio. O vídeo segura quem já veio; o palpite é o que traz.
 
 ### Descrição completa (até 4.000 caracteres)
 
 ```
 O Vulture é o aplicativo da torcida do Flamengo — feito por torcedor, para torcedor.
 
-VÍDEOS DA ARQUIBANCADA
-Grave e assista vídeos curtos da nação: o gol visto da Norte, o esquenta antes do jogo,
-a festa na saída do Maracanã. Um feed só de rubro-negro, sem algoritmo de outro planeta
-decidindo o que você vê.
-
-RANKING DE PALPITES
-Crave o placar de cada jogo do Mengão. Acertar em cheio vale 10 pontos, acertar o saldo
-vale 5, acertar o vencedor vale 3 — e clássico e mata-mata valem em dobro. No fim do mês,
+CRAVE O PLACAR DE CADA JOGO
+Dê seu palpite antes do apito inicial. Acertar em cheio vale 10 pontos, acertar o saldo
+vale 5, acertar o vencedor vale 3 — e clássico e mata-mata valem em dobro. No fim do mês
 o pódio fica registrado no seu perfil para sempre.
 
-DIVISÕES
+DIVISÕES: DÁ PARA GANHAR
 Você não disputa contra o Brasil inteiro. Entra num grupo de até 30 torcedores do seu
 nível, da Série D à Libertadores. Os primeiros sobem de divisão todo mês, os últimos
-caem. Dá para ganhar, e é isso que faz voltar.
+caem. É a diferença entre "estou em 4.312º" e "faltam 3 pontos".
 
 LIGAS PRIVADAS
-Crie a liga da firma, do bar ou do grupo da família com um código de convite e veja quem
-realmente entende de Flamengo.
+Crie a liga da firma, do bar ou do grupo da família com um código de convite e resolva de
+uma vez quem realmente entende de Flamengo.
+
+VÍDEOS DA ARQUIBANCADA
+Grave e assista vídeos curtos da nação: o gol visto da Norte, o esquenta antes do jogo,
+a festa na saída do Maracanã. Um feed só de rubro-negro.
 
 LIVES E RESENHA
 Transmita ao vivo com chat e reações, ou escreva na Arquibancada: posts curtos, respostas

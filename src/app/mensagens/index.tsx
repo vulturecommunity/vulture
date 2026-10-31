@@ -9,6 +9,7 @@ import { FileiraDeRasantes } from '@/components/rasantes/FileiraDeRasantes';
 import { Cabecalho, Carregando, EstadoVazio, Icone, Texto, TituloDeSecao } from '@/components/ui';
 import { useConversas } from '@/hooks/useMensagens';
 import { useNotificacoes } from '@/hooks/useNotificacoes';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useVoltar } from '@/hooks/useVoltar';
 import { useAuthStore } from '@/stores/authStore';
 import { cores, espacos } from '@/theme';
@@ -27,6 +28,7 @@ export default function TelaMensagens() {
   const meuId = useAuthStore((s) => s.sessao?.usuario.id ?? '');
   const conversas = useConversas();
   const notificacoes = useNotificacoes();
+  const puxar = usePuxarParaAtualizar(conversas.refetch, notificacoes.refetch);
 
   const resumo = useMemo(() => {
     const lista = notificacoes.data ?? [];
@@ -73,11 +75,8 @@ export default function TelaMensagens() {
       <FlatList
         data={conversas.data ?? []}
         keyExtractor={(c) => c.id}
-        onRefresh={() => {
-          conversas.refetch();
-          notificacoes.refetch();
-        }}
-        refreshing={conversas.isRefetching}
+        onRefresh={puxar.aoAtualizar}
+        refreshing={puxar.atualizando}
         contentContainerStyle={[estilos.lista, { paddingBottom: insets.bottom + espacos.xl }]}
         ListHeaderComponent={
           <View>

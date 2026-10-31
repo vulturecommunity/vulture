@@ -11,6 +11,8 @@ export interface BalaoDeMensagemProps {
   /** primeira de uma sequência do mesmo remetente (cantos mais retos entre elas) */
   primeiraDaSequencia: boolean;
   ultimaDaSequencia: boolean;
+  /** "Visto" embaixo do balão: só na última mensagem minha, e só depois de lida */
+  mostrarVisto?: boolean;
 }
 
 /** Balão do chat: vermelho à direita para as minhas, cinza à esquerda para as da outra pessoa. */
@@ -19,8 +21,10 @@ export function BalaoDeMensagem({
   minha,
   primeiraDaSequencia,
   ultimaDaSequencia,
+  mostrarVisto = false,
 }: BalaoDeMensagemProps) {
   const pendente = mensagem.id.startsWith('temp-');
+  const lida = !pendente && mensagem.lida;
   return (
     <View
       style={[
@@ -48,21 +52,27 @@ export function BalaoDeMensagem({
           </Texto>
           {minha ? (
             <Icone
-              nome={pendente ? 'relogio' : mensagem.lida ? 'lido' : 'enviado'}
+              nome={pendente ? 'relogio' : lida ? 'lido' : 'enviado'}
               tamanho={12}
-              cor={mensagem.lida ? cores.branco : 'rgba(255,255,255,0.75)'}
+              cor={lida ? cores.azulLido : 'rgba(255,255,255,0.75)'}
+              testID={lida ? 'tique-lido' : 'tique-enviado'}
             />
           ) : null}
         </View>
       </View>
+      {mostrarVisto ? (
+        <Texto variante="legenda" cor={cores.textoTerciario} style={estilos.visto} testID="visto">
+          Visto
+        </Texto>
+      ) : null}
     </View>
   );
 }
 
 const estilos = StyleSheet.create({
-  linha: { flexDirection: 'row', paddingHorizontal: espacos.lg, marginBottom: espacos.sm },
-  linhaMinha: { justifyContent: 'flex-end' },
-  linhaOutro: { justifyContent: 'flex-start' },
+  linha: { paddingHorizontal: espacos.lg, marginBottom: espacos.sm },
+  linhaMinha: { alignItems: 'flex-end' },
+  linhaOutro: { alignItems: 'flex-start' },
   colada: { marginBottom: 2 },
   balao: {
     maxWidth: '80%',
@@ -84,6 +94,7 @@ const estilos = StyleSheet.create({
   outroCantoTopo: { borderTopLeftRadius: raios.sm },
   outroCantoBaixo: { borderBottomLeftRadius: raios.sm },
   pendente: { opacity: 0.7 },
+  visto: { marginTop: 2, marginRight: 2 },
   rodape: {
     flexDirection: 'row',
     alignItems: 'center',

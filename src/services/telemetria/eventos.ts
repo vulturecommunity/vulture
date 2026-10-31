@@ -26,6 +26,12 @@ export const EVENTOS = {
   CADASTRO_CONCLUIDO: 'cadastro_concluido',
   ONBOARDING_CONCLUIDO: 'onboarding_concluido',
   LOGIN: 'login',
+  /**
+   * Quem pede o link de redefinição não conseguiu entrar. Volume alto aqui não é
+   * problema de senha: é sinal de que o cadastro por e-mail está criando contas que a
+   * pessoa não consegue reusar, e aí o caminho certo é empurrar o login social.
+   */
+  SENHA_RECUPERACAO_PEDIDA: 'senha_recuperacao_pedida',
 
   /**
    * O evento mais importante do app hoje. `push_tokens` está em zero, e sem token não há

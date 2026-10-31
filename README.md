@@ -60,7 +60,7 @@ cp .env.example .env     # no Windows: copy .env.example .env
 | Arquibancada | botão à esquerda do "Para você": **resenha** em texto estilo X (280 caracteres, hashtags, curtidas, respostas em thread, post marcado com o jogo, até 4 fotos ou 1 vídeo de 30 s/15 MB ou 1 GIF do GIPHY) e **jogos** do Flamengo mês a mês (Highlightly, todas as competições) com V-E-D, contagem regressiva e **palpites de placar** que fecham no apito inicial |
 | Ranking      | **pódio de palpiteiros** do mês, da temporada e de cada jogo: cravou 10 · saldo 5 · vencedor 3 (clássico e mata-mata em dobro), desempate por desvio de gols, a linha do próprio usuário sempre visível, título do mês congelado no perfil e **ligas privadas** com código de convite                                                              |
 | Rasantes     | vídeo de até 15 s que some em 24 h, fileira no topo das mensagens, anel no avatar do perfil, visualizador em tela cheia                                                                                                                                                                                                                             |
-| Qualidade    | TypeScript strict, ESLint, Prettier, 154 testes (Jest + Testing Library), roteiro de teste manual                                                                                                                                                                                                                                                   |
+| Qualidade    | TypeScript strict, ESLint, Prettier, 389 testes (Jest + Testing Library), roteiro de teste manual                                                                                                                                                                                                                                                   |
 
 ## Arquitetura
 
@@ -206,7 +206,11 @@ nunca coloque segredos nelas (a API Secret do LiveKit fica só na Edge Function)
   servidos pela internet; as miniaturas de exemplo são fotos aleatórias (Lorem Picsum). O celular
   precisa de internet para vê-los; os vídeos **que você grava** ficam no aparelho.
 - Sem transcodificação/CDN: os vídeos são reproduzidos no formato em que foram gravados.
-- Feed "Para Você" é cronológico (sem algoritmo de recomendação).
+- Feed "Para Você" é ranqueado por um score simples (engajamento comprimido por log ×
+  decaimento de 24 h × rodízio por autor), recalculado a cada 5 min pelo `pg_cron`. Não é
+  recomendação personalizada: não há modelo, nem co-visualização, nem embeddings — só o
+  ajuste pelos interesses escolhidos no onboarding. A Fase C do [`ROADMAP.md`](ROADMAP.md)
+  continua de pé.
 - Push funciona no APK (Firebase/FCM configurado); no Expo Go do Android o push remoto não existe.
 - Lives no Expo Go são simuladas (limitação do Expo Go, não do app).
 - Jogos do Flamengo vêm da **Highlightly** (plano gratuito, 100 consultas/dia). Quem consulta é a

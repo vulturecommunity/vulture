@@ -21,6 +21,8 @@ export const cores = {
   sucesso: '#2FBF71',
   aviso: '#E8B84A',
   erro: '#FF4D5A',
+  /** tique duplo de mensagem lida — azul é a convenção que todo mundo já lê sem legenda */
+  azulLido: '#53BDEB',
   sombra: 'rgba(0,0,0,0.65)',
   /** contorno do texto sobre vídeo, onde não há véu escuro atrás */
   sombraForte: 'rgba(0,0,0,0.92)',

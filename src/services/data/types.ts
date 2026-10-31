@@ -156,6 +156,13 @@ export interface DataService {
    * Recusa com 'google_indisponivel' quando o provedor não está configurado no projeto.
    */
   entrarComGoogle(): Promise<Sessao>;
+  /**
+   * Entra com o Apple ID. Cria o perfil na primeira vez, como o Google.
+   *
+   * Exigido pela App Store (Guideline 4.8) em todo app que oferece login social de
+   * terceiro — e o Vulture oferece Google. Sem isto a submissão para iOS é recusada.
+   */
+  entrarComApple(): Promise<Sessao>;
   sair(): Promise<void>;
   sessaoAtual(): Promise<Sessao | null>;
   concluirOnboarding(dados: {
@@ -167,6 +174,14 @@ export interface DataService {
   alterarSenha(senhaAtual: string, novaSenha: string): Promise<void>;
   /** Dispara o e-mail de redefinição de senha. */
   enviarRedefinicaoDeSenha(email: string): Promise<void>;
+  /**
+   * Reenvia o e-mail de confirmação de cadastro.
+   *
+   * Sem isto, quem perdeu (ou nunca recebeu) o primeiro e-mail fica com a conta criada e
+   * inacessível: o login recusa, o cadastro diz que o e-mail já existe e a redefinição de
+   * senha não confirma nada. É um beco sem saída que só o suporte resolveria.
+   */
+  reenviarConfirmacaoDeEmail(email: string): Promise<void>;
   /**
    * Apaga a conta e todo o conteúdo dela, sem volta.
    *

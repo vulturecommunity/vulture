@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Botao, Carregando, Erro, EstadoVazio, Icone, Texto } from '@/components/ui';
 import { useLives } from '@/hooks/useLive';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { modoDeLive, motivoDoModoSimulado } from '@/services/live';
 import { cores, espacos, raios } from '@/theme';
 import type { Live } from '@/types';
@@ -60,6 +61,7 @@ export default function TelaLives() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const lives = useLives();
+  const puxar = usePuxarParaAtualizar(lives.refetch);
   const modo = modoDeLive();
 
   return (
@@ -103,8 +105,8 @@ export default function TelaLives() {
             />
           )}
           contentContainerStyle={estilos.lista}
-          onRefresh={() => lives.refetch()}
-          refreshing={lives.isRefetching}
+          onRefresh={puxar.aoAtualizar}
+          refreshing={puxar.atualizando}
           ListEmptyComponent={
             <EstadoVazio
               icone="lives"

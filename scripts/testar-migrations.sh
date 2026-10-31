@@ -73,9 +73,12 @@ create table if not exists auth.users (
   created_at timestamptz not null default now()
 );
 
-create or replace function auth.uid() returns uuid language sql stable as $$
-  select nullif(current_setting('request.jwt.claims', true)::json->>'sub','')::uuid;
-$$;
+-- Fiel ao auth.uid() do Supabase: o nullif vem ANTES do cast. Com o cast primeiro,
+-- claims vazio ou ausente estoura "invalid input syntax for type json" aqui e funciona
+-- lá — um falso negativo que reprova migration boa.
+create or replace function auth.uid() returns uuid language sql stable as $
+  select (nullif(current_setting('request.jwt.claims', true), '')::json ->> 'sub')::uuid;
+$;
 create or replace function auth.role() returns text language sql stable as $$
   select coalesce(current_setting('request.jwt.claims', true)::json->>'role','authenticated');
 $$;

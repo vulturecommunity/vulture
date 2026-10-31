@@ -17,7 +17,7 @@ const live = {
 describe('notificações de live', () => {
   it('monta título, corpo e dados no mesmo formato do servidor', () => {
     const n = construirNotificacaoDeLive(live);
-    expect(n.title).toBe('🔴 @maraca_vibes está ao vivo');
+    expect(n.title).toBe('🔴 Maraca está ao vivo');
     // igual ao que a RPC notificar_live enfileira: o corpo é o assunto da live, sem
     // "Toque para assistir" — toda notificação é tocável
     expect(n.body).toBe('Esquenta pro clássico');
@@ -28,6 +28,15 @@ describe('notificações de live', () => {
   it('live sem título cai no mesmo texto de reserva do servidor', () => {
     const n = construirNotificacaoDeLive({ ...live, titulo: '   ' });
     expect(n.body).toBe('Transmitindo agora para a nação');
+  });
+
+  it('anfitrião sem nome cai no apelido, e não num título com buraco', () => {
+    // nome é `not null default ''` no banco: conta nova chega aqui com string vazia
+    const semNome = { ...live, anfitriao: { ...live.anfitriao, nome: '   ' } };
+    expect(construirNotificacaoDeLive(semNome).title).toBe('🔴 maraca_vibes está ao vivo');
+
+    const semNada = { ...live, anfitriao: { ...live.anfitriao, nome: '', apelido: '' } };
+    expect(construirNotificacaoDeLive(semNada).title).toBe('🔴 alguém está ao vivo');
   });
 
   it('reconhece o id da live nos dados de uma notificação', () => {
@@ -72,7 +81,7 @@ describe('notificações de live', () => {
     expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         content: expect.objectContaining({
-          title: '🔴 @maraca_vibes está ao vivo',
+          title: '🔴 Maraca está ao vivo',
           data: { tipo: 'live', liveId: 'l-1', url: 'vulture://live/l-1' },
         }),
       }),

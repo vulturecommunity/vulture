@@ -14,7 +14,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bitcode": false
+      "bitcode": false,
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "app.vulture.torcida",
@@ -99,6 +100,7 @@
           "defaultChannel": "lives"
         }
       ],
+      "expo-apple-authentication",
       "expo-web-browser",
       "@sentry/react-native",
       "react-native-compressor",

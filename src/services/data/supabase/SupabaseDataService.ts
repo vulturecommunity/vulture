@@ -4,6 +4,7 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
 import { DURACAO_FOTO_SEGUNDOS, type Interesse, type Reacao } from '@/constants/interesses';
+import { credenciaisDaApple, ErroApple } from '@/services/auth/apple';
 import {
   DURACAO_MAXIMA_RASANTE_SEGUNDOS,
   TAMANHO_MAXIMO_MENSAGEM,
@@ -444,8 +445,23 @@ function paraMensagemDireta(m: LinhaMensagem): Mensagem {
 
 function erroDoSupabase(erro: { message: string; code?: string } | null, contexto: string): never {
   const mensagem = erro?.message ?? contexto;
+  // SQLSTATE próprio do `limitar_frequencia()` (migration 20261004120000). A mensagem já
+  // vem pronta para a tela; o que não pode é virar "Falha ao comentar: ...", que faria
+  // parecer defeito do app em vez de um limite proposital.
+  if (erro?.code === 'P0429') {
+    throw new ErroDeAplicacao(mensagem, 'limite_de_frequencia');
+  }
   if (/invalid login credentials/i.test(mensagem)) {
     throw new ErroDeAplicacao('E-mail ou senha incorretos.', 'credenciais_invalidas');
+  }
+  // O Supabase responde 400 com esta frase quando 'Confirm email' está ligado e a
+  // pessoa nunca clicou no link. Sem um código próprio a tela mostraria 'Falha ao entrar'
+  // e a pessoa ficaria trancada com a senha certa na mão.
+  if (/email not confirmed|email_not_confirmed/i.test(mensagem)) {
+    throw new ErroDeAplicacao(
+      'Seu e-mail ainda não foi confirmado. Procure a mensagem que enviamos ao criar a conta.',
+      'email_nao_confirmado',
+    );
   }
   if (/already registered|already exists/i.test(mensagem)) {
     throw new ErroDeAplicacao('Já existe uma conta com esse e-mail.', 'email_em_uso');
@@ -827,6 +843,50 @@ export class SupabaseDataService implements DataService {
     return this.montarSessao(troca.user.id, false, troca.user.email ?? null);
   }
 
+  /**
+   * Entrar com a Apple.
+   *
+   * Bem mais curto que o do Google porque não passa por navegador: a folha de autorização
+   * é nativa do iOS e devolve um JWT assinado pela Apple na hora. O Supabase troca esse
+   * JWT por sessão sem redirect, sem PKCE e sem URL de retorno para liberar no painel —
+   * ou seja, sem a classe de falha que o comentário do Google descreve.
+   */
+  async entrarComApple(): Promise<Sessao> {
+    const { token, nome } = await credenciaisDaApple().catch((erro) => {
+      if (erro instanceof ErroApple) throw new ErroDeAplicacao(erro.message, erro.codigo);
+      throw erro;
+    });
+
+    const { data, error } = await this.db.auth.signInWithIdToken({
+      provider: 'apple',
+      token,
+    });
+    if (error || !data.user) {
+      if (error && /provider is not enabled/i.test(error.message)) {
+        throw new ErroDeAplicacao(
+          'Entrar com a Apple ainda não está ligado neste projeto.',
+          'apple_indisponivel',
+        );
+      }
+      erroDoSupabase(error, 'Falha ao entrar com a Apple');
+    }
+
+    // A Apple só manda o nome na PRIMEIRA autorização deste Apple ID com este app; da
+    // segunda em diante vem null para sempre. Se não gravar agora, não se recupera.
+    if (nome) {
+      const { data: perfil } = await this.db
+        .from('profiles')
+        .select('nome')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      if (!perfil?.nome) {
+        await this.db.from('profiles').update({ nome }).eq('id', data.user.id);
+      }
+    }
+
+    return this.montarSessao(data.user.id, false, data.user.email ?? null);
+  }
+
   async sair(): Promise<void> {
     await this.db.auth.signOut();
   }
@@ -899,6 +959,21 @@ export class SupabaseDataService implements DataService {
     if (error) erroDoSupabase(error, 'Falha ao enviar o e-mail de redefinição');
   }
 
+  async reenviarConfirmacaoDeEmail(email: string): Promise<void> {
+    const { error } = await this.db.auth.resend({ type: 'signup', email: email.trim() });
+    if (error) {
+      // Reenviar para uma conta já confirmada devolve erro. Do ponto de vista de quem
+      // está na tela isso é uma boa notícia, não uma falha: a conta está pronta.
+      if (/already confirmed|already been confirmed/i.test(error.message)) {
+        throw new ErroDeAplicacao(
+          'Esse e-mail já está confirmado. Tente entrar normalmente.',
+          'email_ja_confirmado',
+        );
+      }
+      erroDoSupabase(error, 'Falha ao reenviar a confirmação');
+    }
+  }
+
   async excluirMinhaConta(): Promise<{ arquivos: number }> {
     // O trabalho é todo da Edge Function: apagar de `auth.users` exige a service role,
     // que nunca pode estar no aparelho. Aqui só mandamos o JWT e a frase de confirmação.
@@ -932,13 +1007,16 @@ export class SupabaseDataService implements DataService {
       p_hashtag: params.hashtag ? normalizarHashtag(params.hashtag) : null,
     });
     if (error) erroDoSupabase(error, 'Falha ao carregar o feed');
-    const refs = (data ?? []) as { id: string; criado_em: string }[];
+    const refs = (data ?? []) as { id: string; criado_em: string; cursor: string }[];
     const temMais = refs.length > limite;
     const pagina = temMais ? refs.slice(0, limite) : refs;
     if (pagina.length === 0) return { itens: [], proximoCursor: null };
 
     const itens = await this.videosPorId(pagina.map((r) => r.id));
-    return { itens, proximoCursor: temMais ? pagina[pagina.length - 1].criado_em : null };
+    // O cursor vem pronto do banco e é opaco de propósito: em "Para você" ele carrega o
+    // score além da data, porque a ordenação tem duas chaves e paginar só pela data
+    // pularia vídeos. Montá-lo aqui obrigaria o app a conhecer a fórmula do ranking.
+    return { itens, proximoCursor: temMais ? pagina[pagina.length - 1].cursor : null };
   }
 
   /** Busca os vídeos de uma lista de ids preservando a ordem pedida. */
@@ -1816,12 +1894,24 @@ export class SupabaseDataService implements DataService {
   }
 
   assinarConversa(conversaId: Id, aoReceber: (mensagem: Mensagem) => void): CancelarAssinatura {
+    // INSERT traz mensagem nova; UPDATE traz a confirmação de leitura (lida = true),
+    // que é o que acende o tique azul e o "Visto" do lado de quem enviou.
     const canal = this.db
       .channel(`conversa:${conversaId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversa_id=eq.${conversaId}`,
+        },
+        (payload) => aoReceber(paraMensagemDireta(payload.new as LinhaMensagem)),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
           schema: 'public',
           table: 'messages',
           filter: `conversa_id=eq.${conversaId}`,

@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { Mensagem } from '@/types';
+
 import { ArmazenamentoMock } from '../banco';
 import { MockDataService } from '../MockDataService';
 
@@ -131,6 +133,28 @@ describe('MockDataService — mensagens diretas', () => {
     await servico.marcarConversaComoLida(conversa.id);
     conversas = await servico.listConversas();
     expect(conversas.find((c) => c.id === conversa.id)!.naoLidas).toBe(0);
+  });
+
+  it('marcar como lida avisa os assinantes — é o que acende o "Visto"', async () => {
+    const { a } = await duasContas(servico);
+    await servico.follow(a);
+    const conversa = await servico.abrirConversa(a);
+    await servico.enviarMensagem(conversa.id, 'Tu viu o jogo?');
+
+    // do outro lado: Ana abre a conversa e lê
+    await servico.sair();
+    await servico.entrar('a@teste.com', '123456');
+    const avisos: Mensagem[] = [];
+    const cancelar = servico.assinarConversa(conversa.id, (m) => avisos.push(m));
+
+    await servico.marcarConversaComoLida(conversa.id);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toMatchObject({ texto: 'Tu viu o jogo?', lida: true });
+
+    // marcar de novo não reavisa: sem isso, o aviso viraria laço com o hook
+    await servico.marcarConversaComoLida(conversa.id);
+    expect(avisos).toHaveLength(1);
+    cancelar();
   });
 
   it('bloquear corta a conversa nos dois sentidos e some da lista', async () => {

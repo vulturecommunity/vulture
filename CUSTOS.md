@@ -77,6 +77,34 @@ comporta cerca de **2.000–3.000 usuários ativos** agora que a mídia saiu de 
 **Quando assinar:** quando o painel acusar egress acima de 80%, ou ao passar de ~2.000
 usuários ativos. A essa altura, US$ 25 é barato pelo que você já tem rodando.
 
+### Sentry e PostHog — ligue agora, no plano grátis
+
+As duas únicas peças de telemetria do app. **Não contrate nada: as faixas gratuitas cobrem
+o beta fechado com folga de várias ordens de grandeza.**
+
+| Serviço | Faixa grátis | O que o app consome |
+| ------- | ------------ | ------------------- |
+| Sentry (erros) | 5.000 erros/mês, 1 usuário, 30 dias de retenção | só o que quebrar de fato; `tracesSampleRate: 0.1` já corta 90% dos rastros |
+| PostHog (produto) | 1 milhão de eventos/mês | catálogo fechado de ~18 eventos por usuário ativo (ver `services/telemetria/eventos.ts`) |
+
+**A regra que torna isso seguro, e não só provável: não cadastre cartão em nenhum dos
+dois.** Sem cartão, o plano grátis descarta o excedente em vez de cobrar. Fatura surpresa
+só é possível com cartão cadastrado e upgrade automático ligado. (Confira os números no
+site antes de criar a conta — preço de SaaS muda sem avisar.)
+
+**Quando isso vira custo:** por volta de 10 mil usuários ativos, segundo a projeção do
+[`ROADMAP.md`](ROADMAP.md) — Sentry Team US$ 26/mês e PostHog entre US$ 0 e 30. Muito
+depois de o app ter tração para justificar a conversa.
+
+**Por que não trocar por algo de graça para sempre:** o Firebase Analytics é ilimitado e
+gratuito, mas obrigaria a refazer a declaração de Data Safety do Play (já escrita em
+[`docs/PLAY_CONSOLE.md`](docs/PLAY_CONSOLE.md)) e a somar mais um processador à política de
+privacidade. Custo real maior que zero, portanto.
+
+**O que não fazer:** deixar as chaves em branco para "economizar". Não economiza nada — o
+app já não envia nada sem chave — e produz um APK cego, que é o pior dos dois mundos:
+nenhum dado e nenhuma economia. `npm run conferir` existe para impedir isso.
+
 ---
 
 ## LiveKit — ligado, e assim deve ficar

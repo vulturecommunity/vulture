@@ -19,6 +19,7 @@ import { SheetDeGifs } from '@/components/arquibancada/SheetDeGifs';
 import { Cabecalho, Carregando, Erro, Icone, Texto } from '@/components/ui';
 import { usePost, usePublicarPost, useRespostas } from '@/hooks/useArquibancada';
 import { useAnexos } from '@/hooks/useAnexos';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useVoltar } from '@/hooks/useVoltar';
 import { cores, espacos, raios, tipografia } from '@/theme';
 import { TAMANHO_MAXIMO_POST, type MarcacaoDePartida, type Post } from '@/types';
@@ -33,6 +34,7 @@ export default function TelaDoPost() {
   const voltar = useVoltar('/arquibancada');
   const post = usePost(id);
   const respostas = useRespostas(id);
+  const puxar = usePuxarParaAtualizar(post.refetch, respostas.refetch);
   const publicar = usePublicarPost();
   const [texto, setTexto] = useState('');
   const anexos = useAnexos();
@@ -94,11 +96,8 @@ export default function TelaDoPost() {
             keyExtractor={(p) => p.id}
             renderItem={renderizar}
             keyboardShouldPersistTaps="handled"
-            onRefresh={() => {
-              post.refetch();
-              respostas.refetch();
-            }}
-            refreshing={post.isRefetching || respostas.isRefetching}
+            onRefresh={puxar.aoAtualizar}
+            refreshing={puxar.atualizando}
             ListHeaderComponent={
               <View>
                 <CartaoDePost

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConteudoDePerfil } from '@/components/perfil/ConteudoDePerfil';
 import { Cabecalho, Carregando, Erro } from '@/components/ui';
 import { usePerfil } from '@/hooks/usePerfil';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useVoltar } from '@/hooks/useVoltar';
 import { cores } from '@/theme';
 
@@ -14,6 +15,7 @@ export default function TelaUsuario() {
   const voltar = useVoltar('/(tabs)');
   const insets = useSafeAreaInsets();
   const perfil = usePerfil(id);
+  const puxar = usePuxarParaAtualizar(perfil.refetch);
 
   return (
     <View style={[estilos.tela, { paddingTop: insets.top }]}>
@@ -25,8 +27,8 @@ export default function TelaUsuario() {
       ) : perfil.data ? (
         <ConteudoDePerfil
           perfil={perfil.data}
-          atualizando={perfil.isRefetching}
-          aoAtualizar={() => perfil.refetch()}
+          atualizando={puxar.atualizando}
+          aoAtualizar={puxar.aoAtualizar}
         />
       ) : null}
     </View>

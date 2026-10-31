@@ -55,6 +55,15 @@ export default function TelaConversa() {
 
   const itens = useMemo(() => montarItens(mensagens.data ?? []), [mensagens.data]);
 
+  // "Visto" vai embaixo da última mensagem que EU mandei, e só se ela já foi lida.
+  // Olhar só a última evita o rótulo pendurado numa mensagem antiga quando mandei
+  // outra depois que ainda não foi lida.
+  const idDoVisto = useMemo(() => {
+    const minhas = (mensagens.data ?? []).filter((m) => m.remetenteId === meuId);
+    const ultima = minhas[minhas.length - 1];
+    return ultima?.lida ? ultima.id : null;
+  }, [mensagens.data, meuId]);
+
   const aoEnviar = useCallback(() => {
     const limpo = texto.trim();
     if (!limpo || enviando) return;
@@ -158,6 +167,7 @@ export default function TelaConversa() {
                 minha={item.mensagem.remetenteId === meuId}
                 primeiraDaSequencia={!mesmoAntes}
                 ultimaDaSequencia={!mesmoDepois}
+                mostrarVisto={item.mensagem.id === idDoVisto}
               />
             );
           }}

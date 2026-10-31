@@ -1,13 +1,17 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { StyleSheet } from 'react-native';
 
 import TelaConfiguracoesDeMensagens from '@/app/configuracoes/mensagens';
+import { BalaoDeMensagem } from '@/components/mensagens/BalaoDeMensagem';
 import TelaConversa from '@/app/mensagens/[id]';
 import TelaMensagens from '@/app/mensagens/index';
 import TelaNovaConversa from '@/app/mensagens/nova';
 import TelaNovosSeguidores from '@/app/mensagens/seguidores';
 import TelaEncontrarTorcedores from '@/app/perfil/encontrar';
 import { useAuthStore } from '@/stores/authStore';
+import { cores } from '@/theme';
+import type { Mensagem } from '@/types';
 
 import { criarServicoDeTeste, renderizar } from './utilitarios-de-teste';
 
@@ -160,5 +164,54 @@ describe('mensagens', () => {
     await fireEvent.changeText(screen.getByTestId('campo-busca-torcedor'), 'memes');
     expect(await screen.findByText('Resultados')).toBeTruthy();
     expect(await screen.findByTestId('sugestao-u-memes')).toBeTruthy();
+  });
+});
+
+describe('balão de mensagem — confirmação de leitura', () => {
+  const base: Mensagem = {
+    id: 'm-1',
+    conversaId: 'c-1',
+    remetenteId: 'eu',
+    texto: 'Bora pro Maracanã?',
+    lida: false,
+    criadoEm: new Date().toISOString(),
+  };
+
+  it('minha mensagem lida: tique duplo azul e "Visto" embaixo', async () => {
+    await renderizar(
+      <BalaoDeMensagem
+        mensagem={{ ...base, lida: true }}
+        minha
+        primeiraDaSequencia
+        ultimaDaSequencia
+        mostrarVisto
+      />,
+    );
+    expect(screen.getByTestId('visto')).toBeTruthy();
+    // a cor do ícone chega como style do Text, não como prop solta
+    const tique = StyleSheet.flatten(screen.getByTestId('tique-lido').props.style);
+    expect(tique.color).toBe(cores.azulLido);
+  });
+
+  it('minha mensagem ainda não lida: tique simples e sem "Visto"', async () => {
+    await renderizar(
+      <BalaoDeMensagem mensagem={base} minha primeiraDaSequencia ultimaDaSequencia />,
+    );
+    expect(screen.queryByTestId('visto')).toBeNull();
+    expect(screen.queryByTestId('tique-lido')).toBeNull();
+    expect(screen.getByTestId('tique-enviado')).toBeTruthy();
+  });
+
+  it('mensagem do outro lado não mostra tique nenhum', async () => {
+    await renderizar(
+      <BalaoDeMensagem
+        mensagem={{ ...base, remetenteId: 'outro', lida: true }}
+        minha={false}
+        primeiraDaSequencia
+        ultimaDaSequencia
+      />,
+    );
+    expect(screen.queryByTestId('tique-lido')).toBeNull();
+    expect(screen.queryByTestId('tique-enviado')).toBeNull();
   });
 });

@@ -4,6 +4,28 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug -PreactNativeArchitectures=arm64-v8a -Pexpo.camera.barcode-scanner-enabled=false"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_DATA_DRIVER": "supabase",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mlajeudfsjymgaxjofya.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_uJQak8ADQgR9yhxglvLyBQ_KO_r-rQO",
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://vulture-i9dz6wb0.livekit.cloud",
+        "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT": "https://mlajeudfsjymgaxjofya.supabase.co/functions/v1/livekit-token",
+        "EXPO_PUBLIC_MIDIA_URL": "https://pub-3b0f41fd874d41e4a7003feeeb74bc5d.r2.dev",
+        "EXPO_PUBLIC_SENTRY_DSN": "",
+        "EXPO_PUBLIC_POSTHOG_KEY": "",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "android": {

@@ -28,6 +28,7 @@ export interface EstadoAuth {
   cadastrar: (dados: DadosDeCadastro) => Promise<void>;
   entrarComoVisitante: () => Promise<void>;
   entrarComGoogle: () => Promise<void>;
+  entrarComApple: () => Promise<void>;
   concluirOnboarding: (dados: {
     apelido: string;
     interesses: Interesse[];
@@ -102,6 +103,11 @@ export const useAuthStore = create<EstadoAuth>((set) => {
       executar(() => dataService().entrarComGoogle(), 'Você entrou com o Google', {
         evento: EVENTOS.LOGIN,
         props: { metodo: 'google' },
+      }),
+    entrarComApple: () =>
+      executar(() => dataService().entrarComApple(), 'Você entrou com a Apple', {
+        evento: EVENTOS.LOGIN,
+        props: { metodo: 'apple' },
       }),
     concluirOnboarding: (dados) =>
       executar(() => dataService().concluirOnboarding(dados), undefined, {

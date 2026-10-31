@@ -21,3 +21,14 @@ export class ErroDeAplicacao extends Error {
     this.name = 'ErroDeAplicacao';
   }
 }
+
+/**
+ * Código do erro quando ele é um `ErroDeAplicacao`; `null` para qualquer outra coisa.
+ *
+ * A tela precisa distinguir "senha errada" de "e-mail ainda não confirmado" para oferecer
+ * a ação certa — e a mensagem em texto é o lugar errado para decidir isso, porque ela muda
+ * com a tradução e com o humor de quem escreveu.
+ */
+export function codigoDoErro(erro: unknown): string | null {
+  return erro instanceof ErroDeAplicacao ? erro.codigo : null;
+}

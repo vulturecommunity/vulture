@@ -13,6 +13,7 @@ import {
   type NomeDeIcone,
 } from '@/components/ui';
 import { useMarcarNotificacoesComoLidas, useNotificacoes } from '@/hooks/useNotificacoes';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useVoltar } from '@/hooks/useVoltar';
 import { cores, espacos, raios } from '@/theme';
 import type { Notificacao } from '@/types';
@@ -61,6 +62,7 @@ export default function TelaNotificacoes() {
     params.grupo === 'atividade' || params.grupo === 'sistema' ? params.grupo : 'todas';
   const tipos = TIPOS_POR_GRUPO[grupo];
   const notificacoes = useNotificacoes();
+  const puxar = usePuxarParaAtualizar(notificacoes.refetch);
   const { mutate: marcarLidas } = useMarcarNotificacoesComoLidas();
 
   const lista = useMemo(
@@ -93,8 +95,8 @@ export default function TelaNotificacoes() {
           data={lista}
           keyExtractor={(n) => n.id}
           contentContainerStyle={estilos.lista}
-          onRefresh={() => notificacoes.refetch()}
-          refreshing={notificacoes.isRefetching}
+          onRefresh={puxar.aoAtualizar}
+          refreshing={puxar.atualizando}
           ListEmptyComponent={
             <EstadoVazio
               icone={grupo === 'sistema' ? 'megafone' : 'sinoMudo'}

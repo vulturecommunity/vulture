@@ -94,11 +94,21 @@ export function useMensagens(conversaId: string | undefined) {
   useEffect(() => {
     if (!conversaId) return;
     const cancelar = dataService().assinarConversa(conversaId, (mensagem) => {
-      queryClient.setQueryData<Mensagem[]>(chaves.mensagens(conversaId), (atual = []) =>
-        atual.some((m) => m.id === mensagem.id) ? atual : [...atual, mensagem],
-      );
-      if (mensagem.remetenteId !== meuId) marcarLida();
-      queryClient.invalidateQueries({ queryKey: chaves.conversas });
+      // a assinatura entrega mensagem nova E mensagem alterada (a confirmação de
+      // leitura), então aqui é upsert: se já existe, troca — senão, acrescenta.
+      let jaConhecida = false;
+      queryClient.setQueryData<Mensagem[]>(chaves.mensagens(conversaId), (atual = []) => {
+        jaConhecida = atual.some((m) => m.id === mensagem.id);
+        return jaConhecida
+          ? atual.map((m) => (m.id === mensagem.id ? mensagem : m))
+          : [...atual, mensagem];
+      });
+      // só mensagem do outro lado ainda não lida justifica ir ao servidor. sem o
+      // `!lida`, marcar a conversa dispararia UPDATEs que pediriam marcar de novo.
+      if (mensagem.remetenteId !== meuId && !mensagem.lida) marcarLida();
+      // a lista de conversas só muda com mensagem nova; confirmação de leitura das
+      // minhas não mexe no contador de não lidas de ninguém.
+      if (!jaConhecida) queryClient.invalidateQueries({ queryKey: chaves.conversas });
     });
     return cancelar;
   }, [conversaId, meuId, queryClient, marcarLida]);

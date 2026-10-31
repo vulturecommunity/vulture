@@ -62,6 +62,7 @@ import {
   validarPalpite,
 } from '@/utils/palpites';
 import { validarMidiasDoPost, validarTextoDoPost } from '@/utils/posts';
+import { ordenarPorRelevancia } from '@/utils/rankingDoFeed';
 import { apelidoValido, emailValido, normalizarApelido, senhaValida } from '@/utils/validacao';
 
 import type {
@@ -289,6 +290,14 @@ export class MockDataService implements DataService {
     );
   }
 
+  async entrarComApple(): Promise<Sessao> {
+    if (this.latenciaMs > 0) await esperar(this.latenciaMs);
+    throw new ErroDeAplicacao(
+      'Entrar com a Apple só funciona com o backend real. No modo demonstração, use "Entrar como visitante".',
+      'apple_indisponivel',
+    );
+  }
+
   async entrarComoVisitante(): Promise<Sessao> {
     const b = await this.banco();
     let visitante = b.usuarios.find((u) => u.id === ID_VISITANTE);
@@ -407,6 +416,18 @@ export class MockDataService implements DataService {
     );
   }
 
+  async reenviarConfirmacaoDeEmail(email: string): Promise<void> {
+    const b = await this.banco();
+    if (!b.contas.some((c) => c.email === email.trim().toLowerCase())) {
+      throw new ErroDeAplicacao('Não existe conta com esse e-mail.', 'conta_inexistente');
+    }
+    // No modo demonstração a conta já nasce confirmada — não há e-mail para reenviar.
+    throw new ErroDeAplicacao(
+      'No modo demonstração a conta já entra confirmada: tente entrar normalmente.',
+      'sem_email_na_demo',
+    );
+  }
+
   async excluirMinhaConta(): Promise<{ arquivos: number }> {
     const b = await this.banco();
     const usuario = this.usuarioLogado(b);
@@ -456,7 +477,15 @@ export class MockDataService implements DataService {
     }
     if (params.categoria) videos = videos.filter((v) => v.categoria === params.categoria);
 
-    const ordenados = this.ordenarPorData(videos);
+    // "Seguindo" é um pedido explícito ("o que quem eu sigo postou"), então reordenar
+    // seria desobedecer. Só "Para você" tem licença para escolher a ordem.
+    const ordenados =
+      params.aba === 'seguindo'
+        ? this.ordenarPorData(videos)
+        : ordenarPorRelevancia(videos, {
+            interesses: b.usuarios.find((u) => u.id === meuId)?.interesses ?? [],
+            meuId,
+          });
     const pagina = ordenados.slice(inicio, inicio + limite).map((v) => this.decorarVideo(b, v));
     const fim = inicio + limite;
     return { itens: pagina, proximoCursor: fim < ordenados.length ? String(fim) : null };
@@ -1872,6 +1901,15 @@ export class MockDataService implements DataService {
         const b = await this.armazenamento.carregar();
         const conversa = b.conversas.find((c) => c.id === conversaId);
         if (!conversa) return;
+        // quem responde obviamente leu: acende o tique azul e o "Visto" do meu lado
+        const lidasAgora: Mensagem[] = [];
+        for (const m of b.mensagens) {
+          if (m.conversaId === conversaId && m.remetenteId !== deId && !m.lida) {
+            m.lida = true;
+            lidasAgora.push(m);
+          }
+        }
+        for (const m of lidasAgora) this.emitirMensagem(m);
         const resposta: Mensagem = {
           id: this.gerarId(),
           conversaId,
@@ -1967,14 +2005,17 @@ export class MockDataService implements DataService {
     const b = await this.armazenamento.carregar();
     const meuId = b.sessao?.usuarioId;
     if (!meuId) return;
-    let mudou = false;
+    const alteradas: Mensagem[] = [];
     for (const m of b.mensagens) {
       if (m.conversaId === conversaId && m.remetenteId !== meuId && !m.lida) {
         m.lida = true;
-        mudou = true;
+        alteradas.push(m);
       }
     }
-    if (mudou) this.persistir();
+    if (alteradas.length === 0) return;
+    this.persistir();
+    // no Supabase a leitura chega aos ouvintes como UPDATE; aqui imitamos isso
+    for (const m of alteradas) this.emitirMensagem(m);
   }
 
   assinarConversa(conversaId: Id, aoReceber: (mensagem: Mensagem) => void): CancelarAssinatura {
@@ -2138,15 +2179,17 @@ export class MockDataService implements DataService {
     const thumbnailUrl = origemThumb
       ? await salvarArquivoLocalmente(origemThumb, 'thumbnails', `rasante-${id}`, 'jpg')
       : null;
-    const criadoEm = agoraIso();
+    // Uma leitura só do relógio: com duas, um milissegundo entre elas faz a validade
+    // sair como 24h menos 1ms, e o teste que confere a janela falha sem nada estar errado.
+    const nascimento = Date.now();
     const registro = {
       id,
       autorId: eu.id,
       url,
       thumbnailUrl,
       duracao: Math.max(1, Math.round(novo.duracao)),
-      criadoEm,
-      expiraEm: new Date(Date.now() + VALIDADE_RASANTE_HORAS * 60 * 60 * 1000).toISOString(),
+      criadoEm: new Date(nascimento).toISOString(),
+      expiraEm: new Date(nascimento + VALIDADE_RASANTE_HORAS * 60 * 60 * 1000).toISOString(),
     };
     b.rasantes.push(registro);
     aoProgredir?.(1, 'Publicado');

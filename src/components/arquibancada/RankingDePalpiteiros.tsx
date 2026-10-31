@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Botao, Carregando, Erro, EstadoVazio, Icone, Texto } from '@/components/ui';
 import { useMinhaDivisao } from '@/hooks/useDivisao';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import {
   periodoAtual,
   useMinhasLigas,
@@ -158,6 +159,9 @@ export function RankingDePalpiteiros() {
   const { periodos } = usePeriodosDoRanking();
   const ranking = useRankingDePalpites(periodo);
   const ligas = useMinhasLigas(periodo);
+  const puxar = usePuxarParaAtualizar(ranking.refetch, () =>
+    aba === 'ligas' ? ligas.refetch() : undefined,
+  );
   const rankingDaLiga = useRankingDaLiga(aba === 'ligas' ? ligaAberta : null, periodo);
 
   const topo = useMemo(() => ranking.data?.topo ?? [], [ranking.data]);
@@ -297,11 +301,8 @@ export function RankingDePalpiteiros() {
         renderItem={renderizar}
         ListHeaderComponent={cabecalho}
         contentContainerStyle={[estilos.lista, { paddingBottom: insets.bottom + espacos.xl }]}
-        onRefresh={() => {
-          ranking.refetch();
-          if (aba === 'ligas') ligas.refetch();
-        }}
-        refreshing={ranking.isRefetching || ligas.isRefetching}
+        onRefresh={puxar.aoAtualizar}
+        refreshing={puxar.atualizando}
         testID="lista-ranking"
       />
 

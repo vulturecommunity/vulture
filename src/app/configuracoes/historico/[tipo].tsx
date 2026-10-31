@@ -15,6 +15,7 @@ import {
   type NomeDeIcone,
 } from '@/components/ui';
 import { useMencoes } from '@/hooks/useMencoes';
+import { usePuxarParaAtualizar } from '@/hooks/usePuxarParaAtualizar';
 import { useVoltar } from '@/hooks/useVoltar';
 import {
   useHistoricoStore,
@@ -110,6 +111,7 @@ export default function TelaDeHistorico() {
   const eventos = useHistoricoStore((s) => s.conta);
   const limpar = useHistoricoStore((s) => s.limpar);
   const mencoes = useMencoes();
+  const puxar = usePuxarParaAtualizar(mencoes.refetch);
 
   const itens = useMemo<ItemDaLista[]>(() => {
     switch (valido) {
@@ -228,8 +230,8 @@ export default function TelaDeHistorico() {
             secoes.length === 0 && estilos.listaVazia,
           ]}
           stickySectionHeadersEnabled={false}
-          refreshing={valido === 'mencoes' && mencoes.isRefetching}
-          onRefresh={valido === 'mencoes' ? () => mencoes.refetch() : undefined}
+          refreshing={puxar.atualizando}
+          onRefresh={valido === 'mencoes' ? puxar.aoAtualizar : undefined}
           ListEmptyComponent={<EstadoVazio {...vazio} />}
           renderSectionHeader={({ section }) => (
             <Texto variante="rotulo" cor={cores.textoTerciario} style={estilos.dia}>
